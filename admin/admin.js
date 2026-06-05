@@ -423,6 +423,24 @@ function onFlagFidelidade(){
 let toastT;
 function showToast(msg,cls='tok-ok'){const el=document.getElementById('toast');el.textContent=msg;el.className=`toast show ${cls}`;clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3000);}
 
+// ── FALLBACK LOCAL (localStorage + BroadcastChannel) ──────────
+function receberPedidoLocal(p){
+  if(pedidos.find(x=>x.id===p.id)) return;
+  pedidos.push({...p, _id:'local-'+p.id, hora:new Date(p.hora), status:p.status||'novo', impresso:false});
+  totalHoje++;
+  tocarNotificacao();
+  showToast(`🔔 Novo pedido ${p.num||'#'+p.id} — ${p.nome}`,'tok-info');
+  atualizarBadgeNovos();
+  if(autoAceitar) setTimeout(()=>moverStatus('local-'+p.id,'prep',true),600);
+  renderAll();
+  renderHistorico();
+}
+
+function lerPedidosLocal(){
+  const salvos=JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
+  salvos.forEach(p=>receberPedidoLocal(p));
+}
+
 // ── INICIALIZAÇÃO ──────────────────────────────────────────────
 function iniciarApp(){
   renderAll();
@@ -441,10 +459,22 @@ function iniciarApp(){
     atualizarBadgeLoja();
   }).catch(console.error);
 
-  // Listener em tempo real para pedidos ativos
+  // ── Fallback local: polling + BroadcastChannel ───────────────
+  // Lê imediatamente pedidos já salvos no localStorage
+  lerPedidosLocal();
+  // Polling a cada 2s (captura pedidos quando Firebase não está configurado)
+  let pollingLocal = setInterval(lerPedidosLocal, 2000);
+  // BroadcastChannel: recebe pedidos em tempo real entre abas (HTTP)
+  try {
+    const canal = new BroadcastChannel('tcho_pedidos');
+    canal.onmessage = (e) => receberPedidoLocal(e.data);
+  } catch(e){}
+
+  // ── Firestore: listener em tempo real (quando configurado) ────
   db.collection('pedidos')
     .where('status','in',['novo','prep','pronto','entrega'])
     .onSnapshot(snapshot=>{
+      clearInterval(pollingLocal); // Firebase funcionando → para o polling local
       snapshot.docChanges().forEach(change=>{
         const data=change.doc.data();
         const p={...data,_id:change.doc.id,hora:data.hora?data.hora.toDate():new Date()};
@@ -464,24 +494,9 @@ function iniciarApp(){
         }
       });
       renderAll();renderHistorico();
-    },err=>{
-      console.warn('Firebase não configurado — modo offline');
-      setInterval(()=>{
-        const salvos=JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
-        salvos.forEach(p=>{
-          if(!pedidos.find(x=>x.id===p.id)){
-            pedidos.push({...p,_id:'local-'+p.id,hora:new Date(p.hora),status:p.status||'novo',impresso:false});
-            totalHoje++;
-            tocarNotificacao();
-            showToast(`🔔 Novo pedido #${p.id} — ${p.nome}`,'tok-info');
-            atualizarBadgeNovos();
-          }
-        });
-        renderAll();
-      },5000);
-    });
+    },()=>{ /* Firebase não configurado — polling local já está rodando */ });
 
-  // Listener em tempo real para cupons
+  // Listener cupons (Firestore)
   db.collection('cupons').onSnapshot(snapshot=>{
     snapshot.docChanges().forEach(change=>{
       const data=change.doc.data();

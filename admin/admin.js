@@ -133,8 +133,9 @@ function imprimirPedido(p){
     showToast('⚠️ Servidor de impressão offline — abrindo janela','tok-err');
     const win=window.open('','_blank','width=420,height:560');
     if(!win)return;
+    const logoUrl=new URL('../logo/logo.png', window.location.href).href;
     win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0}body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:280px}.c{text-align:center}.b{font-weight:bold}.line{border-top:1px dashed #000;margin:6px 0}.row{display:flex;justify-content:space-between;margin:2px 0}.big{font-size:15px;font-weight:bold}@media print{@page{margin:3mm;size:80mm auto}}</style></head><body>
-    <div class="c b" style="font-size:17px">TCHO BURGUER</div>
+    <div class="c"><img src="${logoUrl}" style="max-width:160px;max-height:70px;margin-bottom:4px"></div>
     <div class="c" style="font-size:10px">Qui–Dom 19h–23h | (31) 98309-4152</div>
     <div class="line"></div>
     <div class="row"><span class="big">#${p.id}</span><span>${p.horaStr}</span></div>

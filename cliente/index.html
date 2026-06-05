@@ -5,188 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tcho Burguer — Peça aqui!</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;600;700&family=Barlow+Condensed:wght@700;800&display=swap" rel="stylesheet">
-<style>
-:root{--bg:#0f0d0b;--surface:#1a1612;--card:#221e19;--orange:#f5820a;--orange2:#ff6b00;--gold:#e8a825;--cream:#f5f0e8;--muted:#7a6f65}
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--bg);color:var(--cream);font-family:'Barlow',sans-serif;min-height:100vh}
-/* HEADER */
-header{background:linear-gradient(180deg,#000,#0a0806);text-align:center;padding:14px;border-bottom:2px solid var(--orange);position:sticky;top:0;z-index:100}
-.header-inner{display:flex;align-items:center;justify-content:center;gap:12px}
-.header-text h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(1.8rem,6vw,3rem);letter-spacing:4px;background:linear-gradient(135deg,var(--orange),var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1}
-.header-text p{color:var(--muted);font-size:.7rem;letter-spacing:2px;text-transform:uppercase}
-.horario-badge{display:inline-block;margin-top:4px;background:var(--orange);color:#000;font-size:.68rem;font-weight:700;letter-spacing:1px;padding:2px 10px;border-radius:20px;text-transform:uppercase}
-/* STEPS */
-.steps{display:flex;background:var(--surface);border-bottom:1px solid #2a2520;padding:0 10px;overflow-x:auto}
-.step-btn{flex:1;min-width:70px;padding:11px 5px;background:none;border:none;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-size:.82rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border-bottom:3px solid transparent;transition:all .2s;white-space:nowrap}
-.step-btn.active{color:var(--orange);border-bottom-color:var(--orange)}
-.step-btn.done{color:#27ae60;border-bottom-color:#27ae60}
-.step-num{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;background:var(--muted);color:#000;border-radius:50%;font-size:.62rem;margin-right:3px}
-.step-btn.active .step-num{background:var(--orange)}
-.step-btn.done .step-num{background:#27ae60;color:#fff}
-/* SCREENS */
-.screen{display:none;padding:14px 14px 110px;max-width:680px;margin:0 auto}
-.screen.active{display:block}
-/* SECTION TITLE */
-.section-title{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:3px;color:var(--orange);margin-bottom:11px;display:flex;align-items:center;gap:8px}
-.section-title::after{content:'';flex:1;height:2px;background:linear-gradient(90deg,var(--orange),transparent)}
-/* MENU ITEM */
-.menu-item{background:var(--card);border-radius:12px;margin-bottom:9px;border:1px solid #2a2520;display:flex;align-items:stretch;transition:border-color .2s;overflow:hidden}
-.menu-item.has-items{border-color:var(--orange);background:#2a2018}
-.item-emoji{width:66px;min-width:66px;background:#1a1612;display:flex;align-items:center;justify-content:center;font-size:1.9rem}
-.item-body{flex:1;padding:9px 11px}
-.item-name{font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:800;letter-spacing:1px}
-.item-desc{font-size:.7rem;color:var(--muted);margin-top:2px;line-height:1.4}
-.item-price{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;color:var(--orange);margin-top:4px}
-.tag{display:inline-block;background:var(--orange);color:#000;font-size:.58rem;font-weight:800;padding:2px 5px;border-radius:4px;letter-spacing:1px;margin-left:4px;vertical-align:middle}
-.cart-itens-list{margin-top:5px}
-.cart-item-resumo{background:#2a2018;border-radius:6px;padding:4px 8px;margin-bottom:3px;font-size:.66rem;color:var(--muted);border-left:2px solid var(--orange);display:flex;justify-content:space-between;align-items:center;gap:4px}
-.cart-item-resumo span{flex:1}
-.rm{color:#e74c3c;cursor:pointer;font-size:.8rem;padding:0 3px;flex-shrink:0}
-.item-controls{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 8px;gap:5px;min-width:54px;background:#1a1612}
-.qty-btn{width:28px;height:28px;border-radius:50%;border:2px solid var(--orange);background:none;color:var(--orange);font-size:1.05rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;font-weight:700;line-height:1}
-.qty-btn:hover{background:var(--orange);color:#000}
-.qty-btn.dim{border-color:#3a3530;color:#3a3530;cursor:not-allowed}
-.qty-btn.dim:hover{background:none;color:#3a3530}
-.qty-display{font-family:'Bebas Neue',sans-serif;font-size:1.15rem;color:var(--cream);min-width:16px;text-align:center}
-/* EXTRAS */
-.extra-item{background:var(--card);border-radius:10px;margin-bottom:7px;border:1px solid #2a2520;display:flex;align-items:center;overflow:hidden;transition:border-color .2s}
-.extra-item.has-items{border-color:var(--orange);background:#2a2018}
-.extra-emoji{width:50px;min-width:50px;background:#1a1612;display:flex;align-items:center;justify-content:center;font-size:1.3rem;padding:10px 0}
-.extra-body{flex:1;padding:7px 9px}
-.extra-name{font-size:.8rem;font-weight:700}
-.extra-sub{font-size:.67rem;color:var(--muted)}
-.extra-price{font-family:'Bebas Neue',sans-serif;font-size:.95rem;color:var(--orange)}
-.extra-controls{display:flex;align-items:center;gap:5px;padding:8px;background:#1a1612}
-.eq-btn{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--orange);background:none;color:var(--orange);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;font-weight:700}
-.eq-btn:hover{background:var(--orange);color:#000}
-.eq-btn.dim{border-color:#3a3530;color:#3a3530;cursor:not-allowed}
-.eq-btn.dim:hover{background:none;color:#3a3530}
-.eq-disp{font-family:'Bebas Neue',sans-serif;font-size:1.05rem;color:var(--cream);min-width:16px;text-align:center}
-/* CHECKOUT */
-.tipo-options{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
-.tipo-card{background:var(--card);border:2px solid #2a2520;border-radius:12px;padding:16px;text-align:center;cursor:pointer;transition:all .2s}
-.tipo-card:hover,.tipo-card.selected{border-color:var(--orange);background:#2a2018}
-.tipo-icon{font-size:1.7rem;margin-bottom:5px}
-.tipo-label{font-family:'Barlow Condensed',sans-serif;font-size:.95rem;font-weight:700;letter-spacing:1px}
-.form-group{margin-bottom:11px}
-.form-row{display:flex;gap:8px;margin-bottom:11px}
-.form-row .form-group{margin-bottom:0;flex:1}
-label{display:block;font-size:.74rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
-.label-req{color:#e74c3c;font-size:.6rem;margin-left:4px}
-input,select,textarea{width:100%;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:8px;padding:10px 12px;font-family:'Barlow',sans-serif;font-size:.88rem;outline:none;transition:border-color .2s}
-input:focus,select:focus,textarea:focus{border-color:var(--orange)}
-input.ok{border-color:#27ae60}
-input.loading{border-color:#f39c12}
-input[readonly]{opacity:.7;cursor:default}
-select option{background:var(--card)}
-.cep-row{display:flex;gap:8px}
-.btn-cep{background:#2a2520;border:1px solid #3a3530;border-radius:8px;padding:0 14px;color:var(--cream);font-weight:700;font-size:.75rem;cursor:pointer;white-space:nowrap;transition:all .2s}
-.btn-cep:hover{border-color:var(--orange);color:var(--orange)}
-.cep-msg{font-size:.68rem;margin-top:5px;min-height:16px;line-height:1.4}
-.cep-msg.ok{color:#27ae60}.cep-msg.err{color:#e74c3c}.cep-msg.load{color:#f39c12}
-.aviso-bairro{background:#1a0808;border:2px solid #e74c3c;border-radius:10px;padding:14px 16px;margin-bottom:14px;display:none}
-.aviso-bairro.show{display:block}
-.aviso-titulo{color:#e74c3c;font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:1px;margin-bottom:4px}
-.aviso-texto{font-size:.78rem;color:#f5f0e8;line-height:1.5}
-.aviso-texto strong{color:#e74c3c}
-.aviso-link{font-size:.7rem;color:var(--muted);margin-top:6px;cursor:pointer;text-decoration:underline}
-.bairros-lista{background:#1a1510;border:1px solid #2a2520;border-radius:10px;padding:12px;margin-bottom:12px;display:none}
-.bairros-lista.show{display:block}
-.bairros-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:8px}
-.bairro-chip{background:#221e19;border-radius:5px;padding:4px 8px;font-size:.68rem;display:flex;justify-content:space-between}
-.bairro-taxa{color:var(--orange);font-family:'Bebas Neue',sans-serif;font-size:.8rem}
-.pag-options{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:12px}
-.pag-card{background:var(--card);border:2px solid #2a2520;border-radius:10px;padding:11px 7px;text-align:center;cursor:pointer;transition:all .2s}
-.pag-card:hover,.pag-card.selected{border-color:var(--orange);background:#2a2018}
-.pag-icon{font-size:1.3rem;margin-bottom:4px}
-.pag-label{font-size:.7rem;font-weight:700}
-.pix-box{background:var(--card);border:2px dashed var(--orange);border-radius:10px;padding:14px;text-align:center;margin-bottom:12px;display:none}
-.pix-box.visible{display:block}
-.pix-key{font-family:'Bebas Neue',sans-serif;font-size:1.15rem;color:var(--orange);letter-spacing:2px;margin:5px 0}
-.troco-box{display:none}
-.sec-mini{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;color:var(--orange);margin:14px 0 10px;display:flex;align-items:center;gap:8px}
-.sec-mini::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--orange),transparent)}
-.frete-ok{background:#081508;border:1px solid #27ae60;border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-.frete-ok span:first-child{font-size:.8rem;color:#27ae60}
-.frete-ok span:last-child{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:#27ae60}
-/* CUPOM */
-.cupom-row{display:flex;gap:8px;margin-bottom:8px}
-.cupom-aplicado{background:#081508;border:1px solid #27ae60;border-radius:8px;padding:8px 12px;display:none;justify-content:space-between;align-items:center;margin-bottom:12px}
-.cupom-aplicado.show{display:flex}
-.cupom-tag{font-family:'Bebas Neue',sans-serif;color:#27ae60;font-size:1rem;letter-spacing:2px}
-.cupom-desc{font-size:.7rem;color:#27ae60}
-.btn-rem-cupom{background:none;border:none;color:#e74c3c;cursor:pointer;font-size:.8rem;padding:0 4px}
-/* RESUMO */
-.resumo-linha{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #2a2520;font-size:.82rem}
-.resumo-linha:last-child{border-bottom:none}
-.resumo-sub{font-size:.68rem;color:var(--muted);padding:0 0 5px 10px}
-.resumo-total{display:flex;justify-content:space-between;padding:11px 0;font-family:'Bebas Neue',sans-serif;font-size:1.35rem;color:var(--orange);border-top:2px solid var(--orange);margin-top:6px}
-.resumo-box{background:var(--card);border-radius:12px;padding:13px;margin-bottom:12px}
-.desconto-linha{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #2a2520;font-size:.82rem;color:#27ae60}
-.divider{height:1px;background:#2a2520;margin:9px 0}
-.err-inline{display:none;color:#e74c3c;font-size:.68rem;margin-top:4px}
-/* BOTÕES */
-.btn-primary{width:100%;padding:13px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;font-family:'Bebas Neue',sans-serif;font-size:1.15rem;letter-spacing:2px;border:none;border-radius:10px;cursor:pointer;transition:all .2s;margin-top:6px}
-.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(245,130,10,.4)}
-.btn-secondary{width:100%;padding:10px;background:none;color:var(--orange);font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:2px;border:2px solid var(--orange);border-radius:10px;cursor:pointer;transition:all .2s;margin-top:6px}
-.btn-secondary:hover{background:var(--orange);color:#000}
-.cart-float{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:30px;padding:11px 20px;cursor:pointer;font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:2px;box-shadow:0 8px 30px rgba(245,130,10,.5);display:none;align-items:center;gap:8px;z-index:99;white-space:nowrap}
-.cart-float.visible{display:flex;animation:popIn .3s ease}
-@keyframes popIn{from{transform:translateX(-50%) scale(.8);opacity:0}to{transform:translateX(-50%) scale(1);opacity:1}}
-.cart-badge{background:#000;color:var(--orange);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:.76rem;font-weight:900}
-/* SUCESSO */
-.success-box{text-align:center;padding:34px 14px}
-.success-icon{font-size:4.5rem;margin-bottom:12px;animation:bounce .6s ease}
-@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-16px)}}
-.success-title{font-family:'Bebas Neue',sans-serif;font-size:2.1rem;color:var(--orange);letter-spacing:3px;margin-bottom:5px}
-.success-sub{color:var(--muted);font-size:.88rem;line-height:1.6}
-.order-num{display:inline-block;margin:11px 0;background:var(--card);border:2px solid var(--orange);border-radius:10px;padding:7px 18px;font-family:'Bebas Neue',sans-serif;font-size:1.55rem;color:var(--orange);letter-spacing:4px}
-/* MODAL */
-#modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.87);z-index:200;align-items:flex-end;justify-content:center}
-.modal-box{background:#1a1510;border-radius:16px 16px 0 0;width:100%;max-width:680px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
-.modal-header{display:flex;justify-content:space-between;align-items:flex-start;padding:14px 15px 11px;border-bottom:1px solid #2a2520;background:#221e19;flex-shrink:0}
-.modal-title{font-family:'Bebas Neue',sans-serif;font-size:1.35rem;letter-spacing:2px;color:var(--orange)}
-.modal-price{font-size:.78rem;color:var(--muted);margin-top:2px}
-.modal-close{background:#2a2520;border:none;color:var(--muted);border-radius:50%;width:29px;height:29px;cursor:pointer;font-size:.95rem;display:flex;align-items:center;justify-content:center}
-.modal-close:hover{color:var(--cream)}
-.modal-body{overflow-y:auto;padding:13px 15px;flex:1}
-.modal-footer{padding:11px 15px;border-top:1px solid #2a2520;background:#221e19;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;gap:10px}
-.person-section{margin-bottom:14px}
-.person-label{font-size:.66rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:7px;display:flex;align-items:center;gap:6px}
-.req{color:#e74c3c;font-size:.58rem;font-weight:700}
-.opt-lbl{color:var(--muted);font-size:.56rem}
-.ponto-options,.sache-options{display:flex;gap:6px;flex-wrap:wrap}
-.ponto-btn,.sache-btn{background:#221e19;border:2px solid #3a3530;border-radius:8px;padding:9px 6px;cursor:pointer;transition:all .2s;text-align:center;flex:1;min-width:70px;user-select:none}
-.ponto-btn:hover,.sache-btn:hover{border-color:var(--orange)}
-.ponto-btn.sel,.sache-btn.sel{border-color:var(--orange);background:#2a2018}
-.p-icon,.s-icon{font-size:1.2rem;display:block;margin-bottom:3px}
-.p-name,.s-name{font-size:.65rem;font-weight:700;letter-spacing:.5px}
-.s-badge{display:inline-block;background:#0d1a2a;color:#3498db;font-size:.52rem;font-weight:700;padding:1px 4px;border-radius:3px;border:1px solid #1a3050;margin-top:2px}
-.ing-grid{display:flex;gap:5px;flex-wrap:wrap}
-.ing-btn{background:#221e19;border:1.5px solid #3a3530;border-radius:6px;padding:4px 8px;cursor:pointer;transition:all .2s;font-size:.7rem;font-weight:600;user-select:none}
-.ing-btn:hover{border-color:#e74c3c}
-.ing-btn.removido{border-color:#e74c3c;background:#1a0808;color:#e74c3c;text-decoration:line-through}
-.adic-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
-.adic-item{background:#221e19;border:1.5px solid #3a3530;border-radius:6px;padding:5px 8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:all .2s;user-select:none}
-.adic-item:hover{border-color:var(--orange)}
-.adic-item.sel{border-color:var(--orange);background:#2a2018}
-.adic-name{font-size:.68rem;font-weight:600}
-.adic-price{font-family:'Bebas Neue',sans-serif;color:var(--orange);font-size:.88rem}
-.modal-sep{height:1px;background:#2a2520;margin:2px 0 13px}
-.err-msg{display:none;color:#e74c3c;font-size:.68rem;margin-top:5px}
-/* LOJA FECHADA */
-.loja-fechada{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:999;align-items:center;justify-content:center;text-align:center;padding:20px}
-.loja-fechada.show{display:flex}
-.fechada-box{background:#1a1510;border:2px solid var(--orange);border-radius:16px;padding:32px 24px;max-width:380px}
-.fechada-icon{font-size:4rem;margin-bottom:12px}
-.fechada-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--orange);letter-spacing:3px;margin-bottom:8px}
-.fechada-msg{font-size:.88rem;color:var(--muted);line-height:1.6}
-.whatsapp-btn{display:inline-flex;align-items:center;gap:8px;margin-top:16px;background:#25d366;color:#000;font-weight:700;font-size:.85rem;padding:10px 20px;border-radius:30px;text-decoration:none;letter-spacing:1px}
-</style>
+<link rel="stylesheet" href="../shared/global.css">
+<link rel="stylesheet" href="cliente.css">
 </head>
 <body>
 
-<!-- LOJA FECHADA OVERLAY -->
+<!-- LOJA FECHADA -->
 <div class="loja-fechada" id="loja-fechada">
   <div class="fechada-box">
     <div class="fechada-icon">🔒</div>
@@ -202,6 +26,7 @@ select option{background:var(--card)}
   </div>
 </div>
 
+<!-- HEADER -->
 <header>
   <div class="header-inner">
     <div style="font-size:2rem">🍔</div>
@@ -213,13 +38,14 @@ select option{background:var(--card)}
   </div>
 </header>
 
+<!-- STEPS -->
 <div class="steps">
   <button class="step-btn active" onclick="goStep(1)" id="s1"><span class="step-num">1</span>CARDÁPIO</button>
   <button class="step-btn" onclick="goStep(2)" id="s2"><span class="step-num">2</span>FINALIZAR</button>
   <button class="step-btn" onclick="goStep(3)" id="s3"><span class="step-num">3</span>RESUMO</button>
 </div>
 
-<!-- SC1: CARDÁPIO -->
+<!-- TELA 1: CARDÁPIO -->
 <div class="screen active" id="sc1">
   <div class="section-title">Hamburguers</div>
   <div id="menu-burguers"></div>
@@ -233,7 +59,7 @@ select option{background:var(--card)}
   </button>
 </div>
 
-<!-- SC2: CHECKOUT -->
+<!-- TELA 2: CHECKOUT -->
 <div class="screen" id="sc2">
   <div class="sec-mini">👤 Seus dados</div>
   <div class="form-row">
@@ -308,7 +134,7 @@ select option{background:var(--card)}
   <button class="btn-secondary" onclick="goStep(1)">← VOLTAR</button>
 </div>
 
-<!-- SC3: RESUMO -->
+<!-- TELA 3: RESUMO -->
 <div class="screen" id="sc3">
   <div class="section-title">Resumo do pedido</div>
   <div class="resumo-box" id="resumo-content"></div>
@@ -316,7 +142,7 @@ select option{background:var(--card)}
   <button class="btn-secondary" onclick="goStep(2)">← VOLTAR</button>
 </div>
 
-<!-- SC4: SUCESSO -->
+<!-- TELA 4: SUCESSO -->
 <div class="screen" id="sc4">
   <div class="success-box">
     <div class="success-icon">🎉</div>
@@ -335,382 +161,11 @@ select option{background:var(--card)}
   <div class="modal-box" id="modal-box"></div>
 </div>
 
+<!-- SCRIPTS -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="../shared/dados.js"></script>
 <script src="../shared/firebase.js"></script>
-<script>
-// ── DADOS ──────────────────────────────────────────────────────
-const BURGUERS=[
-  {id:'xb',emoji:'🍔',nome:'X-Burguer',preco:23,desc:'Pão brioche, carne 160g, queijo cheddar, maionese da casa',ing:['Queijo cheddar','Maionese da casa']},
-  {id:'xs',emoji:'🥗',nome:'X-Salada',preco:25,desc:'Pão brioche, carne 160g, queijo cheddar, alface, tomate, maionese da casa',ing:['Queijo cheddar','Alface','Tomate','Maionese da casa']},
-  {id:'xba',emoji:'🥓',nome:'X-Bacon',preco:30,desc:'Pão brioche, carne 160g, queijo cheddar, bacon, alface, tomate, maionese da casa',ing:['Queijo cheddar','Bacon','Alface','Tomate','Maionese da casa']},
-  {id:'xp',emoji:'🥒',nome:'X-Picles Burguer',preco:33,desc:'Pão brioche, carne 160g, queijo cheddar, bacon, picles, alface, tomate, maionese da casa',ing:['Queijo cheddar','Bacon','Picles','Alface','Tomate','Maionese da casa']},
-  {id:'xt',emoji:'🍍',nome:'X-Tropical',preco:37,desc:'Pão brioche, carne 160g, queijo cheddar, bacon, abacaxi caramelizado, alface, tomate, maionese da casa',ing:['Queijo cheddar','Bacon','Abacaxi caramelizado','Alface','Tomate','Maionese da casa']},
-  {id:'xbd',emoji:'🍔',nome:'X-Bacon Duplo',preco:40,desc:'Pão brioche, 2 carnes 160g, queijo cheddar, bacon, alface, tomate, maionese da casa',ing:['Queijo cheddar','Bacon','Alface','Tomate','Maionese da casa']},
-  {id:'xrj',emoji:'🧀',nome:'X-Romeu & Julieta',preco:45,desc:'Pão brioche, carne 160g, queijo coalho, BBQ de goiabada, bacon, alface, tomate, maionese da casa',ing:['Queijo coalho','BBQ de goiabada','Bacon','Alface','Tomate','Maionese da casa']},
-  {id:'xrjd',emoji:'🧀',nome:'X-Romeu & Julieta Duplo',preco:55,tag:'ESPECIAL',desc:'Pão brioche, 2 carnes 160g, queijo coalho, BBQ de goiabada, bacon, alface, tomate, maionese da casa',ing:['Queijo coalho','BBQ de goiabada','Bacon','Alface','Tomate','Maionese da casa']},
-  {id:'xbt',emoji:'🥓',nome:'X-Bacon Triplo',preco:60,tag:'TOP',desc:'Pão brioche, 3 carnes 160g, triplo queijo cheddar, triplo bacon, alface, tomate, maionese da casa',ing:['Queijo cheddar','Bacon','Alface','Tomate','Maionese da casa']},
-];
-const EXTRAS=[
-  {id:'bat',emoji:'🍟',nome:'Porção de Batata',preco:13,desc:'Aprox. 200g'},
-  {id:'r15',emoji:'🥤',nome:'Refrigerante 1,5L',preco:14},
-  {id:'rla',emoji:'🥤',nome:'Refrigerante Lata',preco:6},
-  {id:'suc',emoji:'🧃',nome:'Suco Lata',preco:7},
-  {id:'agu',emoji:'💧',nome:'Água com Gás',preco:5},
-];
-const COMBO=[{id:'cmb',emoji:'🍟',nome:'Combo +R$15',preco:15,desc:'Refrigerante lata + Batata frita'}];
-const ADICIONAIS=[
-  {id:'ac_carne',nome:'Carne bovina 160g',preco:10},{id:'ac_coalho',nome:'Queijo Coalho',preco:10},
-  {id:'ac_abacaxi',nome:'Abacaxi',preco:8},{id:'ac_bacon',nome:'Bacon',preco:5},
-  {id:'ac_cheddar',nome:'Queijo Cheddar',preco:4},{id:'ac_picles',nome:'Picles',preco:3},
-  {id:'ac_molho',nome:'Molhos',preco:3},{id:'ac_salada',nome:'Salada',preco:3},
-];
-const PONTOS=[{id:'mp',emoji:'🩸',nome:'Mal passado'},{id:'ap',emoji:'🥩',nome:'Ao ponto'},{id:'bp',emoji:'🔥',nome:'Bem passado'}];
-const SACHES=[{id:'sn',emoji:'🚫',nome:'Não quero'},{id:'sk',emoji:'🍅',nome:'Ketchup'},{id:'sm',emoji:'🤍',nome:'Maionese'},{id:'sa',emoji:'🍅🤍',nome:'Ketchup + Maio'}];
-const BAIRROS_TAXA=[
-  {nome:'Botafogo',taxa:7},{nome:'Canaã',taxa:7},{nome:'Candelária',taxa:4},{nome:'Cenáculo',taxa:4},
-  {nome:'Céu Azul',taxa:6},{nome:'Comerciários',taxa:4},{nome:'Copacabana',taxa:7},
-  {nome:'Etelvina Carneiro',taxa:7},{nome:'Floramar',taxa:7},{nome:'Guarani',taxa:7},
-  {nome:'Heliópolis',taxa:8},{nome:'Itapoã',taxa:7},{nome:'Jaqueline',taxa:6},
-  {nome:'Jardim Europa',taxa:3},{nome:'Jardim Felicidade',taxa:7},{nome:'Jardim Guanabara',taxa:7},
-  {nome:'Jardim Leblon',taxa:6},{nome:'Juliana',taxa:6},{nome:'Justinópolis',taxa:7},
-  {nome:'Lagoa',taxa:6},{nome:'Lagoinha',taxa:6},{nome:'Letícia',taxa:5},
-  {nome:'Mantiqueira',taxa:5},{nome:'Maria Helena',taxa:5},{nome:'Minascaixa',taxa:4},
-  {nome:'Minaslândia',taxa:7},{nome:'Nova Pampulha',taxa:6},{nome:'Parque São Pedro',taxa:5},
-  {nome:'Piratininga',taxa:6},{nome:'Planalto',taxa:7},{nome:'Rio Branco',taxa:4},
-  {nome:'Santa Amélia',taxa:6},{nome:'Santa Branca',taxa:7},{nome:'Santa Clara',taxa:7},
-  {nome:'Santa Mônica',taxa:6},{nome:'São Bernardo',taxa:8},{nome:'São João Batista',taxa:5},
-  {nome:'São Tomáz',taxa:8},{nome:'Serra Verde',taxa:4},{nome:'Tupi',taxa:7},
-  {nome:'Venda Nova',taxa:5},{nome:'Vila Clóris',taxa:6},{nome:'Xodó-Marize',taxa:7},
-];
-// Cupons ativos (em produção vêm do backend/admin)
-const CUPONS_ATIVOS=[
-  {codigo:'TCHO10',tipo:'pct',valor:10,minimo:30,descricao:'10% de desconto acima de R$30!'},
-  {codigo:'FRETEGRATIS',tipo:'frete',valor:0,minimo:50,descricao:'Frete grátis acima de R$50'},
-  {codigo:'BEMVINDO',tipo:'fixo',valor:5,minimo:0,descricao:'R$5 de desconto no primeiro pedido!'},
-];
-
-// ── STATE ──────────────────────────────────────────────────────
-let cartBurguers={},cartExtras={},tipoPedido=null,pagamento=null,freteAtual=0,bairroAtendido=false;
-let cupomAtual=null,descontoAtual=0;
-let orderCounter=Math.floor(Math.random()*100)+1;
-let modalId=null,pontoAtual=null,sacheAtual=null,removidosAtual=[],adicionaisAtual={};
-
-// ── VERIFICAR HORÁRIO / LOJA ABERTA ──────────────────────────
-function verificarLoja(){
-  db.collection('config').doc('operacao').onSnapshot(doc => {
-    const data = doc.exists ? doc.data() : {};
-    const lojaAberta = data.lojaAberta !== false;
-    document.getElementById('loja-fechada').classList.toggle('show', !lojaAberta);
-  }, () => {
-    // Firebase não configurado ainda — usa localStorage como fallback
-    const lojaAberta = localStorage.getItem('tcho_loja_aberta') !== 'false';
-    if(!lojaAberta) document.getElementById('loja-fechada').classList.add('show');
-  });
-}
-
-// ── RENDER ──────────────────────────────────────────────────────
-function renderBurguers(){
-  document.getElementById('menu-burguers').innerHTML=BURGUERS.map(b=>{
-    const insts=cartBurguers[b.id]||[],qty=insts.length;
-    const resumo=insts.map((inst,i)=>{
-      const pts=[inst.ponto?`${inst.ponto.emoji} ${inst.ponto.nome}`:'',inst.sache?`🧴 ${inst.sache.nome}`:'',inst.removidos.length?'sem '+inst.removidos.join(', '):'',inst.adicionais.length?'+ '+inst.adicionais.map(a=>a.nome).join(', '):''].filter(Boolean).join(' • ');
-      return`<div class="cart-item-resumo"><span>#${i+1} ${pts||'padrão'}</span><span class="rm" onclick="remInst('${b.id}',${i})">✕</span></div>`;
-    }).join('');
-    return`<div class="menu-item ${qty>0?'has-items':''}" id="mi-${b.id}">
-      <div class="item-emoji">${b.emoji}</div>
-      <div class="item-body">
-        <div class="item-name">${b.nome}${b.tag?`<span class="tag">${b.tag}</span>`:''}</div>
-        <div class="item-desc">${b.desc}</div>
-        <div class="item-price">R$${b.preco}</div>
-        ${qty>0?`<div class="cart-itens-list">${resumo}</div>`:''}
-      </div>
-      <div class="item-controls">
-        <button class="qty-btn" onclick="abrirModal('${b.id}')">+</button>
-        <div class="qty-display">${qty}</div>
-        <button class="qty-btn ${qty===0?'dim':''}" onclick="${qty>0?`remUlt('${b.id}')`:'void(0)'}">−</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-function renderExtras(){
-  const render=(arr,id)=>{document.getElementById(id).innerHTML=arr.map(e=>{const q=cartExtras[e.id]||0;return`<div class="extra-item ${q>0?'has-items':''}"><div class="extra-emoji">${e.emoji}</div><div class="extra-body"><div class="extra-name">${e.nome}</div>${e.desc?`<div class="extra-sub">${e.desc}</div>`:''}<div class="extra-price">R$${e.preco}</div></div><div class="extra-controls"><button class="eq-btn ${q===0?'dim':''}" onclick="${q>0?`chgExtra('${e.id}',-1)`:'void(0)'}">−</button><div class="eq-disp">${q}</div><button class="eq-btn" onclick="chgExtra('${e.id}',1)">+</button></div></div>`;}).join('');};
-  render(EXTRAS,'menu-extras');render(COMBO,'menu-combo');
-}
-function chgExtra(id,d){cartExtras[id]=Math.max(0,(cartExtras[id]||0)+d);renderExtras();updateFloat();}
-
-// ── MODAL PERSONALIZAÇÃO ──────────────────────────────────────
-function abrirModal(id){
-  const b=BURGUERS.find(x=>x.id===id);
-  modalId=id;pontoAtual=null;sacheAtual=null;removidosAtual=[];adicionaisAtual={};
-  document.getElementById('modal-box').innerHTML=`
-    <div class="modal-header"><div><div class="modal-title">${b.emoji} ${b.nome}</div><div class="modal-price">R$${b.preco}</div></div><button class="modal-close" onclick="fecharModal()">✕</button></div>
-    <div class="modal-body">
-      <div class="person-section"><div class="person-label">🥩 Ponto da carne <span class="req">* obrigatório</span></div>
-        <div class="ponto-options">${PONTOS.map(p=>`<div class="ponto-btn" id="pnt-${p.id}" onclick="selPonto('${p.id}')"><span class="p-icon">${p.emoji}</span><span class="p-name">${p.nome}</span></div>`).join('')}</div>
-        <div id="err-ponto" class="err-msg">⚠ Selecione o ponto da carne</div></div>
-      <div class="modal-sep"></div>
-      <div class="person-section"><div class="person-label">🧴 Sachê <span class="req">* obrigatório</span></div>
-        <div class="sache-options">${SACHES.map(s=>`<div class="sache-btn" id="sch-${s.id}" onclick="selSache('${s.id}')"><span class="s-icon">${s.emoji}</span><span class="s-name">${s.nome}</span><span class="s-badge">grátis</span></div>`).join('')}</div>
-        <div id="err-sache" class="err-msg">⚠ Selecione sua preferência de sachê</div></div>
-      <div class="modal-sep"></div>
-      <div class="person-section"><div class="person-label">➖ Retirar ingredientes <span class="opt-lbl">(opcional)</span></div>
-        <div class="ing-grid">${b.ing.map(i=>`<div class="ing-btn" id="ing-${i.replace(/[\s&]/g,'_')}" onclick="togIng('${i}')">${i}</div>`).join('')}</div></div>
-      <div class="modal-sep"></div>
-      <div class="person-section"><div class="person-label">➕ Acréscimos <span class="opt-lbl">(opcional)</span></div>
-        <div class="adic-grid">${ADICIONAIS.map(a=>`<div class="adic-item" id="adi-${a.id}" onclick="togAdic('${a.id}',${a.preco},'${a.nome}')"><span class="adic-name">${a.nome}</span><span class="adic-price">+R$${a.preco}</span></div>`).join('')}</div></div>
-    </div>
-    <div class="modal-footer"><div id="adic-total" style="font-size:.76rem;color:var(--muted)"></div><button class="btn-primary" style="margin:0;max-width:200px;padding:10px" onclick="confirmarModal()">✓ ADICIONAR</button></div>`;
-  document.getElementById('modal-overlay').style.display='flex';
-  document.body.style.overflow='hidden';
-}
-function selPonto(id){pontoAtual=PONTOS.find(p=>p.id===id);document.querySelectorAll('.ponto-btn').forEach(e=>e.classList.remove('sel'));document.getElementById('pnt-'+id).classList.add('sel');document.getElementById('err-ponto').style.display='none';}
-function selSache(id){sacheAtual=SACHES.find(s=>s.id===id);document.querySelectorAll('.sache-btn').forEach(e=>e.classList.remove('sel'));document.getElementById('sch-'+id).classList.add('sel');document.getElementById('err-sache').style.display='none';}
-function togIng(ing){const idx=removidosAtual.indexOf(ing);if(idx>-1)removidosAtual.splice(idx,1);else removidosAtual.push(ing);document.getElementById('ing-'+ing.replace(/[\s&]/g,'_')).classList.toggle('removido',removidosAtual.includes(ing));}
-function togAdic(id,preco,nome){if(adicionaisAtual[id])delete adicionaisAtual[id];else adicionaisAtual[id]={preco,nome};document.getElementById('adi-'+id).classList.toggle('sel',!!adicionaisAtual[id]);const t=Object.values(adicionaisAtual).reduce((a,x)=>a+x.preco,0);document.getElementById('adic-total').textContent=t>0?`Acréscimos: +R$${t}`:'';}
-function confirmarModal(){
-  let ok=true;
-  if(!pontoAtual){document.getElementById('err-ponto').style.display='block';ok=false;}
-  if(!sacheAtual){document.getElementById('err-sache').style.display='block';ok=false;}
-  if(!ok)return;
-  const precoExtra=Object.values(adicionaisAtual).reduce((a,x)=>a+x.preco,0);
-  if(!cartBurguers[modalId])cartBurguers[modalId]=[];
-  cartBurguers[modalId].push({ponto:pontoAtual,sache:sacheAtual,removidos:[...removidosAtual],adicionais:Object.values(adicionaisAtual),precoExtra});
-  fecharModal();renderBurguers();updateFloat();
-}
-function fecharModal(){document.getElementById('modal-overlay').style.display='none';document.body.style.overflow='';}
-function remInst(id,idx){cartBurguers[id].splice(idx,1);if(!cartBurguers[id].length)delete cartBurguers[id];renderBurguers();updateFloat();}
-function remUlt(id){if(!cartBurguers[id]||!cartBurguers[id].length)return;cartBurguers[id].pop();if(!cartBurguers[id].length)delete cartBurguers[id];renderBurguers();updateFloat();}
-
-// ── CART ──────────────────────────────────────────────────────
-function getSubtotal(){let t=0;Object.entries(cartBurguers).forEach(([id,insts])=>{const b=BURGUERS.find(x=>x.id===id);if(b)insts.forEach(i=>t+=b.preco+i.precoExtra);});[...EXTRAS,...COMBO].forEach(e=>{if(cartExtras[e.id])t+=e.preco*cartExtras[e.id];});return t;}
-function getTotal(){
-  let sub=getSubtotal(),frete=tipoPedido==='delivery'?freteAtual:0,desc=0;
-  if(cupomAtual){
-    if(cupomAtual.tipo==='pct')desc=Math.round(sub*cupomAtual.valor/100);
-    else if(cupomAtual.tipo==='fixo')desc=cupomAtual.valor;
-    else if(cupomAtual.tipo==='frete')frete=0;
-  }
-  descontoAtual=desc;
-  return sub+frete-desc;
-}
-function getCount(){return Object.values(cartBurguers).reduce((a,arr)=>a+arr.length,0)+Object.values(cartExtras).reduce((a,b)=>a+b,0);}
-function updateFloat(){const c=getCount();document.getElementById('cartCount').textContent=c;document.getElementById('cartTotal').textContent=`R$${getSubtotal()}`;document.getElementById('cartFloat').classList.toggle('visible',c>0&&document.getElementById('sc1').classList.contains('active'));}
-
-// ── CUPOM ──────────────────────────────────────────────────────
-function aplicarCupom(){
-  const code=document.getElementById('f-cupom').value.trim().toUpperCase();
-  const msg=document.getElementById('cupom-msg');
-  if(!code){msg.style.color='#e74c3c';msg.textContent='Digite o código do cupom';return;}
-  const cupom=CUPONS_ATIVOS.find(c=>c.codigo===code);
-  if(!cupom){msg.style.color='#e74c3c';msg.textContent='❌ Cupom inválido ou expirado';return;}
-  const sub=getSubtotal();
-  if(cupom.minimo>0&&sub<cupom.minimo){msg.style.color='#e74c3c';msg.textContent=`❌ Pedido mínimo de R$${cupom.minimo} para este cupom`;return;}
-  cupomAtual=cupom;
-  document.getElementById('cupom-tag').textContent=cupom.codigo;
-  document.getElementById('cupom-desc-text').textContent=cupom.descricao;
-  document.getElementById('cupom-aplicado').classList.add('show');
-  document.getElementById('f-cupom').value='';
-  msg.style.color='#27ae60';msg.textContent='✅ Cupom aplicado com sucesso!';
-}
-function removerCupom(){cupomAtual=null;descontoAtual=0;document.getElementById('cupom-aplicado').classList.remove('show');document.getElementById('cupom-msg').textContent='';}
-
-// ── TIPO / PAG ──────────────────────────────────────────────────
-function selectTipo(t){
-  tipoPedido=t;
-  document.getElementById('t-ret').classList.toggle('selected',t==='retirada');
-  document.getElementById('t-del').classList.toggle('selected',t==='delivery');
-  document.getElementById('form-delivery').style.display=t==='delivery'?'block':'none';
-  document.getElementById('err-tipo').style.display='none';
-  if(t==='retirada'){bairroAtendido=true;freteAtual=0;}else bairroAtendido=false;
-}
-function selectPag(p){
-  pagamento=p;
-  ['pix','din','car'].forEach(x=>document.getElementById('p-'+x).classList.toggle('selected',x===p.substring(0,3)));
-  document.getElementById('pix-info').classList.toggle('visible',p==='pix');
-  document.getElementById('troco-box').style.display=p==='dinheiro'?'block':'none';
-  document.getElementById('err-pag').style.display='none';
-}
-
-// ── CEP ──────────────────────────────────────────────────────
-function mascaraCep(inp){let v=inp.value.replace(/\D/g,'');if(v.length>5)v=v.slice(0,5)+'-'+v.slice(5,8);inp.value=v;if(v.replace('-','').length===8)buscarCep();}
-function mascaraTel(inp){let v=inp.value.replace(/\D/g,'');if(v.length<=2)v=v.replace(/^(\d{0,2})/,'($1');else if(v.length<=7)v=v.replace(/^(\d{2})(\d{0,5})/,'($1) $2');else v=v.replace(/^(\d{2})(\d{5})(\d{0,4})/,'($1) $2-$3');inp.value=v;}
-async function buscarCep(){
-  const cep=document.getElementById('f-cep').value.replace(/\D/g,'');
-  if(cep.length!==8)return;
-  const msg=document.getElementById('cep-msg');
-  msg.className='cep-msg load';msg.textContent='🔍 Buscando endereço...';
-  document.getElementById('f-cep').className='loading';
-  document.getElementById('aviso-bairro').classList.remove('show');
-  document.getElementById('campos-endereco').style.display='none';
-  bairroAtendido=false;
-  try{
-    const r=await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-    const d=await r.json();
-    if(d.erro){msg.className='cep-msg err';msg.textContent='❌ CEP não encontrado.';document.getElementById('f-cep').className='';return;}
-    const bv=d.bairro||'';
-    const enc=BAIRROS_TAXA.find(b=>b.nome.toLowerCase().trim()===bv.toLowerCase().trim()||bv.toLowerCase().includes(b.nome.toLowerCase())||b.nome.toLowerCase().includes(bv.toLowerCase()));
-    if(!enc){
-      msg.className='cep-msg err';msg.textContent=`❌ Bairro "${bv}" não atendido para delivery.`;
-      document.getElementById('f-cep').className='';
-      document.getElementById('bairro-nao-atendido').textContent=bv||'encontrado';
-      document.getElementById('aviso-bairro').classList.add('show');
-      bairroAtendido=false;freteAtual=0;
-      renderListaBairros();
-    }else{
-      msg.className='cep-msg ok';msg.textContent=`✅ Entregamos em ${enc.nome}!`;
-      document.getElementById('f-cep').className='ok';
-      document.getElementById('aviso-bairro').classList.remove('show');
-      document.getElementById('bairros-lista').classList.remove('show');
-      document.getElementById('f-rua').value=d.logradouro||'';
-      document.getElementById('f-bairro').value=enc.nome;
-      document.getElementById('f-cidade').value=`${d.localidade} / ${d.uf}`;
-      document.getElementById('campos-endereco').style.display='block';
-      document.getElementById('bairro-nome-ok').textContent=enc.nome;
-      document.getElementById('frete-val').textContent=`R$${enc.taxa}`;
-      freteAtual=enc.taxa;bairroAtendido=true;
-      document.getElementById('f-num').focus();
-    }
-  }catch(e){msg.className='cep-msg err';msg.textContent='❌ Erro ao buscar CEP.';document.getElementById('f-cep').className='';}
-}
-function renderListaBairros(){const s=[...BAIRROS_TAXA].sort((a,b)=>a.nome.localeCompare(b.nome));document.getElementById('bairros-grid').innerHTML=s.map(b=>`<div class="bairro-chip"><span>${b.nome}</span><span class="bairro-taxa">R$${b.taxa}</span></div>`).join('');}
-function toggleListaBairros(){const el=document.getElementById('bairros-lista');if(!el.classList.contains('show')){renderListaBairros();el.classList.add('show');}else el.classList.remove('show');}
-
-// ── STEPS ──────────────────────────────────────────────────────
-function goStep(n){
-  if(n>1&&getCount()===0){alert('Adicione pelo menos um item!');return;}
-  [1,2,3,4].forEach(i=>document.getElementById('sc'+i).classList.toggle('active',i===n));
-  ['s1','s2','s3'].forEach((id,i)=>{document.getElementById(id).classList.toggle('active',i+1===n);document.getElementById(id).classList.toggle('done',i+1<n);});
-  document.getElementById('cartFloat').classList.toggle('visible',n===1&&getCount()>0);
-  window.scrollTo(0,0);
-}
-function irResumo(){
-  if(!document.getElementById('f-nome').value.trim()){alert('Digite seu nome!');return;}
-  if(document.getElementById('f-tel').value.replace(/\D/g,'').length<10){alert('Digite seu telefone!');return;}
-  if(!tipoPedido){document.getElementById('err-tipo').style.display='block';window.scrollTo(0,200);return;}
-  if(tipoPedido==='delivery'){
-    if(!bairroAtendido){document.getElementById('aviso-bairro').classList.add('show');alert('Não entregamos nesse bairro. Escolha retirada ou informe um CEP atendido.');return;}
-    if(!document.getElementById('f-num').value.trim()){alert('Digite o número do endereço!');return;}
-  }
-  if(!pagamento){document.getElementById('err-pag').style.display='block';return;}
-  renderResumo();goStep(3);
-}
-
-// ── RESUMO ──────────────────────────────────────────────────────
-function renderResumo(){
-  let html='';
-  Object.entries(cartBurguers).forEach(([id,insts])=>{
-    const b=BURGUERS.find(x=>x.id===id);if(!b)return;
-    insts.forEach(inst=>{
-      html+=`<div class="resumo-linha"><span>${b.emoji} ${b.nome}</span><span>R$${b.preco+inst.precoExtra}</span></div>`;
-      const det=[inst.ponto?`🥩 ${inst.ponto.emoji} ${inst.ponto.nome}`:'',inst.sache?`🧴 ${inst.sache.emoji} ${inst.sache.nome}`:'',inst.removidos.length?`➖ sem ${inst.removidos.join(', ')}`:'',inst.adicionais.length?`➕ ${inst.adicionais.map(a=>a.nome).join(', ')}`:''].filter(Boolean);
-      if(det.length)html+=`<div class="resumo-sub">${det.join(' • ')}</div>`;
-    });
-  });
-  [...EXTRAS,...COMBO].forEach(e=>{if((cartExtras[e.id]||0)>0)html+=`<div class="resumo-linha"><span>${e.emoji} ${e.nome} x${cartExtras[e.id]}</span><span>R$${e.preco*cartExtras[e.id]}</span></div>`;});
-  html+=`<div class="divider"></div>`;
-  const nome=document.getElementById('f-nome').value,tel=document.getElementById('f-tel').value;
-  html+=`<div class="resumo-linha"><span>👤 ${nome}</span><span>📞 ${tel}</span></div>`;
-  const sub=getSubtotal(),frete=tipoPedido==='delivery'?freteAtual:0;
-  if(tipoPedido==='delivery'){
-    const rua=document.getElementById('f-rua').value,num=document.getElementById('f-num').value,comp=document.getElementById('f-comp').value,bairro=document.getElementById('f-bairro').value,cidade=document.getElementById('f-cidade').value;
-    html+=`<div class="resumo-linha"><span>🛵 Delivery — ${bairro}</span><span>+R$${frete}</span></div>`;
-    if(rua) html+=`<div class="resumo-sub">📍 ${rua}, ${num}${comp?', '+comp:''} — ${bairro} — ${cidade}</div>`;
-  }else{html+=`<div class="resumo-linha"><span>🏃 Retirada no local</span><span>Grátis</span></div>`;}
-  const pLabel={pix:'PIX',dinheiro:'Dinheiro',cartao:'Cartão na entrega'};
-  html+=`<div class="resumo-linha"><span>💳 ${pLabel[pagamento]}</span></div>`;
-  // cupom
-  getTotal(); // recalcula desconto
-  let freteReal=frete;
-  if(cupomAtual&&cupomAtual.tipo==='frete')freteReal=0;
-  if(cupomAtual){
-    if(descontoAtual>0)html+=`<div class="desconto-linha"><span>🎟️ Cupom ${cupomAtual.codigo}</span><span>−R$${descontoAtual}</span></div>`;
-    else if(cupomAtual.tipo==='frete')html+=`<div class="desconto-linha"><span>🎟️ Frete grátis (${cupomAtual.codigo})</span><span>−R$${frete}</span></div>`;
-  }
-  const obs=document.getElementById('f-obs').value;
-  if(obs)html+=`<div class="resumo-linha" style="flex-direction:column;gap:2px"><span style="color:var(--muted);font-size:.7rem">📝 OBS</span><span style="font-size:.78rem">${obs}</span></div>`;
-  const total=sub+freteReal-descontoAtual;
-  document.getElementById('resumo-content').innerHTML=html+`<div class="resumo-total"><span>TOTAL</span><span>R$${Math.max(0,total)}</span></div>`;
-}
-
-async function finalizarPedido(){
-  // Gera número do pedido sequencial via Firestore
-  let numOrdem;
-  try {
-    const contRef = db.collection('config').doc('contador');
-    numOrdem = await db.runTransaction(async t => {
-      const d = await t.get(contRef);
-      const next = (d.exists ? d.data().ultimo : 0) + 1;
-      t.set(contRef, {ultimo: next}, {merge: true});
-      return next;
-    });
-  } catch(e) {
-    // Fallback se Firebase não estiver configurado
-    numOrdem = Math.floor(Math.random()*900)+100;
-  }
-
-  const num=String(numOrdem).padStart(3,'0');
-  document.getElementById('order-num').textContent=`#${num}`;
-  document.getElementById('success-msg').textContent=tipoPedido==='delivery'?'Pedido recebido! Em breve nosso entregador sairá. 🛵':'Pedido em preparo! Venha retirar em breve. 🍔';
-
-  const pedido={
-    id:numOrdem, num:`#${num}`,
-    nome:document.getElementById('f-nome').value,
-    tel:document.getElementById('f-tel').value,
-    tipo:tipoPedido,
-    bairro:tipoPedido==='delivery'?document.getElementById('f-bairro').value:'',
-    endereco:tipoPedido==='delivery'?`${document.getElementById('f-rua').value}, ${document.getElementById('f-num').value}${document.getElementById('f-comp').value?', '+document.getElementById('f-comp').value:''}`:'' ,
-    cidade:tipoPedido==='delivery'?document.getElementById('f-cidade').value:'',
-    pag:pagamento,
-    frete:tipoPedido==='delivery'?freteAtual:0,
-    desconto:descontoAtual,
-    cupom:cupomAtual?.codigo||'',
-    obs:document.getElementById('f-obs').value,
-    itens:montarItensTexto(),
-    total:Math.max(0,getTotal()),
-    status:'novo',
-    hora:firebase.firestore.FieldValue.serverTimestamp(),
-    horaStr:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
-    impresso:false,
-    criadoEm:firebase.firestore.FieldValue.serverTimestamp(),
-  };
-
-  // Salva no Firestore (admin recebe em tempo real)
-  db.collection('pedidos').add(pedido).catch(() => {
-    // Fallback para localStorage se Firebase não configurado
-    const pedidos=JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
-    pedidos.push({...pedido, hora:new Date().toISOString()});
-    localStorage.setItem('tcho_pedidos',JSON.stringify(pedidos));
-  });
-
-  [1,2,3].forEach(i=>document.getElementById('sc'+i).classList.remove('active'));
-  document.getElementById('sc4').classList.add('active');
-  document.getElementById('cartFloat').classList.remove('visible');
-  window.scrollTo(0,0);
-}
-
-function montarItensTexto(){
-  const lista=[];
-  Object.entries(cartBurguers).forEach(([id,insts])=>{
-    const b=BURGUERS.find(x=>x.id===id);if(!b)return;
-    insts.forEach((inst,i)=>{
-      const det=[inst.ponto?inst.ponto.nome:'',inst.sache&&inst.sache.id!=='sn'?'sachê '+inst.sache.nome:'',inst.removidos.length?'sem '+inst.removidos.join(', '):'',inst.adicionais.length?inst.adicionais.map(a=>'+'+a.nome).join(', '):''].filter(Boolean).join(' • ');
-      lista.push(`${b.nome}${det?' ('+det+')':''} — R$${b.preco+inst.precoExtra}`);
-    });
-  });
-  [...EXTRAS,...COMBO].forEach(e=>{if((cartExtras[e.id]||0)>0)lista.push(`${e.nome} x${cartExtras[e.id]} — R$${e.preco*cartExtras[e.id]}`);});
-  return lista;
-}
-
-function novoPedido(){
-  cartBurguers={};cartExtras={};tipoPedido=null;pagamento=null;freteAtual=0;bairroAtendido=false;cupomAtual=null;descontoAtual=0;
-  renderBurguers();renderExtras();goStep(1);
-}
-
-// ── INIT ──────────────────────────────────────────────────────
-verificarLoja();
-renderBurguers();
-renderExtras();
-</script>
+<script src="cliente.js"></script>
 </body>
 </html>

@@ -1,0 +1,18 @@
+/* ── VARIÁVEIS DE COR — compartilhadas entre cliente e admin ─── */
+:root {
+  --bg:      #0f0d0b;
+  --card:    #221e19;
+  --orange:  #f5820a;
+  --orange2: #ff6b00;
+  --gold:    #e8a825;
+  --cream:   #f5f0e8;
+  --muted:   #7a6f65;
+  /* --surface é definida em cada página (cliente: #1a1612 | admin: #1a1510) */
+}
+
+/* ── RESET ───────────────────────────────────────────────────── */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}

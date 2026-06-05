@@ -47,12 +47,13 @@
 
 <!-- TELA 1: CARDÁPIO -->
 <div class="screen active" id="sc1">
-  <div class="section-title">Hamburguers</div>
+  <div class="section-title" id="cat-title-burguers">Hamburguers</div>
   <div id="menu-burguers"></div>
-  <div class="section-title">Porção & Bebidas</div>
+  <div class="section-title" id="cat-title-extras">Porção & Bebidas</div>
   <div id="menu-extras"></div>
-  <div class="section-title">Combo</div>
+  <div class="section-title" id="cat-title-combo">Combo</div>
   <div id="menu-combo"></div>
+  <div id="custom-cats-section"></div>
   <button class="cart-float" id="cartFloat" onclick="goStep(2)">
     <span class="cart-badge" id="cartCount">0</span>
     FINALIZAR • <span id="cartTotal">R$0</span>
@@ -158,7 +159,7 @@
 </div>
 
 <!-- MODAL PERSONALIZAÇÃO -->
-<div id="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.87);z-index:200;align-items:flex-end;justify-content:center">
+<div id="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.87);z-index:200;align-items:center;justify-content:center">
   <div class="modal-box" id="modal-box"></div>
 </div>
 

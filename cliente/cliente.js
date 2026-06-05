@@ -1,4 +1,18 @@
 // ── DADOS (lidos de shared/dados.js via window.TCHO) ───────────
+(function(){
+  const edits=JSON.parse(localStorage.getItem('tcho_prods_edits')||'{}');
+  [...TCHO.burguers,...TCHO.extras].forEach(item=>{
+    if(edits[item.id]){
+      if(edits[item.id].nome)item.nome=edits[item.id].nome;
+      if(edits[item.id].preco!==undefined)item.preco=edits[item.id].preco;
+      if(edits[item.id].desc!==undefined)item.desc=edits[item.id].desc;
+    }
+  });
+  const ings=JSON.parse(localStorage.getItem('tcho_ing_edits')||'{}');
+  TCHO.burguers.forEach(b=>{if(ings[b.id])b.ing=ings[b.id];});
+  const adicSaved=localStorage.getItem('tcho_adicionais');
+  if(adicSaved){const adics=JSON.parse(adicSaved);TCHO.adicionais.length=0;adics.forEach(a=>TCHO.adicionais.push(a));}
+})();
 const BURGUERS    = TCHO.burguers;
 
 // Fotos dos hambúrgueres — nome do arquivo deve ser igual ao nome do hambúrguer
@@ -15,6 +29,17 @@ const FOTOS = {
 };
 const EXTRAS      = TCHO.extras.filter(e => e.id !== 'cmb');
 const COMBO       = TCHO.extras.filter(e => e.id === 'cmb');
+
+// Carrega produtos custom do admin
+(function(){
+  const prods=JSON.parse(localStorage.getItem('tcho_prods_custom')||'[]').filter(p=>p.ativo!==false);
+  prods.forEach(p=>{
+    const prod={id:p.id,emoji:p.emoji,nome:p.n||p.nome,preco:p.p!==undefined?p.p:p.preco,desc:p.desc||'',opcoes:p.opcoes||[],ativo:true,customCat:p.cat.startsWith('cat_')?p.cat:null};
+    if(p.tipo==='b'||p.cat==='b'||p.cat==='burguers')BURGUERS.push(prod);
+    else if(p.tipo==='c'||p.cat==='c'||p.cat==='combo')COMBO.push(prod);
+    else EXTRAS.push(prod);
+  });
+})();
 const ADICIONAIS  = TCHO.adicionais;
 const PONTOS      = TCHO.pontos;
 const SACHES      = TCHO.saches;
@@ -63,7 +88,7 @@ function getFotoCliente(id){
 
 // ── RENDER CARDÁPIO ────────────────────────────────────────────
 function renderBurguers(){
-  document.getElementById('menu-burguers').innerHTML=BURGUERS.map(b=>{
+  document.getElementById('menu-burguers').innerHTML=BURGUERS.filter(b=>!b.customCat).map(b=>{
     const insts=cartBurguers[b.id]||[],qty=insts.length;
     const resumo=insts.map((inst,i)=>{
       const pts=[inst.ponto?`${inst.ponto.emoji} ${inst.ponto.nome}`:'',inst.sache?`🧴 ${inst.sache.nome}`:'',inst.removidos.length?'sem '+inst.removidos.join(', '):'',inst.adicionais.length?'+ '+inst.adicionais.map(a=>a.nome).join(', '):''].filter(Boolean).join(' • ');
@@ -99,7 +124,7 @@ function getOpcoes(id){
 
 function renderExtras(){
   const render=(arr,id)=>{
-    document.getElementById(id).innerHTML=arr.map(e=>{
+    document.getElementById(id).innerHTML=arr.filter(e=>!e.customCat).map(e=>{
       const opc=getOpcoes(e.id);
       const temOpc=opc.length>0;
       const escolhas=temOpc&&Array.isArray(cartExtras[e.id])?cartExtras[e.id]:[];
@@ -127,6 +152,7 @@ function renderExtras(){
   };
   render(EXTRAS,'menu-extras');
   render(COMBO,'menu-combo');
+  renderCustomCategorias();
 }
 
 function chgExtra(id,d){
@@ -154,7 +180,7 @@ function remSaborExtra(id,idx){
 
 function abrirPickerSabor(id){
   const opc=getOpcoes(id);
-  const extra=[...EXTRAS,...COMBO].find(e=>e.id===id);
+  const extra=[...EXTRAS,...COMBO].find(e=>e.id===id)||{emoji:'🍟',nome:''};
   document.getElementById('modal-box').innerHTML=`
     <div class="modal-header">
       <div><div class="modal-title">${extra.emoji} ${extra.nome}</div>
@@ -180,7 +206,7 @@ function escolherSabor(id,sabor){
 
 // ── MODAL PERSONALIZAÇÃO ───────────────────────────────────────
 function abrirModal(id){
-  const b=BURGUERS.find(x=>x.id===id);
+  const b=BURGUERS.find(x=>x.id===id)||{emoji:'🍔',nome:'Hamburguer',preco:0,ing:[]};
   modalId=id;pontoAtual=null;sacheAtual=null;removidosAtual=[];adicionaisAtual={};
   document.getElementById('modal-box').innerHTML=`
     <div class="modal-header"><div><div class="modal-title">${b.emoji} ${b.nome}</div><div class="modal-price">R$${b.preco}</div></div><button class="modal-close" onclick="fecharModal()">✕</button></div>
@@ -483,7 +509,73 @@ function novoPedido(){
 }
 
 
+// ── CATEGORIAS CUSTOM ─────────────────────────────────────────
+function renderCustomCategorias(){
+  const customCats=JSON.parse(localStorage.getItem('tcho_cats_custom')||'[]');
+  const catNomes=JSON.parse(localStorage.getItem('tcho_cat_nomes')||'{}');
+  const container=document.getElementById('custom-cats-section');
+  if(!container)return;
+  container.innerHTML='';
+  customCats.forEach(cat=>{
+    const prods=[...BURGUERS,...EXTRAS,...COMBO].filter(p=>p.customCat===cat.id);
+    if(!prods.length)return;
+    const nome=catNomes[cat.id]||cat.nome;
+    const listId='menu-'+cat.id;
+    container.insertAdjacentHTML('beforeend',`<div class="section-title">${nome}</div><div id="${listId}"></div>`);
+    const listEl=document.getElementById(listId);
+    if(cat.tipo==='b'){
+      listEl.innerHTML=prods.map(b=>{
+        const insts=cartBurguers[b.id]||[],qty=insts.length;
+        const foto=getFotoCliente(b.id);
+        return`<div class="menu-item ${qty>0?'has-items':''}" id="mi-${b.id}">
+          ${foto?`<div class="item-foto"><img src="${foto}" alt="${b.nome}" loading="lazy"></div>`:`<div class="item-emoji">${b.emoji}</div>`}
+          <div class="item-body">
+            <div class="item-name">${b.nome}</div>
+            ${b.desc?`<div class="item-desc">${b.desc}</div>`:''}
+            <div class="item-price">R$${b.preco}</div>
+          </div>
+          <div class="item-controls">
+            <button class="qty-btn" onclick="abrirModal('${b.id}')">+</button>
+            <div class="qty-display">${qty}</div>
+            <button class="qty-btn ${qty===0?'dim':''}" onclick="${qty>0?`remUlt('${b.id}')`:'void(0)'}">−</button>
+          </div>
+        </div>`;
+      }).join('');
+    } else {
+      listEl.innerHTML=prods.map(e=>{
+        const opc=getOpcoes(e.id),temOpc=opc.length>0;
+        const escolhas=temOpc&&Array.isArray(cartExtras[e.id])?cartExtras[e.id]:[];
+        const qty=temOpc?escolhas.length:(cartExtras[e.id]||0);
+        const resumo=escolhas.map((s,i)=>`<div class="cart-item-resumo"><span>${s}</span><span class="rm" onclick="remSaborExtra('${e.id}',${i})">✕</span></div>`).join('');
+        const foto=getFotoCliente(e.id);
+        return`<div class="extra-item ${qty>0?'has-items':''}">
+          ${foto?`<div class="extra-foto"><img src="${foto}" alt="${e.nome}" loading="lazy"></div>`:`<div class="extra-emoji">${e.emoji}</div>`}
+          <div class="extra-body">
+            <div class="extra-name">${e.nome}</div>
+            ${e.desc?`<div class="extra-sub">${e.desc}</div>`:''}
+            <div class="extra-price">R$${e.preco}</div>
+            ${resumo?`<div class="cart-itens-list">${resumo}</div>`:''}
+          </div>
+          <div class="extra-controls">
+            <button class="eq-btn ${qty===0?'dim':''}" onclick="${qty>0?`chgExtra('${e.id}',-1)`:'void(0)'}">−</button>
+            <div class="eq-disp">${qty}</div>
+            <button class="eq-btn" onclick="chgExtra('${e.id}',1)">+</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  });
+}
+
 // ── INICIALIZAÇÃO ──────────────────────────────────────────────
+(function aplicarNomesCategorias(){
+  const saved=JSON.parse(localStorage.getItem('tcho_cat_nomes')||'{}');
+  const map={burguers:'cat-title-burguers',extras:'cat-title-extras',combo:'cat-title-combo'};
+  Object.entries(map).forEach(([id,elId])=>{
+    if(saved[id]){const el=document.getElementById(elId);if(el)el.textContent=saved[id];}
+  });
+})();
 verificarLoja();
 renderBurguers();
 renderExtras();
+renderCustomCategorias();

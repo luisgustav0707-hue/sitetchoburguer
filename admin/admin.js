@@ -1,4 +1,4 @@
-// ── LOGIN ──────────────────────────────────────────────────────
+﻿// ── LOGIN ──────────────────────────────────────────────────────
 const CREDENCIAIS = { usuario:'admin', senha:'tcho2025' };
 
 function fazerLogin(){
@@ -388,7 +388,18 @@ const PRODS = [
   ...TCHO.extras.filter(e => e.id !== 'cmb').map(e => ({id:e.id, e:e.emoji, n:e.nome, p:e.preco, cat:'e', opcoes:e.opcoes})),
   ...TCHO.extras.filter(e => e.id === 'cmb').map(e => ({id:e.id, e:e.emoji, n:`Combo (+R$${e.preco})`, p:e.preco, cat:'c', opcoes:e.opcoes})),
 ];
+(function(){
+  const edits=JSON.parse(localStorage.getItem('tcho_prods_edits')||'{}');
+  PRODS.forEach(p=>{if(edits[p.id]){if(edits[p.id].nome)p.n=edits[p.id].nome;if(edits[p.id].preco!==undefined)p.p=edits[p.id].preco;}});
+})();
 const est={};PRODS.forEach(p=>{est[p.id]={ativo:true,modo:'inf',qtd:10};});
+
+// ── HELPERS CUSTOM ─────────────────────────────────────────────
+function getProdsCustom(){return JSON.parse(localStorage.getItem('tcho_prods_custom')||'[]');}
+function saveProdsCustom(arr){localStorage.setItem('tcho_prods_custom',JSON.stringify(arr));}
+function getCatsCustom(){return JSON.parse(localStorage.getItem('tcho_cats_custom')||'[]');}
+function saveCatsCustom(arr){localStorage.setItem('tcho_cats_custom',JSON.stringify(arr));}
+getProdsCustom().forEach(p=>{if(!est[p.id])est[p.id]={ativo:p.ativo!==false,modo:'inf',qtd:10};});
 
 // ── FOTOS DOS PRODUTOS ─────────────────────────────────────────
 function getFotoAdmin(id){
@@ -501,6 +512,67 @@ function removerOpcao(id,idx){
   showToast(`🗑️ "${nome}" removido`,'tok-info');
 }
 
+// ── EDIÇÃO DE NOME, PREÇO E DESCRIÇÃO ─────────────────────────
+function getProdDesc(id){
+  const cp=getProdsCustom().find(x=>x.id===id);
+  if(cp)return cp.desc||'';
+  const edits=JSON.parse(localStorage.getItem('tcho_prods_edits')||'{}');
+  if(edits[id]?.desc!==undefined)return edits[id].desc;
+  return TCHO.burguers.find(b=>b.id===id)?.desc||TCHO.extras.find(e=>e.id===id)?.desc||'';
+}
+
+function editarProd(id){
+  let p=PRODS.find(x=>x.id===id);
+  if(!p){const cp=getProdsCustom().find(x=>x.id===id);if(cp)p={n:cp.n||cp.nome,p:cp.p!==undefined?cp.p:cp.preco};}
+  if(!p)return;
+  const row=document.getElementById('prow-'+id);if(!row)return;
+  const infoEl=row.querySelector('.prod-info');
+  const editBtn=row.querySelector('.btn-edit-prod');
+  if(!infoEl)return;
+  if(editBtn)editBtn.style.display='none';
+  const desc=getProdDesc(id);
+  const inp='background:var(--card);border:1px solid var(--orange);border-radius:6px;color:var(--cream);font-size:.78rem;padding:6px 8px;outline:none;width:100%;box-sizing:border-box';
+  infoEl.innerHTML=`
+    <div class="prod-edit-form">
+      <input style="${inp};margin-bottom:5px" id="edit-nome-${id}" value="${p.n.replace(/"/g,'&quot;')}" placeholder="Nome do produto">
+      <div class="prod-edit-preco" style="margin-bottom:5px">
+        <span>R$</span>
+        <input class="prod-edit-input prod-edit-preco" id="edit-preco-${id}" type="number" min="0" step="0.50" value="${p.p}">
+      </div>
+      <textarea style="${inp};resize:vertical;min-height:52px;margin-bottom:5px;font-family:inherit" id="edit-desc-${id}" placeholder="Descrição (ingredientes, tamanho...)">${desc.replace(/</g,'&lt;')}</textarea>
+      <div class="prod-edit-actions">
+        <button class="opc-btn" onclick="salvarEditProd('${id}')">✓ Salvar</button>
+        <button class="opc-btn" style="background:#2a2520;color:var(--muted)" onclick="renderCardapio()">Cancelar</button>
+      </div>
+    </div>`;
+}
+
+function salvarEditProd(id){
+  const nomeEl=document.getElementById('edit-nome-'+id);
+  const precoEl=document.getElementById('edit-preco-'+id);
+  const descEl=document.getElementById('edit-desc-'+id);
+  if(!nomeEl||!precoEl)return;
+  const nome=nomeEl.value.trim();
+  const preco=parseFloat(precoEl.value);
+  const desc=(descEl?.value||'').trim();
+  if(!nome){showToast('⚠️ Digite o nome do produto','tok-err');return;}
+  if(isNaN(preco)||preco<0){showToast('⚠️ Preço inválido','tok-err');return;}
+  if(id.startsWith('cp_')){
+    const arr=getProdsCustom(),idx=arr.findIndex(x=>x.id===id);
+    if(idx!==-1){arr[idx].n=nome;arr[idx].p=preco;arr[idx].nome=nome;arr[idx].preco=preco;arr[idx].desc=desc;saveProdsCustom(arr);}
+  } else {
+    const p=PRODS.find(x=>x.id===id);if(!p)return;
+    p.n=nome;p.p=preco;
+    const edits=JSON.parse(localStorage.getItem('tcho_prods_edits')||'{}');
+    edits[id]={nome,preco,desc};localStorage.setItem('tcho_prods_edits',JSON.stringify(edits));
+    // atualiza TCHO em memória para refletir no cliente sem reload
+    const tItem=[...TCHO.burguers,...TCHO.extras].find(x=>x.id===id);
+    if(tItem){tItem.nome=nome;tItem.preco=preco;tItem.desc=desc;}
+  }
+  renderCardapio();
+  showToast(`✅ "${nome}" salvo!`,'tok-ok');
+}
+
 function renderEstoqueBadge(id){const e=est[id];if(!e.ativo)return`<span class="sbadge sout">INATIVO</span>`;if(e.modo==='inf')return`<span class="sbadge sinf">∞</span>`;if(e.qtd<=0)return`<span class="sbadge sout">Esgotado</span>`;if(e.qtd<=3)return`<span class="sbadge slow">${e.qtd} restam</span>`;return`<span class="sbadge sok">${e.qtd} un.</span>`;}
 
 function renderOpcoes(id){
@@ -520,20 +592,67 @@ function renderOpcoes(id){
   </div>`;
 }
 
+// ── INGREDIENTES DOS HAMBURGUERES ─────────────────────────────
+function getIngAdmin(id){
+  const saved=JSON.parse(localStorage.getItem('tcho_ing_edits')||'{}');
+  if(saved[id])return saved[id];
+  const cp=getProdsCustom().find(x=>x.id===id);
+  if(cp)return cp.ing||[];
+  return TCHO.burguers.find(b=>b.id===id)?.ing||[];
+}
+function salvarIngredientes(id,arr){
+  const saved=JSON.parse(localStorage.getItem('tcho_ing_edits')||'{}');
+  saved[id]=arr;localStorage.setItem('tcho_ing_edits',JSON.stringify(saved));
+}
+function adicionarIngrediente(id){
+  const inp=document.getElementById('ing-inp-'+id);
+  const val=inp.value.trim();
+  if(!val){showToast('Digite o ingrediente','tok-err');return;}
+  const arr=getIngAdmin(id);
+  if(arr.map(x=>x.toLowerCase()).includes(val.toLowerCase())){showToast('Ingrediente já listado','tok-err');return;}
+  arr.push(val);salvarIngredientes(id,arr);inp.value='';renderCardapio();
+  showToast(`✅ "${val}" adicionado`,'tok-ok');
+}
+function removerIngrediente(id,idx){
+  const arr=getIngAdmin(id);const nome=arr[idx];
+  arr.splice(idx,1);salvarIngredientes(id,arr);renderCardapio();
+  showToast(`🗑️ "${nome}" removido`,'tok-info');
+}
+function renderIngredientes(id){
+  const arr=getIngAdmin(id);
+  return`<div class="prod-opcoes">
+    <div class="opc-titulo">🥗 Ingredientes removíveis (cliente pode retirar):</div>
+    <div class="opc-tags">
+      ${arr.length
+        ?arr.map((o,i)=>`<span class="opc-tag">${o}<button class="opc-rm" onclick="removerIngrediente('${id}',${i})">×</button></span>`).join('')
+        :'<span class="opc-empty">Nenhum ingrediente cadastrado</span>'
+      }
+    </div>
+    <div class="opc-add">
+      <input class="opc-input" id="ing-inp-${id}" type="text" placeholder="Ex: Queijo cheddar" onkeydown="if(event.key==='Enter')adicionarIngrediente('${id}')">
+      <button class="opc-btn" onclick="adicionarIngrediente('${id}')">+ Adicionar</button>
+    </div>
+  </div>`;
+}
+
 function renderLista(cat,containerId){
-  document.getElementById(containerId).innerHTML=PRODS.filter(p=>p.cat===cat).map(p=>{
-    const ev=est[p.id];
-    const temOpcoes=(cat==='e'||cat==='c')&&(p.opcoes||getOpcoesAdmin(p.id).length>0);
+  const container=document.getElementById(containerId);if(!container)return;
+  const stdProds=PRODS.filter(p=>p.cat===cat);
+  const custProds=getProdsCustom().filter(p=>p.cat===cat);
+  custProds.forEach(cp=>{if(!est[cp.id])est[cp.id]={ativo:cp.ativo!==false,modo:'inf',qtd:10};});
+  const catTipo=cat==='b'?'b':cat==='c'?'c':cat.startsWith('cat_')?(getCatsCustom().find(c=>c.id===cat)?.tipo||'e'):'e';
+
+  const rowHTML=(p,isCustom)=>{
+    const ev=est[p.id]||{ativo:true,modo:'inf',qtd:10};
+    const temOpcoes=catTipo!=='b'&&(p.opcoes?.length>0||getOpcoesAdmin(p.id).length>0);
     const temFoto=!!getFotoAdmin(p.id);
     return`<div class="prod-item" id="prow-${p.id}">
       <div class="prod-row">
         <div class="prod-foto-mini" onclick="toggleFotoPanel('${p.id}')">
-          ${temFoto
-            ? `<img src="${getFotoAdmin(p.id)}" class="prod-foto-mini-img" alt="">`
-            : `<span class="prod-foto-mini-icon">📷</span>`
-          }
+          ${temFoto?`<img src="${getFotoAdmin(p.id)}" class="prod-foto-mini-img" alt="">`:`<span class="prod-foto-mini-icon">${isCustom?p.emoji:'📷'}</span>`}
         </div>
-        <div class="prod-info"><div class="prod-nome">${p.n}</div><div class="prod-preco">R$${p.p}</div></div>
+        <div class="prod-info" id="prod-info-${p.id}"><div class="prod-nome">${p.n}</div><div class="prod-preco">R$${p.p}</div></div>
+        <button class="btn-edit-prod" id="btn-edit-${p.id}" onclick="editarProd('${p.id}')" title="Editar">✏️</button>
         <label class="toggle-wrap" style="margin-right:8px"><input type="checkbox" ${ev.ativo?'checked':''} onchange="toggleAtivo('${p.id}',this.checked)"><span class="slider"></span></label>
         <div class="prod-stock" id="stock-${p.id}" style="${!ev.ativo?'opacity:.35;pointer-events:none':''}">
           <div class="stock-toggle">
@@ -545,15 +664,332 @@ function renderLista(cat,containerId){
           </div>
           ${renderEstoqueBadge(p.id)}
         </div>
+        ${isCustom?`<button class="btn-del-prod" onclick="removerProdCustom('${p.id}')" title="Remover">🗑️</button>`:''}
       </div>
       ${renderFotoSection(p.id)}
       ${temOpcoes?renderOpcoes(p.id):''}
+      ${catTipo==='b'?renderIngredientes(p.id):''}
     </div>`;
-  }).join('');
+  };
+
+  const addSection=addProdCat===cat
+    ?renderFormNovoProd(cat)
+    :`<button class="btn-add-prod" onclick="abrirFormNovoProd('${cat}')">+ Novo produto</button>`;
+
+  container.innerHTML=stdProds.map(p=>rowHTML(p,false)).join('')+custProds.map(p=>rowHTML(p,true)).join('')+addSection;
 }
 
-function renderCardapio(){renderLista('b','lista-burguers');renderLista('e','lista-extras');renderLista('c','lista-combo');}
-function toggleAtivo(id,val){est[id].ativo=val;renderCardapio();showToast(`${val?'✅':'🔒'} ${PRODS.find(p=>p.id===id)?.n} ${val?'ativo':'inativo'}`,'tok-ok');}
+function renderCustomCats(){
+  const cats=getCatsCustom();
+  const container=document.getElementById('custom-cats-container');if(!container)return;
+  container.innerHTML=cats.map(cat=>`
+    <div class="section">
+      <div class="sec-title" id="sec-title-${cat.id}">${cat.emoji} ${getCatNome(cat.id)||cat.nome}<button class="btn-edit-cat" onclick="editarCategoria('${cat.id}')" title="Editar">✏️</button><button class="btn-del-cat" onclick="removerCatCustom('${cat.id}')" title="Remover">🗑️</button></div>
+      <div id="lista-${cat.id}"></div>
+    </div>`).join('');
+  cats.forEach(cat=>renderLista(cat.id,'lista-'+cat.id));
+}
+
+// ── NOVO PRODUTO ───────────────────────────────────────────────
+let addProdCat=null;
+
+function getCatTipo(cat){
+  if(cat==='b')return'b';if(cat==='c')return'c';
+  if(cat.startsWith('cat_'))return getCatsCustom().find(c=>c.id===cat)?.tipo||'e';
+  return'e';
+}
+
+function renderFormNovoProd(catInicial){
+  const inp='background:var(--card);border:1px solid var(--orange);border-radius:6px;color:var(--cream);font-size:.82rem;padding:6px 8px;outline:none';
+  const sel='width:100%;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:6px;padding:7px 8px;font-size:.78rem;outline:none;margin-bottom:8px';
+  const tipo=getCatTipo(catInicial);
+  const temOpc=tipo!=='b';
+  const cats=getCatsCustom();
+  const catNomesMap=JSON.parse(localStorage.getItem('tcho_cat_nomes')||'{}');
+  const catOpts=[
+    `<option value="b"${catInicial==='b'?' selected':''}>🍔 Hamburguers</option>`,
+    `<option value="e"${catInicial==='e'?' selected':''}>🍟 Extras & Bebidas</option>`,
+    `<option value="c"${catInicial==='c'?' selected':''}>🍟🥤 Combo</option>`,
+    ...cats.map(c=>`<option value="${c.id}"${catInicial===c.id?' selected':''}>${c.emoji} ${catNomesMap[c.id]||c.nome}</option>`),
+    `<option value="nova">➕ Nova categoria...</option>`
+  ].join('');
+  return`<div class="new-prod-form">
+    <div style="font-size:.72rem;font-weight:700;color:var(--orange);letter-spacing:1px;margin-bottom:10px">NOVO PRODUTO</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <input style="${inp};width:46px;text-align:center;font-size:1.1rem;flex-shrink:0" id="nprod-emoji" value="${tipo==='b'?'🍔':'🍟'}">
+      <input style="${inp};flex:1;min-width:0" id="nprod-nome" placeholder="Nome do produto" onkeydown="if(event.key==='Enter')salvarNovoProd()">
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+      <span style="font-size:.72rem;color:var(--muted);flex-shrink:0">R$</span>
+      <input style="${inp};width:80px;flex-shrink:0" id="nprod-preco" type="number" min="0" step="0.5" placeholder="Preço">
+      <input style="${inp};flex:1;min-width:0" id="nprod-desc" placeholder="Descrição (opcional)">
+    </div>
+    <div style="margin-bottom:0">
+      <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Categoria</div>
+      <select style="${sel}" id="nprod-cat" onchange="onMudaCatProd(this.value)">${catOpts}</select>
+    </div>
+    <div id="nprod-nova-div" style="display:none;background:#1e1a14;border:1px dashed #3a3530;border-radius:8px;padding:10px;margin-bottom:8px">
+      <div style="font-size:.65rem;color:var(--orange);font-weight:700;letter-spacing:1px;margin-bottom:8px">NOVA CATEGORIA</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input style="${inp};width:46px;text-align:center;font-size:1.1rem;flex-shrink:0" id="nprod-ncat-emoji" value="🍽️">
+        <input style="${inp};flex:1;min-width:0" id="nprod-ncat-nome" placeholder="Nome da categoria">
+      </div>
+      <select style="${sel}" id="nprod-ncat-tipo">
+        <option value="e" selected>🍟 Extra / Bebida</option>
+        <option value="b">🍔 Hamburguer (ponto e sachê)</option>
+      </select>
+    </div>
+    <div id="nprod-opcoes-div" style="${temOpc?'':'display:none;'}margin-bottom:8px">
+      <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Opções para o cliente escolher</div>
+      <input style="${inp};width:100%;box-sizing:border-box" id="nprod-opcoes" placeholder="Separadas por vírgula (ex: Coca-Cola, Guaraná)">
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="opc-btn" onclick="salvarNovoProd()">✓ Adicionar</button>
+      <button class="opc-btn" style="background:#2a2520;color:var(--muted)" onclick="fecharFormNovoProd()">Cancelar</button>
+    </div>
+  </div>`;
+}
+
+function onMudaCatProd(val){
+  const novaDiv=document.getElementById('nprod-nova-div');
+  const opcoesDiv=document.getElementById('nprod-opcoes-div');
+  if(!novaDiv||!opcoesDiv)return;
+  if(val==='nova'){
+    novaDiv.style.display='block';
+    opcoesDiv.style.display='block';
+  } else {
+    novaDiv.style.display='none';
+    opcoesDiv.style.display=getCatTipo(val)!=='b'?'block':'none';
+  }
+}
+
+function abrirFormNovoProd(cat){addProdCat=cat;renderCardapio();setTimeout(()=>document.getElementById('nprod-nome')?.focus(),60);}
+function fecharFormNovoProd(){addProdCat=null;renderCardapio();}
+
+function salvarNovoProd(){
+  const emoji=document.getElementById('nprod-emoji')?.value.trim()||'🍔';
+  const nome=document.getElementById('nprod-nome')?.value.trim();
+  const preco=parseFloat(document.getElementById('nprod-preco')?.value);
+  const desc=document.getElementById('nprod-desc')?.value.trim()||'';
+  const opcoesStr=document.getElementById('nprod-opcoes')?.value.trim()||'';
+  const catSel=document.getElementById('nprod-cat')?.value||addProdCat||'e';
+  if(!nome){showToast('⚠️ Digite o nome do produto','tok-err');return;}
+  if(isNaN(preco)||preco<0){showToast('⚠️ Preço inválido','tok-err');return;}
+  let catFinal=catSel;
+  if(catSel==='nova'){
+    const ncNome=document.getElementById('nprod-ncat-nome')?.value.trim();
+    if(!ncNome){showToast('⚠️ Digite o nome da nova categoria','tok-err');return;}
+    const ncEmoji=document.getElementById('nprod-ncat-emoji')?.value.trim()||'🍽️';
+    const ncTipo=document.getElementById('nprod-ncat-tipo')?.value||'e';
+    catFinal='cat_'+Date.now();
+    const cats=getCatsCustom();cats.push({id:catFinal,emoji:ncEmoji,nome:ncNome,tipo:ncTipo});saveCatsCustom(cats);
+  }
+  const tipo=getCatTipo(catFinal);
+  const opcoes=opcoesStr?opcoesStr.split(',').map(s=>s.trim()).filter(Boolean):[];
+  const id='cp_'+Date.now();
+  const arr=getProdsCustom();
+  arr.push({id,cat:catFinal,emoji,n:nome,p:preco,nome,preco,desc,opcoes,tipo,ativo:true});
+  saveProdsCustom(arr);
+  est[id]={ativo:true,modo:'inf',qtd:10};
+  addProdCat=null;renderCardapio();
+  showToast(`✅ "${nome}" adicionado!`,'tok-ok');
+}
+
+function removerProdCustom(id){
+  const arr=getProdsCustom(),p=arr.find(x=>x.id===id);
+  if(!p||!confirm(`Remover "${p.n||p.nome}"?`))return;
+  saveProdsCustom(arr.filter(x=>x.id!==id));
+  delete est[id];renderCardapio();
+  showToast(`🗑️ "${p.n||p.nome}" removido`,'tok-info');
+}
+
+// ── NOVA CATEGORIA ─────────────────────────────────────────────
+let novaCatAberta=false;
+
+function abrirFormNovaCategoria(){novaCatAberta=true;renderCardapio();setTimeout(()=>document.getElementById('nca-nome')?.focus(),60);}
+function fecharFormNovaCategoria(){novaCatAberta=false;renderCardapio();}
+
+function salvarNovaCategoria(){
+  const emoji=document.getElementById('nca-emoji')?.value.trim()||'🍽️';
+  const nome=document.getElementById('nca-nome')?.value.trim();
+  const tipo=document.getElementById('nca-tipo')?.value||'e';
+  if(!nome){showToast('⚠️ Digite o nome da categoria','tok-err');return;}
+  const id='cat_'+Date.now();
+  const arr=getCatsCustom();arr.push({id,emoji,nome,tipo});saveCatsCustom(arr);
+  novaCatAberta=false;renderCardapio();
+  showToast(`✅ Categoria "${nome}" criada!`,'tok-ok');
+}
+
+function renderNovaCatArea(){
+  const el=document.getElementById('nova-cat-area');if(!el)return;
+  const inp='background:var(--card);border:1px solid var(--orange);border-radius:6px;color:var(--cream);font-size:.82rem;padding:6px 8px;outline:none';
+  if(novaCatAberta){
+    el.innerHTML=`<div class="section"><div class="nova-cat-form">
+      <div style="font-size:.72rem;font-weight:700;color:var(--orange);letter-spacing:1px;margin-bottom:12px">NOVA CATEGORIA</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input style="${inp};width:46px;text-align:center;font-size:1.1rem;flex-shrink:0" id="nca-emoji" value="🍽️" placeholder="🍽️">
+        <input style="${inp};flex:1;min-width:0" id="nca-nome" placeholder="Nome da categoria" onkeydown="if(event.key==='Enter')salvarNovaCategoria()">
+      </div>
+      <div style="margin-bottom:10px">
+        <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Tipo de produto</div>
+        <select style="width:100%;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:6px;padding:7px 8px;font-size:.78rem;outline:none" id="nca-tipo">
+          <option value="e" selected>🍟 Extra / Bebida — botão de quantidade</option>
+          <option value="b">🍔 Hamburguer — escolha de ponto e sachê</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="opc-btn" onclick="salvarNovaCategoria()">✓ Criar Categoria</button>
+        <button class="opc-btn" style="background:#2a2520;color:var(--muted)" onclick="fecharFormNovaCategoria()">Cancelar</button>
+      </div>
+    </div></div>`;
+    setTimeout(()=>document.getElementById('nca-nome')?.focus(),60);
+  } else {
+    el.innerHTML=`<div class="section" style="padding:10px 0 4px"><button class="btn-add-cat" onclick="abrirFormNovaCategoria()">+ Nova Categoria</button></div>`;
+  }
+}
+
+function removerCatCustom(id){
+  const cats=getCatsCustom(),cat=cats.find(c=>c.id===id);if(!cat)return;
+  const prods=getProdsCustom().filter(p=>p.cat===id);
+  if(prods.length&&!confirm(`A categoria "${cat.nome}" tem ${prods.length} produto(s). Remover tudo?`))return;
+  saveCatsCustom(cats.filter(c=>c.id!==id));
+  saveProdsCustom(getProdsCustom().filter(p=>p.cat!==id));
+  renderCustomCats();showToast(`🗑️ Categoria "${cat.nome}" removida`,'tok-info');
+}
+
+// ── CATEGORIAS ─────────────────────────────────────────────────
+const CAT_DEFAULTS={burguers:'Hamburguers',extras:'Extras & Bebidas',combo:'Combo'};
+const CAT_EMOJI={burguers:'🍔',extras:'🍟',combo:'🍟🥤'};
+
+function getCatNome(id){
+  const saved=JSON.parse(localStorage.getItem('tcho_cat_nomes')||'{}');
+  if(saved[id])return saved[id];
+  if(CAT_DEFAULTS[id])return CAT_DEFAULTS[id];
+  return getCatsCustom().find(c=>c.id===id)?.nome||'';
+}
+
+function renderCatTitles(){
+  ['burguers','extras','combo'].forEach(id=>{
+    const el=document.getElementById('sec-title-'+id);
+    if(!el)return;
+    el.innerHTML=`${CAT_EMOJI[id]} ${getCatNome(id)}<button class="btn-edit-cat" onclick="editarCategoria('${id}')" title="Editar nome da categoria">✏️</button>`;
+  });
+}
+
+function editarCategoria(id){
+  const el=document.getElementById('sec-title-'+id);if(!el)return;
+  const isCustom=id.startsWith('cat_');
+  const emoji=CAT_EMOJI[id]||(getCatsCustom().find(c=>c.id===id)?.emoji||'🍽️');
+  el.innerHTML=`<div class="cat-edit-form">
+    ${isCustom?`<input class="prod-edit-input" id="cat-emoji-${id}" value="${emoji}" style="width:40px;text-align:center;font-size:1rem">`:`<span>${emoji}</span>`}
+    <input class="prod-edit-input" id="cat-inp-${id}" value="${getCatNome(id).replace(/"/g,'&quot;')}" style="width:150px">
+    <button class="opc-btn" onclick="salvarCategoria('${id}')">✓ Salvar</button>
+    <button class="opc-btn" style="background:#2a2520;color:var(--muted)" onclick="${isCustom?'renderCustomCats()':'renderCatTitles()'}">Cancelar</button>
+  </div>`;
+  document.getElementById('cat-inp-'+id)?.focus();
+}
+
+function salvarCategoria(id){
+  const inp=document.getElementById('cat-inp-'+id);if(!inp)return;
+  const nome=inp.value.trim();
+  if(!nome){showToast('⚠️ Digite o nome da categoria','tok-err');return;}
+  const saved=JSON.parse(localStorage.getItem('tcho_cat_nomes')||'{}');
+  saved[id]=nome;localStorage.setItem('tcho_cat_nomes',JSON.stringify(saved));
+  if(id.startsWith('cat_')){
+    const emoji=document.getElementById('cat-emoji-'+id)?.value.trim();
+    if(emoji){const cats=getCatsCustom(),idx=cats.findIndex(c=>c.id===id);if(idx!==-1){cats[idx].emoji=emoji;saveCatsCustom(cats);}}
+    renderCustomCats();
+  } else renderCatTitles();
+  showToast(`✅ Categoria "${nome}" salva!`,'tok-ok');
+}
+
+// ── ACRÉSCIMOS ─────────────────────────────────────────────────
+function getAdicionaisAdmin(){
+  const saved=localStorage.getItem('tcho_adicionais');
+  return saved?JSON.parse(saved):[...TCHO.adicionais];
+}
+function saveAdicionaisAdmin(arr){localStorage.setItem('tcho_adicionais',JSON.stringify(arr));}
+
+let editAdicId=null,addAdicAberto=false;
+
+function renderAdicionais(){
+  const el=document.getElementById('lista-adicionais');if(!el)return;
+  const arr=getAdicionaisAdmin();
+  const inp='background:var(--card);border:1px solid var(--orange);border-radius:6px;color:var(--cream);font-size:.78rem;padding:5px 7px;outline:none';
+  el.innerHTML=arr.map(a=>{
+    if(editAdicId===a.id){
+      return`<div class="prod-item"><div style="display:flex;gap:8px;align-items:center;padding:8px 0;flex-wrap:wrap">
+        <input style="${inp};flex:1;min-width:120px" id="ae-nome-${a.id}" value="${a.nome.replace(/"/g,'&quot;')}">
+        <span style="font-size:.72rem;color:var(--muted);flex-shrink:0">R$</span>
+        <input style="${inp};width:70px;flex-shrink:0" id="ae-preco-${a.id}" type="number" min="0" step="0.5" value="${a.preco}">
+        <button class="opc-btn" onclick="salvarEditAdic('${a.id}')">✓ Salvar</button>
+        <button class="opc-btn" style="background:#2a2520;color:var(--muted)" onclick="cancelarEditAdic()">Cancelar</button>
+      </div></div>`;
+    }
+    return`<div class="prod-item"><div style="display:flex;align-items:center;gap:8px;padding:8px 0">
+      <div style="flex:1;min-width:0"><div class="prod-nome">${a.nome}</div></div>
+      <div class="prod-preco" style="flex-shrink:0">+R$${a.preco}</div>
+      <button class="btn-edit-prod" onclick="iniciarEditAdic('${a.id}')" title="Editar">✏️</button>
+      <button class="btn-del-prod" onclick="removerAdic('${a.id}')" title="Remover">🗑️</button>
+    </div></div>`;
+  }).join('')
+  +(addAdicAberto
+    ?`<div class="new-prod-form" style="margin-top:6px">
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
+          <input style="${inp};flex:1;min-width:140px" id="an-nome" placeholder="Nome do acréscimo" onkeydown="if(event.key==='Enter')salvarNovoAdic()">
+          <span style="font-size:.72rem;color:var(--muted);flex-shrink:0">R$</span>
+          <input style="${inp};width:70px;flex-shrink:0" id="an-preco" type="number" min="0" step="0.5" placeholder="Preço">
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="opc-btn" onclick="salvarNovoAdic()">✓ Adicionar</button>
+          <button class="opc-btn" style="background:#2a2520;color:var(--muted)" onclick="fecharAddAdic()">Cancelar</button>
+        </div>
+      </div>`
+    :`<button class="btn-add-prod" onclick="abrirAddAdic()">+ Novo acréscimo</button>`
+  );
+}
+
+function iniciarEditAdic(id){editAdicId=id;addAdicAberto=false;renderAdicionais();setTimeout(()=>document.getElementById('ae-nome-'+id)?.focus(),40);}
+function cancelarEditAdic(){editAdicId=null;renderAdicionais();}
+
+function salvarEditAdic(id){
+  const nome=document.getElementById('ae-nome-'+id)?.value.trim();
+  const preco=parseFloat(document.getElementById('ae-preco-'+id)?.value);
+  if(!nome){showToast('⚠️ Digite o nome','tok-err');return;}
+  if(isNaN(preco)||preco<0){showToast('⚠️ Preço inválido','tok-err');return;}
+  const arr=getAdicionaisAdmin(),idx=arr.findIndex(a=>a.id===id);
+  if(idx!==-1){arr[idx].nome=nome;arr[idx].preco=preco;saveAdicionaisAdmin(arr);}
+  editAdicId=null;renderAdicionais();showToast(`✅ "${nome}" atualizado!`,'tok-ok');
+}
+
+function removerAdic(id){
+  const arr=getAdicionaisAdmin(),a=arr.find(x=>x.id===id);
+  if(!a||!confirm(`Remover "${a.nome}"?`))return;
+  saveAdicionaisAdmin(arr.filter(x=>x.id!==id));
+  renderAdicionais();showToast(`🗑️ "${a.nome}" removido`,'tok-info');
+}
+
+function abrirAddAdic(){addAdicAberto=true;editAdicId=null;renderAdicionais();setTimeout(()=>document.getElementById('an-nome')?.focus(),40);}
+function fecharAddAdic(){addAdicAberto=false;renderAdicionais();}
+
+function salvarNovoAdic(){
+  const nome=document.getElementById('an-nome')?.value.trim();
+  const preco=parseFloat(document.getElementById('an-preco')?.value);
+  if(!nome){showToast('⚠️ Digite o nome do acréscimo','tok-err');return;}
+  if(isNaN(preco)||preco<0){showToast('⚠️ Preço inválido','tok-err');return;}
+  const arr=getAdicionaisAdmin();
+  arr.push({id:'ac_'+Date.now(),nome,preco});
+  saveAdicionaisAdmin(arr);
+  addAdicAberto=false;renderAdicionais();showToast(`✅ "${nome}" adicionado!`,'tok-ok');
+}
+
+function renderCardapio(){renderLista('b','lista-burguers');renderLista('e','lista-extras');renderLista('c','lista-combo');renderCatTitles();renderCustomCats();renderNovaCatArea();renderAdicionais();}
+function toggleAtivo(id,val){
+  est[id].ativo=val;
+  if(id.startsWith('cp_')){const arr=getProdsCustom(),idx=arr.findIndex(x=>x.id===id);if(idx!==-1){arr[idx].ativo=val;saveProdsCustom(arr);}}
+  const p=PRODS.find(x=>x.id===id)||getProdsCustom().find(x=>x.id===id);
+  renderCardapio();showToast(`${val?'✅':'🔒'} ${p?.n||p?.nome||id} ${val?'ativo':'inativo'}`,'tok-ok');
+}
 function setModo(id,modo){est[id].modo=modo;document.getElementById(`inp-${id}`).style.display=modo==='qtd'?'block':'none';document.querySelectorAll(`#stock-${id} .stock-btn`).forEach(b=>b.classList.toggle('active',b.textContent.trim()===(modo==='inf'?'∞':'Qtd')));const row=document.getElementById(`prow-${id}`);if(row){row.querySelectorAll('.sbadge').forEach(b=>b.remove());document.getElementById(`stock-${id}`).insertAdjacentHTML('beforeend',renderEstoqueBadge(id));}}
 function setQtd(id,val){est[id].qtd=Math.max(0,parseInt(val)||0);const row=document.getElementById(`prow-${id}`);if(row){row.querySelectorAll('.sbadge').forEach(b=>b.remove());document.getElementById(`stock-${id}`).insertAdjacentHTML('beforeend',renderEstoqueBadge(id));}}
 

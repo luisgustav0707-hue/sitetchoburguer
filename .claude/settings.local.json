@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-Command *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Test-Path \"C:\\\\Program Files\\\\Git\\\\bin\\\\git.exe\"; Test-Path \"C:\\\\Program Files\\\\Git\\\\cmd\\\\git.exe\"; $env:PATH)",
+      "PowerShell(winget install *)",
+      "PowerShell(git init *)",
+      "PowerShell(git *)"
+    ]
+  }
+}

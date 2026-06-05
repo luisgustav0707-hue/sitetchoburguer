@@ -246,11 +246,17 @@ function moverStatus(id,novoStatus,auto=false){
   p.status=novoStatus;p.hora=new Date();p.horaStr=horaStr;
   if(novoStatus==='finalizado') p.horaFim=horaStr;
   db.collection('pedidos').doc(id).update(update).catch(console.error);
-  // Sincroniza status no localStorage para o financeiro
+  // Sincroniza status no localStorage (financeiro lê daqui)
   try{
     const ls=JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
-    const idx=ls.findIndex(x=>x.id===p.id);
-    if(idx!==-1){ls[idx].status=novoStatus;localStorage.setItem('tcho_pedidos',JSON.stringify(ls));}
+    // Busca pelo id numérico ou pela string do num (#001)
+    const idx=ls.findIndex(x=>x.id==p.id || x.num===p.num);
+    if(idx!==-1){
+      ls[idx].status=novoStatus;
+      ls[idx].horaStr=horaStr;
+      if(novoStatus==='finalizado') ls[idx].horaFim=horaStr;
+      localStorage.setItem('tcho_pedidos',JSON.stringify(ls));
+    }
   }catch(e){}
   if(novoStatus==='prep') setTimeout(()=>imprimirPedido(p),200);
   if(novoStatus==='finalizado') setTimeout(()=>mostrarCardFinalizado({...p}),200);
@@ -510,21 +516,28 @@ async function carregarFinanceiro(){
   document.getElementById('fin-periodo-label').textContent = labelPeriodo(range);
   document.getElementById('fin-stats').innerHTML = '<div style="color:var(--muted);font-size:.78rem;padding:8px 0">Carregando...</div>';
 
+  // 1. Sempre carrega localStorage primeiro — fonte confiável sem Firebase
+  const todos = JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
+  finPedidosList = todos.filter(p=>{
+    const h = new Date(p.hora);
+    return !isNaN(h.getTime()) && h >= range.ini && h < range.fim;
+  }).map(p=>({...p, hora: new Date(p.hora)}));
+
+  // 2. Se Firebase configurado e retornar dados reais, usa Firestore
   try {
     const snap = await db.collection('pedidos')
       .where('criadoEm','>=', firebase.firestore.Timestamp.fromDate(range.ini))
       .where('criadoEm','<',  firebase.firestore.Timestamp.fromDate(range.fim))
       .get();
-    finPedidosList = snap.docs.map(d=>{
-      const data=d.data();
-      return {...data, _id:d.id, hora:data.hora?.toDate?.() || new Date(data.hora||0)};
-    });
+    if(snap && snap.docs && snap.docs.length > 0){
+      finPedidosList = snap.docs.map(d=>{
+        const data=d.data();
+        return {...data, _id:d.id, hora:data.hora?.toDate?.() || new Date(data.hora||0)};
+      });
+    }
+    // Se snap vazio → mantém dados do localStorage
   } catch(e){
-    // localStorage fallback
-    const todos = JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
-    finPedidosList = todos
-      .filter(p=>{ const h=new Date(p.hora||p.criadoEm); return h>=range.ini && h<range.fim; })
-      .map(p=>({...p, hora:new Date(p.hora||0)}));
+    // Erro no Firestore → mantém dados do localStorage
   }
 
   renderFinanceiro();

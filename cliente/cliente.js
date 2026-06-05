@@ -1,5 +1,12 @@
 // ── DADOS (lidos de shared/dados.js via window.TCHO) ───────────
 const BURGUERS    = TCHO.burguers;
+
+// Fotos disponíveis — adicione aqui quando renomear os arquivos restantes
+const FOTOS = {
+  'xb':  '../hamburgueres/X-burguer.jpg',
+  'xs':  '../hamburgueres/X-Salada.jpg',
+  'xba': '../hamburgueres/X-bacon.jpg',
+};
 const EXTRAS      = TCHO.extras.filter(e => e.id !== 'cmb');
 const COMBO       = TCHO.extras.filter(e => e.id === 'cmb');
 const ADICIONAIS  = TCHO.adicionais;
@@ -41,8 +48,12 @@ function renderBurguers(){
       const pts=[inst.ponto?`${inst.ponto.emoji} ${inst.ponto.nome}`:'',inst.sache?`🧴 ${inst.sache.nome}`:'',inst.removidos.length?'sem '+inst.removidos.join(', '):'',inst.adicionais.length?'+ '+inst.adicionais.map(a=>a.nome).join(', '):''].filter(Boolean).join(' • ');
       return`<div class="cart-item-resumo"><span>#${i+1} ${pts||'padrão'}</span><span class="rm" onclick="remInst('${b.id}',${i})">✕</span></div>`;
     }).join('');
+    const foto = FOTOS[b.id];
     return`<div class="menu-item ${qty>0?'has-items':''}" id="mi-${b.id}">
-      <div class="item-emoji">${b.emoji}</div>
+      ${foto
+        ? `<div class="item-foto"><img src="${foto}" alt="${b.nome}" loading="lazy"></div>`
+        : `<div class="item-emoji">${b.emoji}</div>`
+      }
       <div class="item-body">
         <div class="item-name">${b.nome}${b.tag?`<span class="tag">${b.tag}</span>`:''}</div>
         <div class="item-desc">${b.desc}</div>

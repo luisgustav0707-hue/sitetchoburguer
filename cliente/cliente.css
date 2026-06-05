@@ -31,6 +31,8 @@ header{background:linear-gradient(180deg,#000,#0a0806);text-align:center;padding
 .menu-item{background:var(--card);border-radius:12px;margin-bottom:9px;border:1px solid #2a2520;display:flex;align-items:stretch;transition:border-color .2s;overflow:hidden}
 .menu-item.has-items{border-color:var(--orange);background:#2a2018}
 .item-emoji{width:66px;min-width:66px;background:#1a1612;display:flex;align-items:center;justify-content:center;font-size:1.9rem}
+.item-foto{width:66px;min-width:66px;overflow:hidden;flex-shrink:0}
+.item-foto img{width:66px;height:100%;min-height:80px;object-fit:cover;display:block}
 .item-body{flex:1;padding:9px 11px}
 .item-name{font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:800;letter-spacing:1px}
 .item-desc{font-size:.7rem;color:var(--muted);margin-top:2px;line-height:1.4}

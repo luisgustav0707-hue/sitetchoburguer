@@ -55,6 +55,12 @@ function verificarLoja(){
   });
 }
 
+// ── FOTOS (localStorage tem prioridade sobre o mapa estático) ──
+function getFotoCliente(id){
+  const salvas=JSON.parse(localStorage.getItem('tcho_fotos')||'{}');
+  return salvas[id]||FOTOS[id]||null;
+}
+
 // ── RENDER CARDÁPIO ────────────────────────────────────────────
 function renderBurguers(){
   document.getElementById('menu-burguers').innerHTML=BURGUERS.map(b=>{
@@ -63,7 +69,7 @@ function renderBurguers(){
       const pts=[inst.ponto?`${inst.ponto.emoji} ${inst.ponto.nome}`:'',inst.sache?`🧴 ${inst.sache.nome}`:'',inst.removidos.length?'sem '+inst.removidos.join(', '):'',inst.adicionais.length?'+ '+inst.adicionais.map(a=>a.nome).join(', '):''].filter(Boolean).join(' • ');
       return`<div class="cart-item-resumo"><span>#${i+1} ${pts||'padrão'}</span><span class="rm" onclick="remInst('${b.id}',${i})">✕</span></div>`;
     }).join('');
-    const foto = FOTOS[b.id];
+    const foto = getFotoCliente(b.id);
     return`<div class="menu-item ${qty>0?'has-items':''}" id="mi-${b.id}">
       ${foto
         ? `<div class="item-foto"><img src="${foto}" alt="${b.nome}" loading="lazy"></div>`
@@ -99,8 +105,12 @@ function renderExtras(){
       const escolhas=temOpc&&Array.isArray(cartExtras[e.id])?cartExtras[e.id]:[];
       const qty=temOpc?escolhas.length:(cartExtras[e.id]||0);
       const resumo=escolhas.map((s,i)=>`<div class="cart-item-resumo"><span>${s}</span><span class="rm" onclick="remSaborExtra('${e.id}',${i})">✕</span></div>`).join('');
+      const fotoExtra=getFotoCliente(e.id);
       return`<div class="extra-item ${qty>0?'has-items':''}">
-        <div class="extra-emoji">${e.emoji}</div>
+        ${fotoExtra
+          ? `<div class="extra-foto"><img src="${fotoExtra}" alt="${e.nome}" loading="lazy"></div>`
+          : `<div class="extra-emoji">${e.emoji}</div>`
+        }
         <div class="extra-body">
           <div class="extra-name">${e.nome}</div>
           ${e.desc?`<div class="extra-sub">${e.desc}</div>`:''}

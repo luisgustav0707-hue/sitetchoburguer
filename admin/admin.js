@@ -390,6 +390,85 @@ const PRODS = [
 ];
 const est={};PRODS.forEach(p=>{est[p.id]={ativo:true,modo:'inf',qtd:10};});
 
+// ── FOTOS DOS PRODUTOS ─────────────────────────────────────────
+function getFotoAdmin(id){
+  return JSON.parse(localStorage.getItem('tcho_fotos')||'{}')[id]||null;
+}
+function salvarFotoData(id,src){
+  const fotos=JSON.parse(localStorage.getItem('tcho_fotos')||'{}');
+  fotos[id]=src;
+  localStorage.setItem('tcho_fotos',JSON.stringify(fotos));
+  renderCardapio();
+  showToast('📷 Foto salva!','tok-ok');
+}
+function removerFotoAdmin(id){
+  const fotos=JSON.parse(localStorage.getItem('tcho_fotos')||'{}');
+  delete fotos[id];
+  localStorage.setItem('tcho_fotos',JSON.stringify(fotos));
+  renderCardapio();
+  showToast('🗑️ Foto removida','tok-info');
+}
+function abrirUploadFoto(id){
+  const inp=document.createElement('input');
+  inp.type='file';inp.accept='image/*';
+  inp.onchange=e=>{
+    const file=e.target.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const img=new Image();
+      img.onload=()=>{
+        const canvas=document.createElement('canvas');
+        const MAX=700;
+        let w=img.width,h=img.height;
+        if(w>h){if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}}
+        else{if(h>MAX){w=Math.round(w*MAX/h);h=MAX;}}
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        salvarFotoData(id,canvas.toDataURL('image/jpeg',0.82));
+      };
+      img.src=ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+  inp.click();
+}
+function salvarFotoUrl(id){
+  const url=(document.getElementById('foto-url-'+id)||{}).value?.trim();
+  if(!url){showToast('Cole uma URL válida','tok-err');return;}
+  salvarFotoData(id,url);
+}
+function toggleFotoPanel(id){
+  const el=document.getElementById('foto-panel-'+id);
+  if(!el)return;
+  const aberto=el.style.display!=='none';
+  el.style.display=aberto?'none':'block';
+  const btn=document.getElementById('foto-toggle-'+id);
+  if(btn)btn.classList.toggle('active',!aberto);
+}
+
+function renderFotoSection(id){
+  const foto=getFotoAdmin(id);
+  return`<div class="prod-foto" id="foto-panel-${id}" style="display:none">
+    <div class="foto-titulo">📷 Foto do produto no cardápio</div>
+    <div class="foto-body">
+      <div class="foto-preview">
+        ${foto
+          ? `<img class="foto-thumb" src="${foto}" alt="foto do produto">`
+          : `<div class="foto-placeholder">Sem foto</div>`
+        }
+        ${foto?`<button class="foto-rm-btn" onclick="removerFotoAdmin('${id}')">🗑️ Remover</button>`:''}
+      </div>
+      <div class="foto-inputs">
+        <button class="foto-upload-btn" onclick="abrirUploadFoto('${id}')">📁 Fazer upload</button>
+        <div class="foto-url-row">
+          <input class="opc-input" id="foto-url-${id}" type="text" placeholder="ou cole uma URL da imagem aqui">
+          <button class="opc-btn" onclick="salvarFotoUrl('${id}')">Salvar URL</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
 // ── OPÇÕES DE EXTRAS (sabores de bebidas etc.) ─────────────────
 function getOpcoesAdmin(id){
   const saved=JSON.parse(localStorage.getItem('tcho_opcoes')||'{}');
@@ -445,9 +524,15 @@ function renderLista(cat,containerId){
   document.getElementById(containerId).innerHTML=PRODS.filter(p=>p.cat===cat).map(p=>{
     const ev=est[p.id];
     const temOpcoes=cat==='e'&&(p.opcoes||getOpcoesAdmin(p.id).length>0);
+    const temFoto=!!getFotoAdmin(p.id);
     return`<div class="prod-item" id="prow-${p.id}">
       <div class="prod-row">
-        <div class="prod-emoji">${p.e}</div>
+        <div class="prod-foto-mini" onclick="toggleFotoPanel('${p.id}')">
+          ${temFoto
+            ? `<img src="${getFotoAdmin(p.id)}" class="prod-foto-mini-img" alt="">`
+            : `<span class="prod-foto-mini-icon">📷</span>`
+          }
+        </div>
         <div class="prod-info"><div class="prod-nome">${p.n}</div><div class="prod-preco">R$${p.p}</div></div>
         <label class="toggle-wrap" style="margin-right:8px"><input type="checkbox" ${ev.ativo?'checked':''} onchange="toggleAtivo('${p.id}',this.checked)"><span class="slider"></span></label>
         <div class="prod-stock" id="stock-${p.id}" style="${!ev.ativo?'opacity:.35;pointer-events:none':''}">
@@ -461,6 +546,7 @@ function renderLista(cat,containerId){
           ${renderEstoqueBadge(p.id)}
         </div>
       </div>
+      ${renderFotoSection(p.id)}
       ${temOpcoes?renderOpcoes(p.id):''}
     </div>`;
   }).join('');

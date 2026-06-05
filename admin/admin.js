@@ -22,12 +22,13 @@ function logout(){
 
 // ── NAVEGAÇÃO ──────────────────────────────────────────────────
 function showPage(p){
-  document.querySelectorAll('.nav-tab').forEach((el,i)=>el.classList.toggle('active',['cozinha','pedidos','config','cardapio','marketing'][i]===p));
+  document.querySelectorAll('.nav-tab').forEach((el,i)=>el.classList.toggle('active',['cozinha','pedidos','config','cardapio','marketing','financeiro'][i]===p));
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
-  if(p==='cardapio')renderCardapio();
-  if(p==='pedidos')renderHistorico();
-  if(p==='marketing')renderCupons();
+  if(p==='cardapio')  renderCardapio();
+  if(p==='pedidos')   renderHistorico();
+  if(p==='marketing') renderCupons();
+  if(p==='financeiro') carregarFinanceiro();
 }
 function showInner(t){
   document.querySelectorAll('.inner-tab').forEach((el,i)=>el.classList.toggle('active',['cupons','fidelidade'][i]===t));
@@ -421,6 +422,255 @@ function onFlagFidelidade(){
   else{status.className='fid-status fid-off';status.innerHTML='<span>🔒</span><span>Programa desativado — não visível para clientes</span>';}
 }
 
+// ── FINANCEIRO ─────────────────────────────────────────────────
+let finPeriodo = 'hoje';
+let finPedidosList = [];
+
+function filtrarPeriodo(tipo){
+  finPeriodo = tipo;
+  ['hoje','semana','mes'].forEach(t => {
+    const el = document.getElementById('fin-btn-'+t);
+    if(el) el.classList.toggle('active', t === tipo);
+  });
+  if(tipo !== 'custom') carregarFinanceiro();
+  else carregarFinanceiro();
+}
+
+function getFinRange(){
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const amanha = new Date(hoje.getTime() + 86400000);
+  if(finPeriodo==='hoje')   return {ini:hoje, fim:amanha};
+  if(finPeriodo==='semana') return {ini:new Date(hoje.getTime()-6*86400000), fim:amanha};
+  if(finPeriodo==='mes')    return {ini:new Date(hoje.getFullYear(),hoje.getMonth(),1), fim:amanha};
+  if(finPeriodo==='custom'){
+    const vi=document.getElementById('fin-ini').value;
+    const vf=document.getElementById('fin-fim').value;
+    return {
+      ini: vi?new Date(vi):hoje,
+      fim: vf?new Date(vf+'T23:59:59'):amanha
+    };
+  }
+  return {ini:hoje, fim:amanha};
+}
+
+function labelPeriodo(range){
+  const fmt={day:'2-digit',month:'2-digit',year:'numeric'};
+  const di=range.ini.toLocaleDateString('pt-BR',fmt);
+  const df=new Date(range.fim.getTime()-1).toLocaleDateString('pt-BR',fmt);
+  return di===df?`Período: ${di}`:`Período: ${di} até ${df}`;
+}
+
+async function carregarFinanceiro(){
+  const range = getFinRange();
+  document.getElementById('fin-periodo-label').textContent = labelPeriodo(range);
+  document.getElementById('fin-stats').innerHTML = '<div style="color:var(--muted);font-size:.78rem;padding:8px 0">Carregando...</div>';
+
+  try {
+    const snap = await db.collection('pedidos')
+      .where('criadoEm','>=', firebase.firestore.Timestamp.fromDate(range.ini))
+      .where('criadoEm','<',  firebase.firestore.Timestamp.fromDate(range.fim))
+      .get();
+    finPedidosList = snap.docs.map(d=>{
+      const data=d.data();
+      return {...data, _id:d.id, hora:data.hora?.toDate?.() || new Date(data.hora||0)};
+    });
+  } catch(e){
+    // localStorage fallback
+    const todos = JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
+    finPedidosList = todos
+      .filter(p=>{ const h=new Date(p.hora||p.criadoEm); return h>=range.ini && h<range.fim; })
+      .map(p=>({...p, hora:new Date(p.hora||0)}));
+  }
+
+  renderFinanceiro();
+}
+
+function renderFinanceiro(){
+  const ps = finPedidosList;
+  const r  = n => 'R$'+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  if(!ps.length){
+    const vazio='<div class="empty"><div class="empty-icon">📊</div><div>Nenhum pedido neste período</div></div>';
+    document.getElementById('fin-stats').innerHTML  = vazio;
+    document.getElementById('fin-fretes').innerHTML = '';
+    document.getElementById('fin-lista').innerHTML  = '';
+    return;
+  }
+
+  // ── Totais ──
+  const totalFaturado = ps.reduce((a,p)=>a+(p.total||0),0);
+  const totalFrete    = ps.reduce((a,p)=>a+(p.frete||0),0);
+  const totalDesconto = ps.reduce((a,p)=>a+(p.desconto||0),0);
+  const totalLiquido  = totalFaturado - totalFrete;
+  const nDelivery     = ps.filter(p=>p.tipo==='delivery').length;
+  const nRetirada     = ps.filter(p=>p.tipo==='retirada').length;
+
+  // ── Por forma de pagamento ──
+  const pagMap={};
+  ps.forEach(p=>{
+    const k=p.pag||'Outro';
+    if(!pagMap[k]) pagMap[k]={total:0,count:0};
+    pagMap[k].total+=(p.total||0);
+    pagMap[k].count++;
+  });
+
+  // ── Render Resumo ──
+  document.getElementById('fin-stats').innerHTML=`
+    <div class="fin-cards">
+      <div class="fin-card"><div class="fin-card-n">${ps.length}</div><div class="fin-card-l">Pedidos</div></div>
+      <div class="fin-card"><div class="fin-card-n" style="color:var(--orange)">${r(totalFaturado)}</div><div class="fin-card-l">Faturado</div></div>
+      <div class="fin-card"><div class="fin-card-n" style="color:#27ae60">${r(totalLiquido)}</div><div class="fin-card-l">Líquido s/frete</div></div>
+      <div class="fin-card"><div class="fin-card-n" style="color:#3498db">${r(totalFrete)}</div><div class="fin-card-l">Total Fretes</div></div>
+      ${totalDesconto>0?`<div class="fin-card"><div class="fin-card-n" style="color:#e74c3c">-${r(totalDesconto)}</div><div class="fin-card-l">Descontos</div></div>`:''}
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Forma de pagamento</div>
+      ${Object.entries(pagMap).sort((a,b)=>b[1].total-a[1].total).map(([pag,d])=>{
+        const pct=Math.round((d.total/totalFaturado)*100);
+        return`<div class="fin-pag-row">
+          <div class="fin-pag-label">${pag}</div>
+          <div class="fin-pag-bar-wrap"><div class="fin-pag-bar" style="width:${pct}%"></div></div>
+          <div class="fin-pag-val">${r(d.total)}</div>
+          <div class="fin-pag-cnt">${d.count} ped.</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="display:flex;gap:14px;font-size:.75rem;color:var(--muted)">
+      <span>🛵 ${nDelivery} delivery</span>
+      <span>🏃 ${nRetirada} retirada${nRetirada!==1?'s':''}</span>
+    </div>`;
+
+  // ── Render Taxas Motoboy ──
+  const entregas = ps.filter(p=>p.tipo==='delivery'&&(p.frete||0)>0)
+                     .sort((a,b)=>new Date(a.hora)-new Date(b.hora));
+  if(!entregas.length){
+    document.getElementById('fin-fretes').innerHTML='<div style="color:var(--muted);font-size:.78rem">Nenhuma entrega neste período</div>';
+  } else {
+    document.getElementById('fin-fretes').innerHTML=`
+      <div class="fin-moto-header">
+        <span>${entregas.length} entrega${entregas.length!==1?'s':''}</span>
+        <span style="color:var(--orange);font-weight:700">Total: ${r(totalFrete)}</span>
+      </div>
+      <table class="fin-table">
+        <thead><tr><th>Pedido</th><th>Cliente</th><th>Bairro</th><th>Hora</th><th class="fin-val">Taxa</th></tr></thead>
+        <tbody>
+          ${entregas.map(p=>`<tr>
+            <td class="fin-num">${p.num||'#'+p.id}</td>
+            <td>${p.nome}</td>
+            <td>${p.bairro||'-'}</td>
+            <td>${p.horaStr||'-'}</td>
+            <td class="fin-val">${r(p.frete||0)}</td>
+          </tr>`).join('')}
+          <tr class="fin-total-row">
+            <td colspan="4"><strong>TOTAL (${entregas.length} entrega${entregas.length!==1?'s':''})</strong></td>
+            <td class="fin-val"><strong>${r(totalFrete)}</strong></td>
+          </tr>
+        </tbody>
+      </table>`;
+  }
+
+  // ── Render Lista de Pedidos ──
+  const statusLabel={novo:'Novo',prep:'Preparo',pronto:'Pronto',entrega:'Entrega',finalizado:'Finalizado'};
+  const statusCor={novo:'#e74c3c',prep:'#f39c12',pronto:'#27ae60',entrega:'#3498db',finalizado:'var(--muted)'};
+  const sorted=[...ps].sort((a,b)=>new Date(b.hora)-new Date(a.hora));
+  document.getElementById('fin-lista').innerHTML=`
+    <table class="fin-table">
+      <thead><tr><th>Pedido</th><th>Cliente</th><th>Tipo</th><th>Pagamento</th><th>Status</th><th>Hora</th><th class="fin-val">Total</th></tr></thead>
+      <tbody>
+        ${sorted.map(p=>`<tr>
+          <td class="fin-num">${p.num||'#'+p.id}</td>
+          <td>${p.nome}</td>
+          <td>${p.tipo==='delivery'?'🛵':'🏃'}</td>
+          <td>${p.pag||'-'}</td>
+          <td style="color:${statusCor[p.status]||'var(--muted)'};font-weight:700;font-size:.68rem">${statusLabel[p.status]||p.status||'-'}</td>
+          <td style="font-size:.7rem;color:var(--muted)">${p.horaStr||'-'}</td>
+          <td class="fin-val">${r(p.total||0)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ── IMPRESSÃO FINANCEIRO ───────────────────────────────────────
+function imprimirVendas(){
+  const ps = finPedidosList;
+  if(!ps.length){showToast('Nenhum dado para imprimir','tok-err');return;}
+  const r  = n => 'R$'+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const totalFaturado = ps.reduce((a,p)=>a+(p.total||0),0);
+  const totalFrete    = ps.reduce((a,p)=>a+(p.frete||0),0);
+  const totalDesconto = ps.reduce((a,p)=>a+(p.desconto||0),0);
+  const totalLiquido  = totalFaturado - totalFrete;
+  const pagMap={};
+  ps.forEach(p=>{const k=p.pag||'Outro';if(!pagMap[k])pagMap[k]={total:0,count:0};pagMap[k].total+=(p.total||0);pagMap[k].count++;});
+  const periodoLabel = document.getElementById('fin-periodo-label').textContent;
+  const logoUrl = new URL('../logo/logo.png', window.location.href).href;
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${CSS_CUPOM}
+    table{width:100%;border-collapse:collapse;margin:4px 0}td,th{font-size:11px;padding:2px 4px}
+    th{border-bottom:1px solid #000;font-weight:bold}.r{text-align:right}
+  </style></head><body>
+    <div class="c"><img src="${logoUrl}" style="max-width:150px;max-height:65px"></div>
+    <div class="c b" style="font-size:14px;margin-top:4px">RESUMO DE VENDAS</div>
+    <div class="c" style="font-size:10px">${periodoLabel.replace('Período: ','')}</div>
+    <div class="line"></div>
+    <div class="row"><span>Pedidos:</span><span>${ps.length}</span></div>
+    <div class="row"><span>Delivery:</span><span>${ps.filter(p=>p.tipo==='delivery').length}</span></div>
+    <div class="row"><span>Retirada:</span><span>${ps.filter(p=>p.tipo==='retirada').length}</span></div>
+    <div class="line"></div>
+    <div class="row"><span>Total faturado:</span><span>${r(totalFaturado)}</span></div>
+    <div class="row"><span>Fretes cobrados:</span><span>${r(totalFrete)}</span></div>
+    ${totalDesconto>0?`<div class="row"><span>Descontos:</span><span>-${r(totalDesconto)}</span></div>`:''}
+    <div class="row b" style="font-size:13px;padding:3px 0"><span>LÍQUIDO (s/frete):</span><span>${r(totalLiquido)}</span></div>
+    <div class="line"></div>
+    <div class="b" style="margin-bottom:3px;font-size:11px">POR PAGAMENTO</div>
+    ${Object.entries(pagMap).sort((a,b)=>b[1].total-a[1].total).map(([k,v])=>`<div class="row"><span>${k} (${v.count} ped.):</span><span>${r(v.total)}</span></div>`).join('')}
+    <div class="line"></div>
+    <div class="c" style="font-size:9px;margin-top:4px">Impresso em ${new Date().toLocaleString('pt-BR')}</div>
+    <script>window.onload=function(){window.print();setTimeout(()=>window.close(),1500)};<\/script>
+  </body></html>`;
+  abrirJanelaImpressao(html, 400);
+}
+
+function imprimirMotoboy(){
+  const entregas = finPedidosList.filter(p=>p.tipo==='delivery'&&(p.frete||0)>0)
+                                  .sort((a,b)=>new Date(a.hora)-new Date(b.hora));
+  if(!entregas.length){showToast('Nenhuma entrega para imprimir','tok-err');return;}
+  const r = n => 'R$'+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const totalFrete = entregas.reduce((a,p)=>a+(p.frete||0),0);
+  const periodoLabel = document.getElementById('fin-periodo-label').textContent;
+  const logoUrl = new URL('../logo/logo.png', window.location.href).href;
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${CSS_CUPOM}
+    table{width:100%;border-collapse:collapse;margin:4px 0}td,th{font-size:11px;padding:3px 4px}
+    th{border-bottom:1px solid #000;font-weight:bold}.r{text-align:right}
+    .tot td{border-top:1px solid #000;font-weight:bold;padding-top:5px}
+  </style></head><body>
+    <div class="c"><img src="${logoUrl}" style="max-width:150px;max-height:65px"></div>
+    <div class="c b" style="font-size:14px;margin-top:4px">TAXAS DE ENTREGA</div>
+    <div class="c b" style="font-size:11px">— MOTOBOY —</div>
+    <div class="c" style="font-size:10px">${periodoLabel.replace('Período: ','')}</div>
+    <div class="line"></div>
+    <table>
+      <thead><tr><th>Pedido</th><th>Bairro</th><th>Hora</th><th class="r">Taxa</th></tr></thead>
+      <tbody>
+        ${entregas.map(p=>`<tr>
+          <td><b>${p.num||'#'+p.id}</b></td>
+          <td>${p.bairro||'-'}</td>
+          <td>${p.horaStr||'-'}</td>
+          <td class="r">${r(p.frete||0)}</td>
+        </tr>`).join('')}
+        <tr class="tot">
+          <td colspan="3">TOTAL (${entregas.length} entrega${entregas.length!==1?'s':''})</td>
+          <td class="r">${r(totalFrete)}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="line"></div>
+    <div class="c" style="font-size:9px;margin-top:4px">Impresso em ${new Date().toLocaleString('pt-BR')}</div>
+    <script>window.onload=function(){window.print();setTimeout(()=>window.close(),1500)};<\/script>
+  </body></html>`;
+  abrirJanelaImpressao(html, 400);
+}
+
 // ── TOAST ──────────────────────────────────────────────────────
 let toastT;
 function showToast(msg,cls='tok-ok'){const el=document.getElementById('toast');el.textContent=msg;el.className=`toast show ${cls}`;clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3000);}
@@ -447,6 +697,12 @@ function lerPedidosLocal(){
 function iniciarApp(){
   renderAll();
   atualizarBotaoSom();
+  // Preenche datas padrão do filtro personalizado com hoje
+  const hoje = new Date().toISOString().split('T')[0];
+  const iniEl = document.getElementById('fin-ini');
+  const fimEl = document.getElementById('fin-fim');
+  if(iniEl) iniEl.value = hoje;
+  if(fimEl) fimEl.value = hoje;
 
   // Carrega config do Firestore
   db.collection('config').doc('operacao').get().then(doc=>{

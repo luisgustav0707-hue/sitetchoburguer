@@ -48,6 +48,7 @@
     <div class="nav-tab" onclick="showPage('config')">⚙️ Config</div>
     <div class="nav-tab" onclick="showPage('cardapio')">🍔 Cardápio</div>
     <div class="nav-tab" onclick="showPage('marketing')">📣 Marketing</div>
+    <div class="nav-tab" onclick="showPage('financeiro')">💰 Financeiro</div>
   </div>
 
   <!-- ── COZINHA ── -->
@@ -235,6 +236,46 @@
         • Identificação pelo número de celular
       </div>
     </div>
+  </div>
+
+  <!-- ── FINANCEIRO ── -->
+  <div class="page" id="page-financeiro">
+
+    <!-- Filtro de período -->
+    <div class="section">
+      <div class="sec-title">📅 Período</div>
+      <div class="fin-filtros">
+        <button class="fin-btn active" id="fin-btn-hoje"   onclick="filtrarPeriodo('hoje')">Hoje</button>
+        <button class="fin-btn"        id="fin-btn-semana" onclick="filtrarPeriodo('semana')">7 dias</button>
+        <button class="fin-btn"        id="fin-btn-mes"    onclick="filtrarPeriodo('mes')">Este mês</button>
+        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+          <input type="date" id="fin-ini" class="fin-date-input">
+          <span style="color:var(--muted);font-size:.75rem">até</span>
+          <input type="date" id="fin-fim" class="fin-date-input">
+          <button class="fin-btn" onclick="filtrarPeriodo('custom')">Filtrar</button>
+        </div>
+      </div>
+      <div id="fin-periodo-label" style="font-size:.72rem;color:var(--muted);margin-top:6px"></div>
+    </div>
+
+    <!-- Resumo de Vendas -->
+    <div class="section">
+      <div class="sec-title">💰 Resumo de vendas <button class="btn-print-fin" onclick="imprimirVendas()">🖨️ Imprimir</button></div>
+      <div id="fin-stats"><div class="empty"><div class="empty-icon">📊</div><div>Selecione um período</div></div></div>
+    </div>
+
+    <!-- Taxas de Entrega / Motoboy -->
+    <div class="section">
+      <div class="sec-title">🛵 Taxas de entrega — Motoboy <button class="btn-print-fin" onclick="imprimirMotoboy()">🖨️ Imprimir</button></div>
+      <div id="fin-fretes"></div>
+    </div>
+
+    <!-- Lista de Pedidos do Período -->
+    <div class="section">
+      <div class="sec-title">📋 Pedidos do período</div>
+      <div id="fin-lista"></div>
+    </div>
+
   </div>
 
 </div><!-- fim .app -->

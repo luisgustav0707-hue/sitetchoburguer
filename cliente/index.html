@@ -335,6 +335,9 @@ select option{background:var(--card)}
   <div class="modal-box" id="modal-box"></div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase.js"></script>
 <script>
 // ── DADOS ──────────────────────────────────────────────────────
 const BURGUERS=[
@@ -395,15 +398,15 @@ let modalId=null,pontoAtual=null,sacheAtual=null,removidosAtual=[],adicionaisAtu
 
 // ── VERIFICAR HORÁRIO / LOJA ABERTA ──────────────────────────
 function verificarLoja(){
-  // Em produção isso vem do admin via localStorage/API
-  const lojaAberta = localStorage.getItem('tcho_loja_aberta') !== 'false';
-  const agora = new Date();
-  const dia = agora.getDay(); // 0=dom,1=seg,...,4=qui,5=sex,6=sab
-  const hora = agora.getHours();
-  const dentroHorario = [0,4,5,6].includes(dia) && hora >= 19 && hora < 23;
-  if(!lojaAberta) document.getElementById('loja-fechada').classList.add('show');
-  // Descomente a linha abaixo para verificar horário real:
-  // if(!lojaAberta || !dentroHorario) document.getElementById('loja-fechada').classList.add('show');
+  db.collection('config').doc('operacao').onSnapshot(doc => {
+    const data = doc.exists ? doc.data() : {};
+    const lojaAberta = data.lojaAberta !== false;
+    document.getElementById('loja-fechada').classList.toggle('show', !lojaAberta);
+  }, () => {
+    // Firebase não configurado ainda — usa localStorage como fallback
+    const lojaAberta = localStorage.getItem('tcho_loja_aberta') !== 'false';
+    if(!lojaAberta) document.getElementById('loja-fechada').classList.add('show');
+  });
 }
 
 // ── RENDER ──────────────────────────────────────────────────────
@@ -630,15 +633,28 @@ function renderResumo(){
   document.getElementById('resumo-content').innerHTML=html+`<div class="resumo-total"><span>TOTAL</span><span>R$${Math.max(0,total)}</span></div>`;
 }
 
-function finalizarPedido(){
-  orderCounter++;
-  const num=String(orderCounter).padStart(3,'0');
+async function finalizarPedido(){
+  // Gera número do pedido sequencial via Firestore
+  let numOrdem;
+  try {
+    const contRef = db.collection('config').doc('contador');
+    numOrdem = await db.runTransaction(async t => {
+      const d = await t.get(contRef);
+      const next = (d.exists ? d.data().ultimo : 0) + 1;
+      t.set(contRef, {ultimo: next}, {merge: true});
+      return next;
+    });
+  } catch(e) {
+    // Fallback se Firebase não estiver configurado
+    numOrdem = Math.floor(Math.random()*900)+100;
+  }
+
+  const num=String(numOrdem).padStart(3,'0');
   document.getElementById('order-num').textContent=`#${num}`;
   document.getElementById('success-msg').textContent=tipoPedido==='delivery'?'Pedido recebido! Em breve nosso entregador sairá. 🛵':'Pedido em preparo! Venha retirar em breve. 🍔';
 
-  // Salva pedido no localStorage para o admin receber
   const pedido={
-    id:orderCounter, num:`#${num}`,
+    id:numOrdem, num:`#${num}`,
     nome:document.getElementById('f-nome').value,
     tel:document.getElementById('f-tel').value,
     tipo:tipoPedido,
@@ -653,14 +669,19 @@ function finalizarPedido(){
     itens:montarItensTexto(),
     total:Math.max(0,getTotal()),
     status:'novo',
-    hora:new Date().toISOString(),
+    hora:firebase.firestore.FieldValue.serverTimestamp(),
     horaStr:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
     impresso:false,
+    criadoEm:firebase.firestore.FieldValue.serverTimestamp(),
   };
-  // Salva no localStorage (admin lê de lá)
-  const pedidos=JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
-  pedidos.push(pedido);
-  localStorage.setItem('tcho_pedidos',JSON.stringify(pedidos));
+
+  // Salva no Firestore (admin recebe em tempo real)
+  db.collection('pedidos').add(pedido).catch(() => {
+    // Fallback para localStorage se Firebase não configurado
+    const pedidos=JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
+    pedidos.push({...pedido, hora:new Date().toISOString()});
+    localStorage.setItem('tcho_pedidos',JSON.stringify(pedidos));
+  });
 
   [1,2,3].forEach(i=>document.getElementById('sc'+i).classList.remove('active'));
   document.getElementById('sc4').classList.add('active');

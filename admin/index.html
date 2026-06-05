@@ -417,6 +417,9 @@ input:checked+.slider:before{transform:translateX(22px);background:#000}
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="../shared/firebase.js"></script>
 <script>
 // ── LOGIN ──────────────────────────────────────────────────────
 const CREDENCIAIS = { usuario:'admin', senha:'tcho2025' };
@@ -467,8 +470,6 @@ function atualizarBadgeLoja(){
   const badge=document.getElementById('loja-badge');
   badge.textContent=aberta?'🟢 ABERTA':'🔴 FECHADA';
   badge.className='loja-badge '+(aberta?'aberta':'fechada');
-  // comunica com o site do cliente via localStorage
-  localStorage.setItem('tcho_loja_aberta', aberta);
 }
 
 // ── CONFIGS ──────────────────────────────────────────────────────
@@ -481,7 +482,8 @@ function salvarConfig(){
     autoAceitar:autoAceitar,
     autoImprimir:document.getElementById('cfg-print').checked,
   };
-  localStorage.setItem('tcho_config',JSON.stringify(cfg));
+  // Salva no Firestore (cliente lê em tempo real)
+  db.collection('config').doc('operacao').set(cfg,{merge:true}).catch(console.error);
   showToast('✅ Configuração salva!','tok-ok');
 }
 function syncAutoConfig(){
@@ -517,7 +519,7 @@ const NOMES=['João','Maria','Pedro','Ana','Carlos','Lucas','Fernanda','Rafael',
 const BAIRROS=['Copacabana','Floramar','Heliópolis','Jardim Europa','Lagoa','Planalto','Tupi','Venda Nova'];
 const MOCK=[['X-Burguer (🥩 Ao ponto • 🍅 Ketchup)'],['X-Bacon (🔥 Bem passado • 🤍 Maionese)','Refrigerante Lata'],['X-Picles (🩸 Mal passado)','Porção de Batata'],['X-Tropical (🥩 Ao ponto)'],['X-Bacon Duplo (🔥 Bem passado)','Suco Lata'],['X-Romeu & Julieta (🥩 Ao ponto • + Queijo)']];
 
-function simularPedido(){
+async function simularPedido(){
   const num=++contPed,tipo=Math.random()>.35?'delivery':'retirada';
   const itens=MOCK[Math.floor(Math.random()*MOCK.length)];
   const nome=NOMES[Math.floor(Math.random()*NOMES.length)];
@@ -525,12 +527,22 @@ function simularPedido(){
   const pag=['PIX','Dinheiro','Cartão'][Math.floor(Math.random()*3)];
   const total=Math.floor(Math.random()*70)+25,frete=tipo==='delivery'?[4,5,6,7,8][Math.floor(Math.random()*5)]:0;
   const obs=Math.random()>.72?'Sem cebola':'';
-  const p={id:num,tipo,nome,bairro,pag,total,frete,obs,itens,status:'novo',hora:new Date(),horaStr:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),impresso:false};
-  pedidos.push(p);totalHoje++;
-  showToast(`🔔 Novo pedido #${num} — ${nome}`,'tok-info');
-  atualizarBadgeNovos();
-  if(autoAceitar)setTimeout(()=>moverStatus(p.id,'prep',true),600);
-  else renderAll();
+  const pedido={id:num,num:`#${String(num).padStart(3,'0')}`,tipo,nome,bairro,pag,total,frete,obs,itens,status:'novo',
+    hora:firebase.firestore.FieldValue.serverTimestamp(),
+    horaStr:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),impresso:false};
+  try{
+    const ref=await db.collection('pedidos').add(pedido);
+    // onSnapshot vai adicionar automaticamente ao array pedidos
+    showToast(`🔔 Novo pedido #${num} — ${nome}`,'tok-info');
+  }catch(e){
+    // Fallback se Firebase não configurado
+    const p={...pedido,_id:'sim-'+num,hora:new Date()};
+    pedidos.push(p);totalHoje++;
+    showToast(`🔔 Novo pedido #${num} — ${nome}`,'tok-info');
+    atualizarBadgeNovos();
+    if(autoAceitar)setTimeout(()=>moverStatus(p._id,'prep',true),600);
+    else renderAll();
+  }
 }
 
 function imprimirPedido(p){
@@ -570,15 +582,28 @@ function imprimirPedido(p){
 }
 
 function moverStatus(id,novoStatus,auto=false){
-  const p=pedidos.find(x=>x.id===id);if(!p)return;
-  if(novoStatus==='finalizado'){p.status='finalizado';p.horaFim=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
-  else{p.status=novoStatus;p.hora=new Date();p.horaStr=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
+  const p=pedidos.find(x=>x._id===id);if(!p)return;
+  const horaStr=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  const update={status:novoStatus,horaStr,hora:firebase.firestore.FieldValue.serverTimestamp()};
+  if(novoStatus==='finalizado') update.horaFim=horaStr;
+  // Atualiza localmente
+  p.status=novoStatus;p.hora=new Date();p.horaStr=horaStr;
+  if(novoStatus==='finalizado') p.horaFim=horaStr;
+  // Atualiza no Firestore
+  db.collection('pedidos').doc(id).update(update).catch(console.error);
   if(novoStatus==='prep')setTimeout(()=>imprimirPedido(p),200);
   atualizarBadgeNovos();
   renderAll();
   renderHistorico();
 }
-function cancelar(id){if(!confirm(`Cancelar pedido #${id}?`))return;pedidos=pedidos.filter(x=>x.id!==id);totalHoje=Math.max(0,totalHoje-1);renderAll();renderHistorico();}
+function cancelar(id){
+  const p=pedidos.find(x=>x._id===id);
+  if(!p||!confirm(`Cancelar pedido ${p.num||('#'+p.id)}?`))return;
+  db.collection('pedidos').doc(id).delete().catch(console.error);
+  pedidos=pedidos.filter(x=>x._id!==id);
+  totalHoje=Math.max(0,totalHoje-1);
+  renderAll();renderHistorico();
+}
 
 // DRAG & DROP
 function onDragStart(event,id,status){dragId=id;dragSrc=status;event.dataTransfer.effectAllowed='move';setTimeout(()=>{const el=document.getElementById(`card-${id}`);if(el)el.classList.add('dragging');},0);}
@@ -596,15 +621,16 @@ function renderCard(p){
   const m=getMin(p.hora),cls=tc(m,p.status);
   const tipoEl=p.tipo==='delivery'?`<span class="card-tipo td">🛵 DEL</span>`:`<span class="card-tipo tr">🏃 RET</span>`;
   const pb=p.impresso?`<span class="badge-print">🖨</span>`:'';
+  const fid=p._id;
   let btns='';
-  if(p.status==='novo'){btns=autoAceitar?`<span style="font-size:.6rem;color:#f39c12">⚡ aceite automático</span>`:`<button class="btn-k bk-aceitar" onclick="moverStatus(${p.id},'prep')">✓ ACEITAR + 🖨️</button><button class="btn-k bk-cancel" onclick="cancelar(${p.id})">×</button>`;}
-  else if(p.status==='prep'){btns=`<button class="btn-k bk-pronto" onclick="moverStatus(${p.id},'pronto')">PRONTO ✓</button>`;}
-  else if(p.status==='pronto'){btns=p.tipo==='delivery'?`<button class="btn-k bk-entrega" onclick="moverStatus(${p.id},'entrega')">SAIU 🛵</button>`:`<button class="btn-k bk-final" onclick="moverStatus(${p.id},'finalizado')">RETIRADO ✓</button>`;}
-  else if(p.status==='entrega'){btns=`<button class="btn-k bk-final" onclick="moverStatus(${p.id},'finalizado')">ENTREGUE ✓</button>`;}
+  if(p.status==='novo'){btns=autoAceitar?`<span style="font-size:.6rem;color:#f39c12">⚡ aceite automático</span>`:`<button class="btn-k bk-aceitar" onclick="moverStatus('${fid}','prep')">✓ ACEITAR + 🖨️</button><button class="btn-k bk-cancel" onclick="cancelar('${fid}')">×</button>`;}
+  else if(p.status==='prep'){btns=`<button class="btn-k bk-pronto" onclick="moverStatus('${fid}','pronto')">PRONTO ✓</button>`;}
+  else if(p.status==='pronto'){btns=p.tipo==='delivery'?`<button class="btn-k bk-entrega" onclick="moverStatus('${fid}','entrega')">SAIU 🛵</button>`:`<button class="btn-k bk-final" onclick="moverStatus('${fid}','finalizado')">RETIRADO ✓</button>`;}
+  else if(p.status==='entrega'){btns=`<button class="btn-k bk-final" onclick="moverStatus('${fid}','finalizado')">ENTREGUE ✓</button>`;}
   const nextLabel={novo:'Em preparo →',prep:'Pronto →',pronto:p.tipo==='delivery'?'Entrega →':'',entrega:''}[p.status];
   const dragHint=nextLabel?`<div class="drag-hint">↔ Arraste para ${nextLabel}</div>`:'';
-  return`<div class="card" id="card-${p.id}" draggable="true" ondragstart="onDragStart(event,${p.id},'${p.status}')" ondragend="onDragEnd()">
-    <div class="card-hdr"><span class="card-num">#${p.id}${pb}</span>${tipoEl}</div>
+  return`<div class="card" id="card-${fid}" draggable="true" ondragstart="onDragStart(event,'${fid}','${p.status}')" ondragend="onDragEnd()">
+    <div class="card-hdr"><span class="card-num">${p.num||('#'+p.id)}${pb}</span>${tipoEl}</div>
     <div class="card-cli">${p.nome}${p.bairro?` · ${p.bairro}`:''}</div>
     <div class="card-itens">${p.itens.join(' · ')}</div>
     ${p.obs?`<div class="card-obs">⚠ ${p.obs}</div>`:''}
@@ -695,15 +721,18 @@ function salvarCupom(){
   if(!codigo){showToast('⚠️ Digite o código do cupom','tok-err');return;}
   const tipo=document.getElementById('c-tipo').value,valor=parseFloat(document.getElementById('c-valor').value)||0;
   if(tipo!=='frete'&&tipo!=='item'&&!valor){showToast('⚠️ Informe o valor do desconto','tok-err');return;}
-  const existe=cupons.find(c=>c.codigo===codigo&&c.id!==editandoId);
+  const existe=cupons.find(c=>c.codigo===codigo&&c._id!==editandoId);
   if(existe){showToast('⚠️ Esse código já existe!','tok-err');return;}
-  const cupom={id:editandoId||Date.now(),codigo,tipo,valor,minimo:parseFloat(document.getElementById('c-minimo').value)||0,usosMax:parseInt(document.getElementById('c-usos').value)||0,usosFeitos:editandoId?(cupons.find(c=>c.id===editandoId)?.usosFeitos||0):0,validade:document.getElementById('c-validade').value||null,descricao:document.getElementById('c-desc').value||'',item:document.getElementById('c-item').value,ativo:true,criadoEm:editandoId?(cupons.find(c=>c.id===editandoId)?.criadoEm||new Date().toLocaleDateString('pt-BR')):new Date().toLocaleDateString('pt-BR')};
-  if(editandoId){const idx=cupons.findIndex(c=>c.id===editandoId);cupons[idx]=cupom;showToast('✅ Cupom atualizado!','tok-ok');}
-  else{cupons.push(cupom);showToast('🎟️ Cupom criado!','tok-ok');}
-  fecharFormCupom();renderCupons();
+  const prev=editandoId?cupons.find(c=>c._id===editandoId):null;
+  const cupom={codigo,tipo,valor,minimo:parseFloat(document.getElementById('c-minimo').value)||0,usosMax:parseInt(document.getElementById('c-usos').value)||0,usosFeitos:prev?prev.usosFeitos:0,validade:document.getElementById('c-validade').value||null,descricao:document.getElementById('c-desc').value||'',item:document.getElementById('c-item').value,ativo:true,criadoEm:prev?prev.criadoEm:new Date().toLocaleDateString('pt-BR')};
+  if(editandoId){
+    db.collection('cupons').doc(editandoId).set(cupom,{merge:true}).then(()=>{showToast('✅ Cupom atualizado!','tok-ok');fecharFormCupom();}).catch(e=>{showToast('❌ Erro ao salvar','tok-err');console.error(e);});
+  } else {
+    db.collection('cupons').add(cupom).then(()=>{showToast('🎟️ Cupom criado!','tok-ok');fecharFormCupom();}).catch(e=>{showToast('❌ Erro ao salvar','tok-err');console.error(e);});
+  }
 }
-function toggleCupom(id){const c=cupons.find(x=>x.id===id);if(!c)return;c.ativo=!c.ativo;showToast(c.ativo?'✅ Cupom ativado!':'🔒 Cupom desativado',c.ativo?'tok-ok':'tok-info');renderCupons();}
-function deletarCupom(id){const c=cupons.find(x=>x.id===id);if(!c||!confirm(`Excluir cupom "${c.codigo}"?`))return;cupons=cupons.filter(x=>x.id!==id);showToast('🗑️ Cupom excluído','tok-info');renderCupons();}
+function toggleCupom(id){const c=cupons.find(x=>x._id===id);if(!c)return;const novoAtivo=!c.ativo;db.collection('cupons').doc(id).update({ativo:novoAtivo}).then(()=>showToast(novoAtivo?'✅ Cupom ativado!':'🔒 Cupom desativado',novoAtivo?'tok-ok':'tok-info')).catch(console.error);}
+function deletarCupom(id){const c=cupons.find(x=>x._id===id);if(!c||!confirm(`Excluir cupom "${c.codigo}"?`))return;db.collection('cupons').doc(id).delete().then(()=>showToast('🗑️ Cupom excluído','tok-info')).catch(console.error);}
 function copiarCodigo(codigo){navigator.clipboard?.writeText(codigo).then(()=>showToast(`📋 "${codigo}" copiado!`,'tok-ok')).catch(()=>showToast(`Código: ${codigo}`,'tok-info'));}
 function isExp(c){return c.validade&&new Date(c.validade)<new Date();}
 function descontoLabel(c){if(c.tipo==='pct')return`${c.valor}% OFF`;if(c.tipo==='fixo')return`R$${c.valor} OFF`;if(c.tipo==='frete')return'FRETE GRÁTIS';if(c.tipo==='item')return`${c.item} GRÁTIS`;return'';}
@@ -723,9 +752,9 @@ function renderCupons(){
       ${c.usosMax>0?`<div style="background:#2a2520;border-radius:10px;height:4px;overflow:hidden;margin-top:6px"><div style="height:100%;background:var(--orange);border-radius:10px;width:${Math.min(100,(c.usosFeitos/c.usosMax)*100)}%"></div></div>`:''}
       <div class="cupom-acoes">
         <button class="btn-sm bsm-copy" onclick="copiarCodigo('${c.codigo}')">📋 Copiar</button>
-        <button class="btn-sm bsm-toggle" onclick="toggleCupom(${c.id})">${c.ativo?'🔒 Desativar':'✅ Ativar'}</button>
-        <button class="btn-sm bsm-edit" onclick="abrirFormCupom(${c.id})">✏️ Editar</button>
-        <button class="btn-sm bsm-del" onclick="deletarCupom(${c.id})">🗑️</button>
+        <button class="btn-sm bsm-toggle" onclick="toggleCupom('${c._id}')">${c.ativo?'🔒 Desativar':'✅ Ativar'}</button>
+        <button class="btn-sm bsm-edit" onclick="abrirFormCupom('${c._id}')">✏️ Editar</button>
+        <button class="btn-sm bsm-del" onclick="deletarCupom('${c._id}')">🗑️</button>
       </div>
     </div>`;
   }).join('');
@@ -744,31 +773,74 @@ function onFlagFidelidade(){
 let toastT;
 function showToast(msg,cls='tok-ok'){const el=document.getElementById('toast');el.textContent=msg;el.className=`toast show ${cls}`;clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3000);}
 
-// ── POLLING — lê pedidos do site do cliente ──────────────────────
-function lerPedidosCliente(){
-  const salvos=JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
-  salvos.forEach(p=>{
-    if(!pedidos.find(x=>x.id===p.id)){
-      pedidos.push({...p,hora:new Date(p.hora),status:p.status||'novo',impresso:false});
-      totalHoje++;
-      showToast(`🔔 Novo pedido #${p.id} — ${p.nome}`,'tok-info');
-      atualizarBadgeNovos();
-      if(autoAceitar)setTimeout(()=>moverStatus(p.id,'prep',true),600);
-    }
-  });
-  renderAll();
-}
-
 // ── INIT ──────────────────────────────────────────────────────────
 function iniciarApp(){
   renderAll();
-  // Polling a cada 5s para pegar novos pedidos do site do cliente
-  setInterval(lerPedidosCliente,5000);
+
+  // Carrega config do Firestore
+  db.collection('config').doc('operacao').get().then(doc=>{
+    if(!doc.exists) return;
+    const cfg=doc.data();
+    document.getElementById('cfg-loja').checked=cfg.lojaAberta!==false;
+    document.getElementById('cfg-delivery').checked=cfg.deliveryAtivo!==false;
+    document.getElementById('cfg-retirada').checked=cfg.retiradaAtiva!==false;
+    document.getElementById('cfg-print').checked=cfg.autoImprimir!==false;
+    autoAceitar=!!cfg.autoAceitar;
+    atualizarBotaoAuto();
+    atualizarBadgeLoja();
+  }).catch(console.error);
+
+  // Listener em tempo real para pedidos ativos
+  db.collection('pedidos')
+    .where('status','in',['novo','prep','pronto','entrega'])
+    .onSnapshot(snapshot=>{
+      snapshot.docChanges().forEach(change=>{
+        const data=change.doc.data();
+        const p={...data,_id:change.doc.id,hora:data.hora?data.hora.toDate():new Date()};
+        if(change.type==='added'){
+          if(!pedidos.find(x=>x._id===p._id)){
+            pedidos.push(p);totalHoje++;
+            showToast(`🔔 Novo pedido ${p.num||'#'+p.id} — ${p.nome}`,'tok-info');
+            atualizarBadgeNovos();
+            if(autoAceitar)setTimeout(()=>moverStatus(p._id,'prep',true),600);
+          }
+        } else if(change.type==='modified'){
+          const idx=pedidos.findIndex(x=>x._id===p._id);
+          if(idx!==-1) pedidos[idx]={...pedidos[idx],...p};
+        } else if(change.type==='removed'){
+          pedidos=pedidos.filter(x=>x._id!==p._id);
+        }
+      });
+      renderAll();renderHistorico();
+    },err=>{
+      console.warn('Firebase não configurado — modo offline');
+      setInterval(()=>{
+        const salvos=JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
+        salvos.forEach(p=>{
+          if(!pedidos.find(x=>x.id===p.id)){
+            pedidos.push({...p,_id:'local-'+p.id,hora:new Date(p.hora),status:p.status||'novo',impresso:false});
+            totalHoje++;
+            showToast(`🔔 Novo pedido #${p.id} — ${p.nome}`,'tok-info');
+            atualizarBadgeNovos();
+          }
+        });
+        renderAll();
+      },5000);
+    });
+
+  // Listener em tempo real para cupons
+  db.collection('cupons').onSnapshot(snapshot=>{
+    snapshot.docChanges().forEach(change=>{
+      const data=change.doc.data();
+      const c={...data,_id:change.doc.id};
+      if(change.type==='added') cupons.push(c);
+      else if(change.type==='modified'){const idx=cupons.findIndex(x=>x._id===c._id);if(idx!==-1)cupons[idx]=c;}
+      else if(change.type==='removed') cupons=cupons.filter(x=>x._id!==c._id);
+    });
+    renderCupons();
+  },console.error);
+
   setInterval(renderAll,30000);
-  // Cupons de exemplo
-  cupons=[
-    {id:1,codigo:'TCHO10',tipo:'pct',valor:10,minimo:30,usosMax:100,usosFeitos:0,validade:'2025-12-31',descricao:'10% de desconto acima de R$30!',item:'',ativo:true,criadoEm:new Date().toLocaleDateString('pt-BR')},
-  ];
 }
 </script>
 </body>

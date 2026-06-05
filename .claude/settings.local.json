@@ -6,7 +6,8 @@
       "PowerShell(Test-Path \"C:\\\\Program Files\\\\Git\\\\bin\\\\git.exe\"; Test-Path \"C:\\\\Program Files\\\\Git\\\\cmd\\\\git.exe\"; $env:PATH)",
       "PowerShell(winget install *)",
       "PowerShell(git init *)",
-      "PowerShell(git *)"
+      "PowerShell(git *)",
+      "PowerShell(git add *)"
     ]
   }
 }

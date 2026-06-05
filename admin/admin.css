@@ -6,7 +6,7 @@ body{background:var(--bg);color:var(--cream);font-family:'Barlow',sans-serif;fon
 /* LOGIN */
 .login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
 .login-box{background:var(--surface);border:1px solid #2a2520;border-radius:16px;padding:32px 24px;width:100%;max-width:360px;text-align:center}
-.login-logo{font-size:3rem;margin-bottom:8px}
+.login-logo{margin-bottom:8px}
 .login-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;background:linear-gradient(135deg,var(--orange),var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
 .login-sub{font-size:.75rem;color:var(--muted);margin-bottom:24px;letter-spacing:1px;text-transform:uppercase}
 .login-input{width:100%;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:8px;padding:12px 14px;font-family:'Barlow',sans-serif;font-size:.9rem;outline:none;transition:border-color .2s;margin-bottom:10px}

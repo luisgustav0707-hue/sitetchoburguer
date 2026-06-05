@@ -13,7 +13,7 @@
 <!-- LOGIN -->
 <div class="login-screen" id="login-screen">
   <div class="login-box">
-    <div class="login-logo">🍔</div>
+    <img src="../logo/logo.png" alt="Tcho Burguer" style="height:80px;width:auto;object-fit:contain;margin-bottom:8px">
     <div class="login-title">TCHO BURGUER</div>
     <div class="login-sub">Painel Administrativo</div>
     <input class="login-input" type="text" id="login-user" placeholder="Usuário" autocomplete="username">
@@ -29,7 +29,10 @@
 
   <!-- TOPBAR -->
   <div class="topbar">
-    <div class="topbar-title">🍔 TCHO BURGUER — ADMIN</div>
+    <div class="topbar-title" style="display:flex;align-items:center;gap:8px">
+      <img src="../logo/logo.png" alt="Tcho Burguer" style="height:28px;width:auto;object-fit:contain">
+      TCHO BURGUER — ADMIN
+    </div>
     <div class="topbar-right">
       <div class="loja-badge aberta" id="loja-badge" onclick="toggleLoja()">🟢 ABERTA</div>
       <button class="btn-logout" onclick="logout()">SAIR</button>

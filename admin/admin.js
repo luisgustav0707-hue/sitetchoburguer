@@ -140,7 +140,14 @@ function imprimirPedido(p){
     <div class="row"><span class="big">#${p.id}</span><span>${p.horaStr}</span></div>
     <div class="row"><span class="b">${p.tipo==='delivery'?'🛵 DELIVERY':'🏃 RETIRADA'}</span></div>
     <div class="row"><span>Cliente:</span><span>${p.nome}</span></div>
-    ${p.bairro?`<div class="row"><span>Bairro:</span><span>${p.bairro}</span></div>`:''}
+    <div class="row"><span>Tel:</span><span>${p.tel||'-'}</span></div>
+    ${p.tipo==='delivery'?`
+    <div class="line"></div>
+    ${p.endereco?`<div style="margin:2px 0"><span>Endereço: </span><span>${p.endereco}</span></div>`:''}
+    ${p.bairro?`<div style="margin:2px 0"><span>Bairro: </span><span>${p.bairro}</span></div>`:''}
+    ${p.cidade?`<div style="margin:2px 0"><span>Cidade: </span><span>${p.cidade}</span></div>`:''}
+    <div class="row"><span>Frete:</span><span>R$${p.frete||0}</span></div>`:''}
+    <div class="line"></div>
     <div class="row"><span>Pag:</span><span>${p.pag}</span></div>
     <div class="line"></div>
     ${p.itens.map(i=>`<div>• ${i}</div>`).join('')}

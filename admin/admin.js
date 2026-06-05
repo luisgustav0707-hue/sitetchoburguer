@@ -159,44 +159,77 @@ async function simularPedido(){
 }
 
 // ── IMPRESSÃO ──────────────────────────────────────────────────
+const CSS_CUPOM = `*{margin:0;padding:0}body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:280px}.c{text-align:center}.b{font-weight:bold}.line{border-top:1px dashed #000;margin:6px 0}.row{display:flex;justify-content:space-between;margin:2px 0}.big{font-size:15px;font-weight:bold}.obs-box{border:2px solid #000;padding:4px 6px;margin:4px 0;font-weight:800;font-size:13px;text-align:center}@media print{@page{margin:3mm;size:80mm auto}}`;
+
+function abrirJanelaImpressao(html, largura=420){
+  const win = window.open('','_blank',`width=${largura},height=560`);
+  if(!win) return;
+  win.document.write(html);
+  win.document.close();
+}
+
+function cupomCozinha(p){
+  const obsBloco = p.obs
+    ? `<div class="line"></div><div class="obs-box">⚠ OBS: ${p.obs.toUpperCase()} ⚠</div>`
+    : '';
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${CSS_CUPOM}</style></head><body>
+    <div class="c b" style="font-size:14px">— COZINHA —</div>
+    <div class="c" style="font-size:10px">TCHO BURGUER</div>
+    <div class="line"></div>
+    <div class="row"><span class="big">${p.num||'#'+p.id}</span><span>${p.horaStr}</span></div>
+    <div class="row"><span class="b">${p.tipo==='delivery'?'🛵 DELIVERY':'🏃 RETIRADA'}</span><span>${p.nome}</span></div>
+    <div class="line"></div>
+    ${p.itens.map(i=>`<div style="margin:3px 0">• ${i}</div>`).join('')}
+    ${obsBloco}
+    <script>window.onload=function(){window.print();setTimeout(()=>window.close(),1500)};<\/script>
+  </body></html>`;
+}
+
+function cupomEntrega(p){
+  const logoUrl = new URL('../logo/logo.png', window.location.href).href;
+  const obsBloco = p.obs
+    ? `<div class="line"></div><div class="obs-box">⚠ OBS: ${p.obs.toUpperCase()} ⚠</div>`
+    : '';
+  const enderecoBloco = p.tipo==='delivery' ? `
+    <div class="line"></div>
+    ${p.endereco ? `<div style="margin:2px 0">End: ${p.endereco}</div>` : ''}
+    ${p.bairro   ? `<div class="row"><span>Bairro:</span><span>${p.bairro}</span></div>` : ''}
+    ${p.cidade   ? `<div style="margin:2px 0;font-size:10px">${p.cidade}</div>` : ''}
+    <div class="row"><span>Frete:</span><span>R$${p.frete||0}</span></div>` : '';
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${CSS_CUPOM}</style></head><body>
+    <div class="c"><img src="${logoUrl}" style="max-width:160px;max-height:70px;margin-bottom:4px"></div>
+    <div class="c" style="font-size:10px">Qui–Dom 19h–23h | (31) 98309-4152</div>
+    <div class="line"></div>
+    <div class="row"><span class="big">${p.num||'#'+p.id}</span><span>${p.horaStr}</span></div>
+    <div class="row b"><span>${p.tipo==='delivery'?'🛵 DELIVERY':'🏃 RETIRADA'}</span></div>
+    <div class="line"></div>
+    <div class="row"><span>Cliente:</span><span>${p.nome}</span></div>
+    <div class="row"><span>Tel:</span><span>${p.tel||'-'}</span></div>
+    ${enderecoBloco}
+    <div class="line"></div>
+    <div class="row"><span>Pag:</span><span>${p.pag}</span></div>
+    <div class="line"></div>
+    ${p.itens.map(i=>`<div style="margin:2px 0">• ${i}</div>`).join('')}
+    ${obsBloco}
+    <div class="line"></div>
+    <div class="row big"><span>TOTAL:</span><span>R$${p.total+(p.frete||0)}</span></div>
+    <div class="c b" style="margin-top:8px">Obrigado! 😋</div>
+    <script>window.onload=function(){window.print();setTimeout(()=>window.close(),1500)};<\/script>
+  </body></html>`;
+}
+
 function imprimirPedido(p){
   if(!document.getElementById('cfg-print').checked)return;
   fetch('http://localhost:3333/imprimir',{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify(p)
   }).then(r=>r.json()).then(d=>{
-    if(d.ok)showToast(`🖨️ Pedido #${p.id} impresso!`,'tok-ok');
+    if(d.ok)showToast(`🖨️ Pedido ${p.num||'#'+p.id} impresso!`,'tok-ok');
     else showToast(`⚠️ Erro ao imprimir: ${d.erro}`,'tok-err');
   }).catch(()=>{
-    showToast('⚠️ Servidor de impressão offline — abrindo janela','tok-err');
-    const win=window.open('','_blank','width=420,height:560');
-    if(!win)return;
-    const logoUrl=new URL('../logo/logo.png', window.location.href).href;
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0}body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:280px}.c{text-align:center}.b{font-weight:bold}.line{border-top:1px dashed #000;margin:6px 0}.row{display:flex;justify-content:space-between;margin:2px 0}.big{font-size:15px;font-weight:bold}@media print{@page{margin:3mm;size:80mm auto}}</style></head><body>
-    <div class="c"><img src="${logoUrl}" style="max-width:160px;max-height:70px;margin-bottom:4px"></div>
-    <div class="c" style="font-size:10px">Qui–Dom 19h–23h | (31) 98309-4152</div>
-    <div class="line"></div>
-    <div class="row"><span class="big">#${p.id}</span><span>${p.horaStr}</span></div>
-    <div class="row"><span class="b">${p.tipo==='delivery'?'🛵 DELIVERY':'🏃 RETIRADA'}</span></div>
-    <div class="row"><span>Cliente:</span><span>${p.nome}</span></div>
-    <div class="row"><span>Tel:</span><span>${p.tel||'-'}</span></div>
-    ${p.tipo==='delivery'?`
-    <div class="line"></div>
-    ${p.endereco?`<div style="margin:2px 0"><span>Endereço: </span><span>${p.endereco}</span></div>`:''}
-    ${p.bairro?`<div style="margin:2px 0"><span>Bairro: </span><span>${p.bairro}</span></div>`:''}
-    ${p.cidade?`<div style="margin:2px 0"><span>Cidade: </span><span>${p.cidade}</span></div>`:''}
-    <div class="row"><span>Frete:</span><span>R$${p.frete||0}</span></div>`:''}
-    <div class="line"></div>
-    <div class="row"><span>Pag:</span><span>${p.pag}</span></div>
-    <div class="line"></div>
-    ${p.itens.map(i=>`<div>• ${i}</div>`).join('')}
-    ${p.obs?`<div><b>⚠ OBS: ${p.obs}</b></div>`:''}
-    <div class="line"></div>
-    <div class="row big"><span>TOTAL:</span><span>R$${p.total+(p.frete||0)}</span></div>
-    <div class="c b" style="margin-top:8px">Obrigado! 😋</div>
-    <script>window.onload=function(){window.print();setTimeout(()=>window.close(),1500)};<\/script>
-    </body></html>`);
-    win.document.close();
+    showToast('🖨️ Abrindo cupons...','tok-info');
+    abrirJanelaImpressao(cupomCozinha(p), 380);
+    setTimeout(()=>abrirJanelaImpressao(cupomEntrega(p), 420), 600);
   });
   p.impresso=true;renderAll();
 }

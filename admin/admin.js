@@ -68,6 +68,44 @@ function syncAutoConfig(){
   salvarConfig();
 }
 
+// ── NOTIFICAÇÃO SONORA ─────────────────────────────────────────
+let somAtivo = localStorage.getItem('tcho_som') !== 'false';
+
+function tocarNotificacao(){
+  if(!somAtivo) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [[880, 0, 0.15], [1046, 0.22, 0.2]].forEach(([freq, delay, dur]) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.35, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + dur);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + dur);
+    });
+  } catch(e) {}
+}
+
+function toggleSom(){
+  somAtivo = !somAtivo;
+  localStorage.setItem('tcho_som', somAtivo);
+  atualizarBotaoSom();
+  if(somAtivo) tocarNotificacao(); // preview ao ativar
+}
+
+function atualizarBotaoSom(){
+  const btn = document.getElementById('btn-som');
+  if(!btn) return;
+  document.getElementById('som-icone').textContent = somAtivo ? '🔔' : '🔕';
+  document.getElementById('som-txt').textContent   = somAtivo ? 'Ativado' : 'Desativado';
+  btn.style.borderColor = somAtivo ? '#27ae60' : '#3a3530';
+  btn.style.color       = somAtivo ? '#27ae60' : 'var(--muted)';
+}
+
 // ── KANBAN & PEDIDOS ───────────────────────────────────────────
 let pedidos=[],totalHoje=0,contPed=100,autoAceitar=false,dragId=null,dragSrc=null;
 const STATUS_COLS=['novo','prep','pronto','entrega'];
@@ -355,6 +393,7 @@ function showToast(msg,cls='tok-ok'){const el=document.getElementById('toast');e
 // ── INICIALIZAÇÃO ──────────────────────────────────────────────
 function iniciarApp(){
   renderAll();
+  atualizarBotaoSom();
 
   // Carrega config do Firestore
   db.collection('config').doc('operacao').get().then(doc=>{
@@ -379,6 +418,7 @@ function iniciarApp(){
         if(change.type==='added'){
           if(!pedidos.find(x=>x._id===p._id)){
             pedidos.push(p);totalHoje++;
+            tocarNotificacao();
             showToast(`🔔 Novo pedido ${p.num||'#'+p.id} — ${p.nome}`,'tok-info');
             atualizarBadgeNovos();
             if(autoAceitar)setTimeout(()=>moverStatus(p._id,'prep',true),600);
@@ -399,6 +439,7 @@ function iniciarApp(){
           if(!pedidos.find(x=>x.id===p.id)){
             pedidos.push({...p,_id:'local-'+p.id,hora:new Date(p.hora),status:p.status||'novo',impresso:false});
             totalHoje++;
+            tocarNotificacao();
             showToast(`🔔 Novo pedido #${p.id} — ${p.nome}`,'tok-info');
             atualizarBadgeNovos();
           }

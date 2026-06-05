@@ -202,6 +202,17 @@ input:checked+.slider:before{transform:translateX(22px);background:#000}
 .auto-banner.show{display:flex}
 
 /* FINANCEIRO */
+/* CONFERÊNCIA DE CAIXA */
+.fin-conferencia{background:#0a1a0a;border:2px solid #27ae60;border-radius:12px;padding:14px;margin-bottom:4px}
+.fin-conf-titulo{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;color:#27ae60;margin-bottom:12px;text-align:center}
+.fin-conf-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:8px;margin-bottom:12px}
+.fin-conf-item{background:rgba(39,174,96,.1);border:1px solid rgba(39,174,96,.3);border-radius:8px;padding:10px 8px;text-align:center}
+.fin-conf-icone{font-size:1.4rem;margin-bottom:3px}
+.fin-conf-label{font-size:.65rem;color:#27ae60;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.fin-conf-val{font-size:.95rem;font-weight:700;color:var(--cream);margin-bottom:2px}
+.fin-conf-cnt{font-size:.62rem;color:var(--muted)}
+.fin-conf-total{display:flex;justify-content:space-between;align-items:center;border-top:1px solid rgba(39,174,96,.4);padding-top:10px;font-family:'Bebas Neue',sans-serif;font-size:1.2rem;color:#27ae60;letter-spacing:1px}
+
 .fin-filtros{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
 .fin-btn{padding:5px 14px;border-radius:20px;border:1px solid #2a2520;cursor:pointer;font-size:.72rem;font-weight:700;color:var(--muted);background:none;transition:all .2s;white-space:nowrap}
 .fin-btn.active{background:var(--orange);color:#000;border-color:var(--orange)}

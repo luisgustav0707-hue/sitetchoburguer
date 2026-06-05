@@ -246,10 +246,55 @@ function moverStatus(id,novoStatus,auto=false){
   p.status=novoStatus;p.hora=new Date();p.horaStr=horaStr;
   if(novoStatus==='finalizado') p.horaFim=horaStr;
   db.collection('pedidos').doc(id).update(update).catch(console.error);
-  if(novoStatus==='prep')setTimeout(()=>imprimirPedido(p),200);
+  // Sincroniza status no localStorage para o financeiro
+  try{
+    const ls=JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
+    const idx=ls.findIndex(x=>x.id===p.id);
+    if(idx!==-1){ls[idx].status=novoStatus;localStorage.setItem('tcho_pedidos',JSON.stringify(ls));}
+  }catch(e){}
+  if(novoStatus==='prep') setTimeout(()=>imprimirPedido(p),200);
+  if(novoStatus==='finalizado') setTimeout(()=>mostrarCardFinalizado({...p}),200);
   atualizarBadgeNovos();
   renderAll();
   renderHistorico();
+}
+
+// ── CARD DE PEDIDO FINALIZADO ──────────────────────────────────
+function mostrarCardFinalizado(p){
+  const r=n=>'R$'+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const icone={pix:'📱',dinheiro:'💵',cartao:'💳',pix:'📱'};
+  const pagIcon=icone[(p.pag||'').toLowerCase()]||'💳';
+  document.getElementById('card-fin-box').innerHTML=`
+    <div style="text-align:center;margin-bottom:14px">
+      <div style="font-size:2.8rem;line-height:1">✅</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:#27ae60;letter-spacing:3px;margin-top:4px">PEDIDO FINALIZADO</div>
+      <div style="font-size:.72rem;color:var(--muted);margin-top:2px">Registrado no financeiro</div>
+    </div>
+    <div style="background:var(--card);border-radius:10px;padding:13px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--orange)">${p.num||'#'+p.id}</span>
+        <span style="font-size:.65rem;font-weight:700;padding:3px 8px;border-radius:4px;background:${p.tipo==='delivery'?'#1a0e0e':'#081508'};color:${p.tipo==='delivery'?'#e74c3c':'#27ae60'}">${p.tipo==='delivery'?'🛵 DELIVERY':'🏃 RETIRADA'}</span>
+      </div>
+      <div style="font-size:.88rem;font-weight:700">${p.nome}</div>
+      ${p.bairro?`<div style="font-size:.72rem;color:var(--muted)">📍 ${p.bairro}</div>`:''}
+      <div style="height:1px;background:#2a2520;margin:8px 0"></div>
+      ${p.itens.map(i=>`<div style="font-size:.72rem;color:var(--muted);padding:2px 0">• ${i}</div>`).join('')}
+      ${p.obs?`<div style="font-size:.7rem;color:#000;background:#f39c12;padding:4px 8px;border-radius:4px;font-weight:800;margin-top:6px">⚠ ${p.obs}</div>`:''}
+      <div style="height:1px;background:#2a2520;margin:8px 0"></div>
+      <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted);margin-bottom:4px">
+        <span>${pagIcon} ${p.pag||'-'}</span>
+        ${(p.frete||0)>0?`<span>🛵 Frete: ${r(p.frete)}</span>`:''}
+      </div>
+      <div style="display:flex;justify-content:space-between;font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--orange)">
+        <span>TOTAL</span><span>${r((p.total||0))}</span>
+      </div>
+    </div>
+    <button onclick="fecharCardFinalizado()" style="width:100%;padding:11px;background:linear-gradient(135deg,#27ae60,#1e8449);color:#fff;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;cursor:pointer">FECHAR</button>`;
+  document.getElementById('modal-finalizado').style.display='flex';
+}
+
+function fecharCardFinalizado(){
+  document.getElementById('modal-finalizado').style.display='none';
 }
 function cancelar(id){
   const p=pedidos.find(x=>x._id===id);
@@ -514,30 +559,35 @@ function renderFinanceiro(){
     pagMap[k].count++;
   });
 
+  // ── Ícones por forma de pagamento ──
+  const pagIcones={pix:'📱',dinheiro:'💵',cartão:'💳',cartao:'💳',outro:'🪙'};
+  const pagIcon=k=>pagIcones[(k||'').toLowerCase()]||'💳';
+
+  // ── Conferência de Caixa ──
+  const confItems=Object.entries(pagMap).sort((a,b)=>b[1].total-a[1].total).map(([pag,d])=>`
+    <div class="fin-conf-item">
+      <div class="fin-conf-icone">${pagIcon(pag)}</div>
+      <div class="fin-conf-label">${pag}</div>
+      <div class="fin-conf-val">${r(d.total)}</div>
+      <div class="fin-conf-cnt">${d.count} pedido${d.count!==1?'s':''}</div>
+    </div>`).join('');
+
   // ── Render Resumo ──
   document.getElementById('fin-stats').innerHTML=`
-    <div class="fin-cards">
-      <div class="fin-card"><div class="fin-card-n">${ps.length}</div><div class="fin-card-l">Pedidos</div></div>
-      <div class="fin-card"><div class="fin-card-n" style="color:var(--orange)">${r(totalFaturado)}</div><div class="fin-card-l">Faturado</div></div>
+    <div class="fin-conferencia">
+      <div class="fin-conf-titulo">📊 Conferência de Caixa</div>
+      <div class="fin-conf-grid">${confItems}</div>
+      <div class="fin-conf-total">
+        <span>TOTAL (${ps.length} pedido${ps.length!==1?'s':''})</span>
+        <span>${r(totalFaturado)}</span>
+      </div>
+    </div>
+    <div class="fin-cards" style="margin-top:14px">
       <div class="fin-card"><div class="fin-card-n" style="color:#27ae60">${r(totalLiquido)}</div><div class="fin-card-l">Líquido s/frete</div></div>
       <div class="fin-card"><div class="fin-card-n" style="color:#3498db">${r(totalFrete)}</div><div class="fin-card-l">Total Fretes</div></div>
       ${totalDesconto>0?`<div class="fin-card"><div class="fin-card-n" style="color:#e74c3c">-${r(totalDesconto)}</div><div class="fin-card-l">Descontos</div></div>`:''}
-    </div>
-    <div style="margin-bottom:14px">
-      <div style="font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Forma de pagamento</div>
-      ${Object.entries(pagMap).sort((a,b)=>b[1].total-a[1].total).map(([pag,d])=>{
-        const pct=Math.round((d.total/totalFaturado)*100);
-        return`<div class="fin-pag-row">
-          <div class="fin-pag-label">${pag}</div>
-          <div class="fin-pag-bar-wrap"><div class="fin-pag-bar" style="width:${pct}%"></div></div>
-          <div class="fin-pag-val">${r(d.total)}</div>
-          <div class="fin-pag-cnt">${d.count} ped.</div>
-        </div>`;
-      }).join('')}
-    </div>
-    <div style="display:flex;gap:14px;font-size:.75rem;color:var(--muted)">
-      <span>🛵 ${nDelivery} delivery</span>
-      <span>🏃 ${nRetirada} retirada${nRetirada!==1?'s':''}</span>
+      <div class="fin-card"><div class="fin-card-n" style="color:var(--muted)">${nDelivery}</div><div class="fin-card-l">🛵 Delivery</div></div>
+      <div class="fin-card"><div class="fin-card-n" style="color:var(--muted)">${nRetirada}</div><div class="fin-card-l">🏃 Retirada</div></div>
     </div>`;
 
   // ── Render Taxas Motoboy ──
@@ -595,6 +645,7 @@ function imprimirVendas(){
   const ps = finPedidosList;
   if(!ps.length){showToast('Nenhum dado para imprimir','tok-err');return;}
   const r  = n => 'R$'+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const pagIcones={pix:'📱',dinheiro:'💵',cartão:'💳',cartao:'💳',outro:'🪙'};
   const totalFaturado = ps.reduce((a,p)=>a+(p.total||0),0);
   const totalFrete    = ps.reduce((a,p)=>a+(p.frete||0),0);
   const totalDesconto = ps.reduce((a,p)=>a+(p.desconto||0),0);
@@ -621,8 +672,10 @@ function imprimirVendas(){
     ${totalDesconto>0?`<div class="row"><span>Descontos:</span><span>-${r(totalDesconto)}</span></div>`:''}
     <div class="row b" style="font-size:13px;padding:3px 0"><span>LÍQUIDO (s/frete):</span><span>${r(totalLiquido)}</span></div>
     <div class="line"></div>
-    <div class="b" style="margin-bottom:3px;font-size:11px">POR PAGAMENTO</div>
-    ${Object.entries(pagMap).sort((a,b)=>b[1].total-a[1].total).map(([k,v])=>`<div class="row"><span>${k} (${v.count} ped.):</span><span>${r(v.total)}</span></div>`).join('')}
+    <div class="b" style="margin-bottom:3px;font-size:11px">CONFERÊNCIA DE CAIXA</div>
+    ${Object.entries(pagMap).sort((a,b)=>b[1].total-a[1].total).map(([k,v])=>`
+      <div class="row b"><span>${pagIcones[(k||'').toLowerCase()]||'💳'} ${k}:</span><span>${r(v.total)}</span></div>
+      <div class="row" style="margin-left:10px;font-size:10px"><span>${v.count} pedido${v.count!==1?'s':''}</span></div>`).join('')}
     <div class="line"></div>
     <div class="c" style="font-size:9px;margin-top:4px">Impresso em ${new Date().toLocaleString('pt-BR')}</div>
     <script>window.onload=function(){window.print();setTimeout(()=>window.close(),1500)};<\/script>

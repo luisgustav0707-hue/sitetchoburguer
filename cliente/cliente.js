@@ -1,11 +1,17 @@
 // ── DADOS (lidos de shared/dados.js via window.TCHO) ───────────
 const BURGUERS    = TCHO.burguers;
 
-// Fotos disponíveis — adicione aqui quando renomear os arquivos restantes
+// Fotos dos hambúrgueres — nome do arquivo deve ser igual ao nome do hambúrguer
 const FOTOS = {
-  'xb':  '../hamburgueres/X-burguer.jpg',
-  'xs':  '../hamburgueres/X-Salada.jpg',
-  'xba': '../hamburgueres/X-bacon.jpg',
+  'xb':   '../hamburgueres/X-Burguer.jpg',
+  'xs':   '../hamburgueres/X-Salada.jpg',
+  'xba':  '../hamburgueres/X-Bacon.jpg',
+  'xp':   '../hamburgueres/X-Picles%20Burguer.jpg',
+  'xt':   '../hamburgueres/X-Tropical.jpg',
+  'xbd':  '../hamburgueres/X-Bacon%20Duplo.jpg',
+  'xrj':  '../hamburgueres/X-Romeu%20%26%20Julieta.jpg',
+  'xrjd': '../hamburgueres/X-Romeu%20%26%20Julieta%20Duplo.jpg',
+  'xbt':  '../hamburgueres/X-Bacon%20Triplo.jpg',
 };
 const EXTRAS      = TCHO.extras.filter(e => e.id !== 'cmb');
 const COMBO       = TCHO.extras.filter(e => e.id === 'cmb');

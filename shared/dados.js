@@ -35,9 +35,9 @@ const TCHO = {
   // ── EXTRAS & BEBIDAS (id 'cmb' = combo) ──────────────
   extras: [
     { id:'bat', emoji:'🍟', nome:'Porção de Batata',  preco:13, desc:'Aprox. 200g',                        ativo:true },
-    { id:'r15', emoji:'🥤', nome:'Refrigerante 1,5L', preco:14,                                             ativo:true },
-    { id:'rla', emoji:'🥤', nome:'Refrigerante Lata', preco:6,                                              ativo:true },
-    { id:'suc', emoji:'🧃', nome:'Suco Lata',         preco:7,                                              ativo:true },
+    { id:'r15', emoji:'🥤', nome:'Refrigerante 1,5L', preco:14, opcoes:['Coca-Cola','Guaraná','Fanta Laranja','Fanta Uva','Sprite'],        ativo:true },
+    { id:'rla', emoji:'🥤', nome:'Refrigerante Lata', preco:6,  opcoes:['Coca-Cola','Guaraná','Fanta Laranja','Fanta Uva','Sprite'],        ativo:true },
+    { id:'suc', emoji:'🧃', nome:'Suco Lata',         preco:7,  opcoes:['Del Valle Uva','Del Valle Pêssego','Del Valle Laranja','Goiaba'], ativo:true },
     { id:'agu', emoji:'💧', nome:'Água com Gás',      preco:5,                                              ativo:true },
     { id:'cmb', emoji:'🍟', nome:'Combo +R$15',       preco:15, desc:'Refrigerante lata + Batata frita',   ativo:true },
   ],

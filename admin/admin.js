@@ -385,13 +385,87 @@ function renderHistorico(){
 // ── CARDÁPIO (estoque) — dados de shared/dados.js via TCHO ─────
 const PRODS = [
   ...TCHO.burguers.map(b => ({id:b.id, e:b.emoji, n:b.nome, p:b.preco, cat:'b'})),
-  ...TCHO.extras.filter(e => e.id !== 'cmb').map(e => ({id:e.id, e:e.emoji, n:e.nome, p:e.preco, cat:'e'})),
+  ...TCHO.extras.filter(e => e.id !== 'cmb').map(e => ({id:e.id, e:e.emoji, n:e.nome, p:e.preco, cat:'e', opcoes:e.opcoes})),
   ...TCHO.extras.filter(e => e.id === 'cmb').map(e => ({id:e.id, e:e.emoji, n:`Combo (+R$${e.preco})`, p:e.preco, cat:'c'})),
 ];
 const est={};PRODS.forEach(p=>{est[p.id]={ativo:true,modo:'inf',qtd:10};});
 
+// ── OPÇÕES DE EXTRAS (sabores de bebidas etc.) ─────────────────
+function getOpcoesAdmin(id){
+  const saved=JSON.parse(localStorage.getItem('tcho_opcoes')||'{}');
+  const prod=PRODS.find(p=>p.id===id);
+  return saved[id]!==undefined ? saved[id] : (prod?.opcoes||[]);
+}
+function salvarOpcoes(id,arr){
+  const saved=JSON.parse(localStorage.getItem('tcho_opcoes')||'{}');
+  saved[id]=arr;
+  localStorage.setItem('tcho_opcoes',JSON.stringify(saved));
+}
+function adicionarOpcao(id){
+  const inp=document.getElementById(`opc-inp-${id}`);
+  const val=inp.value.trim();
+  if(!val){showToast('Digite o nome da opção','tok-err');return;}
+  const arr=getOpcoesAdmin(id);
+  if(arr.map(x=>x.toLowerCase()).includes(val.toLowerCase())){showToast('Opção já cadastrada','tok-err');return;}
+  arr.push(val);
+  salvarOpcoes(id,arr);
+  inp.value='';
+  renderCardapio();
+  showToast(`✅ "${val}" adicionado`,'tok-ok');
+}
+function removerOpcao(id,idx){
+  const arr=getOpcoesAdmin(id);
+  const nome=arr[idx];
+  arr.splice(idx,1);
+  salvarOpcoes(id,arr);
+  renderCardapio();
+  showToast(`🗑️ "${nome}" removido`,'tok-info');
+}
+
 function renderEstoqueBadge(id){const e=est[id];if(!e.ativo)return`<span class="sbadge sout">INATIVO</span>`;if(e.modo==='inf')return`<span class="sbadge sinf">∞</span>`;if(e.qtd<=0)return`<span class="sbadge sout">Esgotado</span>`;if(e.qtd<=3)return`<span class="sbadge slow">${e.qtd} restam</span>`;return`<span class="sbadge sok">${e.qtd} un.</span>`;}
-function renderLista(cat,containerId){document.getElementById(containerId).innerHTML=PRODS.filter(p=>p.cat===cat).map(p=>{const ev=est[p.id];return`<div class="prod-row" id="prow-${p.id}"><div class="prod-emoji">${p.e}</div><div class="prod-info"><div class="prod-nome">${p.n}</div><div class="prod-preco">R$${p.p}</div></div><label class="toggle-wrap" style="margin-right:8px"><input type="checkbox" ${ev.ativo?'checked':''} onchange="toggleAtivo('${p.id}',this.checked)"><span class="slider"></span></label><div class="prod-stock" id="stock-${p.id}" style="${!ev.ativo?'opacity:.35;pointer-events:none':''}"><div class="stock-toggle"><button class="stock-btn ${ev.modo==='inf'?'active':''}" onclick="setModo('${p.id}','inf')">∞</button><button class="stock-btn ${ev.modo==='qtd'?'active':''}" onclick="setModo('${p.id}','qtd')">Qtd</button></div><div id="inp-${p.id}" style="display:${ev.modo==='qtd'?'block':'none'}"><input class="stock-input" type="number" min="0" max="999" value="${ev.qtd}" onchange="setQtd('${p.id}',this.value)" onclick="event.stopPropagation()"></div>${renderEstoqueBadge(p.id)}</div></div>`;}).join('');}
+
+function renderOpcoes(id){
+  const arr=getOpcoesAdmin(id);
+  return`<div class="prod-opcoes">
+    <div class="opc-titulo">🧃 Opções disponíveis para o cliente escolher:</div>
+    <div class="opc-tags">
+      ${arr.length
+        ? arr.map((o,i)=>`<span class="opc-tag">${o}<button class="opc-rm" onclick="removerOpcao('${id}',${i})">×</button></span>`).join('')
+        : '<span class="opc-empty">Nenhuma opção cadastrada</span>'
+      }
+    </div>
+    <div class="opc-add">
+      <input class="opc-input" id="opc-inp-${id}" type="text" placeholder="Ex: Coca-Cola" onkeydown="if(event.key==='Enter')adicionarOpcao('${id}')">
+      <button class="opc-btn" onclick="adicionarOpcao('${id}')">+ Adicionar</button>
+    </div>
+  </div>`;
+}
+
+function renderLista(cat,containerId){
+  document.getElementById(containerId).innerHTML=PRODS.filter(p=>p.cat===cat).map(p=>{
+    const ev=est[p.id];
+    const temOpcoes=cat==='e'&&(p.opcoes||getOpcoesAdmin(p.id).length>0);
+    return`<div class="prod-item" id="prow-${p.id}">
+      <div class="prod-row">
+        <div class="prod-emoji">${p.e}</div>
+        <div class="prod-info"><div class="prod-nome">${p.n}</div><div class="prod-preco">R$${p.p}</div></div>
+        <label class="toggle-wrap" style="margin-right:8px"><input type="checkbox" ${ev.ativo?'checked':''} onchange="toggleAtivo('${p.id}',this.checked)"><span class="slider"></span></label>
+        <div class="prod-stock" id="stock-${p.id}" style="${!ev.ativo?'opacity:.35;pointer-events:none':''}">
+          <div class="stock-toggle">
+            <button class="stock-btn ${ev.modo==='inf'?'active':''}" onclick="setModo('${p.id}','inf')">∞</button>
+            <button class="stock-btn ${ev.modo==='qtd'?'active':''}" onclick="setModo('${p.id}','qtd')">Qtd</button>
+          </div>
+          <div id="inp-${p.id}" style="display:${ev.modo==='qtd'?'block':'none'}">
+            <input class="stock-input" type="number" min="0" max="999" value="${ev.qtd}" onchange="setQtd('${p.id}',this.value)" onclick="event.stopPropagation()">
+          </div>
+          ${renderEstoqueBadge(p.id)}
+        </div>
+      </div>
+      ${temOpcoes?renderOpcoes(p.id):''}
+    </div>`;
+  }).join('');
+}
+
 function renderCardapio(){renderLista('b','lista-burguers');renderLista('e','lista-extras');renderLista('c','lista-combo');}
 function toggleAtivo(id,val){est[id].ativo=val;renderCardapio();showToast(`${val?'✅':'🔒'} ${PRODS.find(p=>p.id===id)?.n} ${val?'ativo':'inativo'}`,'tok-ok');}
 function setModo(id,modo){est[id].modo=modo;document.getElementById(`inp-${id}`).style.display=modo==='qtd'?'block':'none';document.querySelectorAll(`#stock-${id} .stock-btn`).forEach(b=>b.classList.toggle('active',b.textContent.trim()===(modo==='inf'?'∞':'Qtd')));const row=document.getElementById(`prow-${id}`);if(row){row.querySelectorAll('.sbadge').forEach(b=>b.remove());document.getElementById(`stock-${id}`).insertAdjacentHTML('beforeend',renderEstoqueBadge(id));}}

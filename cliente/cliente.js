@@ -84,13 +84,89 @@ function renderBurguers(){
   }).join('');
 }
 
+// ── OPÇÕES DE EXTRAS (sabores) ─────────────────────────────────
+function getOpcoes(id){
+  const saved=JSON.parse(localStorage.getItem('tcho_opcoes')||'{}');
+  const extra=[...EXTRAS,...COMBO].find(e=>e.id===id);
+  return saved[id]!==undefined ? saved[id] : (extra?.opcoes||[]);
+}
+
 function renderExtras(){
-  const render=(arr,id)=>{document.getElementById(id).innerHTML=arr.map(e=>{const q=cartExtras[e.id]||0;return`<div class="extra-item ${q>0?'has-items':''}"><div class="extra-emoji">${e.emoji}</div><div class="extra-body"><div class="extra-name">${e.nome}</div>${e.desc?`<div class="extra-sub">${e.desc}</div>`:''}<div class="extra-price">R$${e.preco}</div></div><div class="extra-controls"><button class="eq-btn ${q===0?'dim':''}" onclick="${q>0?`chgExtra('${e.id}',-1)`:'void(0)'}">−</button><div class="eq-disp">${q}</div><button class="eq-btn" onclick="chgExtra('${e.id}',1)">+</button></div></div>`;}).join('');};
+  const render=(arr,id)=>{
+    document.getElementById(id).innerHTML=arr.map(e=>{
+      const opc=getOpcoes(e.id);
+      const temOpc=opc.length>0;
+      const escolhas=temOpc&&Array.isArray(cartExtras[e.id])?cartExtras[e.id]:[];
+      const qty=temOpc?escolhas.length:(cartExtras[e.id]||0);
+      const resumo=escolhas.map((s,i)=>`<div class="cart-item-resumo"><span>${s}</span><span class="rm" onclick="remSaborExtra('${e.id}',${i})">✕</span></div>`).join('');
+      return`<div class="extra-item ${qty>0?'has-items':''}">
+        <div class="extra-emoji">${e.emoji}</div>
+        <div class="extra-body">
+          <div class="extra-name">${e.nome}</div>
+          ${e.desc?`<div class="extra-sub">${e.desc}</div>`:''}
+          <div class="extra-price">R$${e.preco}</div>
+          ${resumo?`<div class="cart-itens-list">${resumo}</div>`:''}
+        </div>
+        <div class="extra-controls">
+          <button class="eq-btn ${qty===0?'dim':''}" onclick="${qty>0?`chgExtra('${e.id}',-1)`:'void(0)'}">−</button>
+          <div class="eq-disp">${qty}</div>
+          <button class="eq-btn" onclick="chgExtra('${e.id}',1)">+</button>
+        </div>
+      </div>`;
+    }).join('');
+  };
   render(EXTRAS,'menu-extras');
   render(COMBO,'menu-combo');
 }
 
-function chgExtra(id,d){cartExtras[id]=Math.max(0,(cartExtras[id]||0)+d);renderExtras();updateFloat();}
+function chgExtra(id,d){
+  const opc=getOpcoes(id);
+  if(opc.length>0){
+    if(d>0){abrirPickerSabor(id);return;}
+    if(Array.isArray(cartExtras[id])&&cartExtras[id].length>0){
+      cartExtras[id].pop();
+      if(!cartExtras[id].length)delete cartExtras[id];
+      renderExtras();updateFloat();
+    }
+    return;
+  }
+  cartExtras[id]=Math.max(0,(cartExtras[id]||0)+d);
+  renderExtras();updateFloat();
+}
+
+function remSaborExtra(id,idx){
+  if(Array.isArray(cartExtras[id])){
+    cartExtras[id].splice(idx,1);
+    if(!cartExtras[id].length)delete cartExtras[id];
+    renderExtras();updateFloat();
+  }
+}
+
+function abrirPickerSabor(id){
+  const opc=getOpcoes(id);
+  const extra=[...EXTRAS,...COMBO].find(e=>e.id===id);
+  document.getElementById('modal-box').innerHTML=`
+    <div class="modal-header">
+      <div><div class="modal-title">${extra.emoji} ${extra.nome}</div>
+      <div class="modal-price">Qual sabor você quer?</div></div>
+      <button class="modal-close" onclick="fecharModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="ponto-options" style="flex-wrap:wrap">
+        ${opc.map(o=>`<div class="ponto-btn" onclick="escolherSabor('${id}','${o.replace(/'/g,"\\'")}')">
+          <span class="p-name" style="font-size:.8rem">${o}</span>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  document.getElementById('modal-overlay').style.display='flex';
+  document.body.style.overflow='hidden';
+}
+
+function escolherSabor(id,sabor){
+  if(!Array.isArray(cartExtras[id]))cartExtras[id]=[];
+  cartExtras[id].push(sabor);
+  fecharModal();renderExtras();updateFloat();
+}
 
 // ── MODAL PERSONALIZAÇÃO ───────────────────────────────────────
 function abrirModal(id){
@@ -139,7 +215,15 @@ function remInst(id,idx){cartBurguers[id].splice(idx,1);if(!cartBurguers[id].len
 function remUlt(id){if(!cartBurguers[id]||!cartBurguers[id].length)return;cartBurguers[id].pop();if(!cartBurguers[id].length)delete cartBurguers[id];renderBurguers();updateFloat();}
 
 // ── CARRINHO ───────────────────────────────────────────────────
-function getSubtotal(){let t=0;Object.entries(cartBurguers).forEach(([id,insts])=>{const b=BURGUERS.find(x=>x.id===id);if(b)insts.forEach(i=>t+=b.preco+i.precoExtra);});[...EXTRAS,...COMBO].forEach(e=>{if(cartExtras[e.id])t+=e.preco*cartExtras[e.id];});return t;}
+function getSubtotal(){
+  let t=0;
+  Object.entries(cartBurguers).forEach(([id,insts])=>{const b=BURGUERS.find(x=>x.id===id);if(b)insts.forEach(i=>t+=b.preco+i.precoExtra);});
+  [...EXTRAS,...COMBO].forEach(e=>{
+    const q=cartExtras[e.id];
+    if(q)t+=e.preco*(Array.isArray(q)?q.length:q);
+  });
+  return t;
+}
 
 function getTotal(){
   let sub=getSubtotal(),frete=tipoPedido==='delivery'?freteAtual:0,desc=0;
@@ -152,7 +236,7 @@ function getTotal(){
   return sub+frete-desc;
 }
 
-function getCount(){return Object.values(cartBurguers).reduce((a,arr)=>a+arr.length,0)+Object.values(cartExtras).reduce((a,b)=>a+b,0);}
+function getCount(){return Object.values(cartBurguers).reduce((a,arr)=>a+arr.length,0)+Object.values(cartExtras).reduce((a,b)=>a+(Array.isArray(b)?b.length:b),0);}
 function updateFloat(){const c=getCount();document.getElementById('cartCount').textContent=c;document.getElementById('cartTotal').textContent=`R$${getSubtotal()}`;document.getElementById('cartFloat').classList.toggle('visible',c>0&&document.getElementById('sc1').classList.contains('active'));}
 
 // ── CUPOM ──────────────────────────────────────────────────────
@@ -268,7 +352,15 @@ function renderResumo(){
       if(det.length)html+=`<div class="resumo-sub">${det.join(' • ')}</div>`;
     });
   });
-  [...EXTRAS,...COMBO].forEach(e=>{if((cartExtras[e.id]||0)>0)html+=`<div class="resumo-linha"><span>${e.emoji} ${e.nome} x${cartExtras[e.id]}</span><span>R$${e.preco*cartExtras[e.id]}</span></div>`;});
+  [...EXTRAS,...COMBO].forEach(e=>{
+    const q=cartExtras[e.id];
+    if(!q)return;
+    if(Array.isArray(q)&&q.length>0){
+      q.forEach(s=>html+=`<div class="resumo-linha"><span>${e.emoji} ${e.nome} <span style="color:var(--muted);font-size:.75rem">(${s})</span></span><span>R$${e.preco}</span></div>`);
+    }else if(!Array.isArray(q)&&q>0){
+      html+=`<div class="resumo-linha"><span>${e.emoji} ${e.nome} x${q}</span><span>R$${e.preco*q}</span></div>`;
+    }
+  });
   html+=`<div class="divider"></div>`;
   const nome=document.getElementById('f-nome').value,tel=document.getElementById('f-tel').value;
   html+=`<div class="resumo-linha"><span>👤 ${nome}</span><span>📞 ${tel}</span></div>`;
@@ -363,7 +455,15 @@ function montarItensTexto(){
       lista.push(`${b.nome}${det?' ('+det+')':''} — R$${b.preco+inst.precoExtra}`);
     });
   });
-  [...EXTRAS,...COMBO].forEach(e=>{if((cartExtras[e.id]||0)>0)lista.push(`${e.nome} x${cartExtras[e.id]} — R$${e.preco*cartExtras[e.id]}`);});
+  [...EXTRAS,...COMBO].forEach(e=>{
+    const q=cartExtras[e.id];
+    if(!q)return;
+    if(Array.isArray(q)&&q.length>0){
+      q.forEach(s=>lista.push(`${e.nome} (${s}) — R$${e.preco}`));
+    }else if(!Array.isArray(q)&&q>0){
+      lista.push(`${e.nome} x${q} — R$${e.preco*q}`);
+    }
+  });
   return lista;
 }
 
@@ -371,6 +471,7 @@ function novoPedido(){
   cartBurguers={};cartExtras={};tipoPedido=null;pagamento=null;freteAtual=0;bairroAtendido=false;cupomAtual=null;descontoAtual=0;
   renderBurguers();renderExtras();goStep(1);
 }
+
 
 // ── INICIALIZAÇÃO ──────────────────────────────────────────────
 verificarLoja();

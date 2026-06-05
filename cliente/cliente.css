@@ -29,29 +29,29 @@ header{background:linear-gradient(180deg,#000,#0a0806);text-align:center;padding
 .section-title{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:3px;color:var(--orange);margin-bottom:11px;display:flex;align-items:center;gap:8px}
 .section-title::after{content:'';flex:1;height:2px;background:linear-gradient(90deg,var(--orange),transparent)}
 
-/* MENU ITEM */
-.menu-item{background:var(--card);border-radius:12px;margin-bottom:9px;border:1px solid #2a2520;display:flex;align-items:stretch;transition:border-color .2s;overflow:hidden}
+/* MENU ITEM — lista horizontal */
+.menu-item{background:var(--card);border-radius:12px;margin-bottom:10px;border:1px solid #2a2520;display:flex;align-items:stretch;transition:border-color .2s;overflow:hidden}
 .menu-item.has-items{border-color:var(--orange);background:#2a2018}
-.item-emoji{width:66px;min-width:66px;background:#1a1612;display:flex;align-items:center;justify-content:center;font-size:1.9rem}
-.item-foto{width:66px;min-width:66px;overflow:hidden;flex-shrink:0}
-.item-foto img{width:66px;height:100%;min-height:80px;object-fit:cover;display:block}
-.item-body{flex:1;padding:9px 11px}
-.item-name{font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:800;letter-spacing:1px}
-.item-desc{font-size:.7rem;color:var(--muted);margin-top:2px;line-height:1.4}
-.item-price{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;color:var(--orange);margin-top:4px}
+.item-emoji{width:100px;min-width:100px;background:#1a1612;display:flex;align-items:center;justify-content:center;font-size:2.6rem}
+.item-foto{width:100px;min-width:100px;overflow:hidden;flex-shrink:0}
+.item-foto img{width:100px;height:100%;min-height:110px;object-fit:cover;display:block}
+.item-body{flex:1;padding:14px 15px}
+.item-name{font-family:'Barlow Condensed',sans-serif;font-size:1.18rem;font-weight:800;letter-spacing:1px}
+.item-desc{font-size:.78rem;color:var(--muted);margin-top:4px;line-height:1.4}
+.item-price{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--orange);margin-top:6px}
 .tag{display:inline-block;background:var(--orange);color:#000;font-size:.58rem;font-weight:800;padding:2px 5px;border-radius:4px;letter-spacing:1px;margin-left:4px;vertical-align:middle}
-.cart-itens-list{margin-top:5px}
-.cart-item-resumo{background:#2a2018;border-radius:6px;padding:4px 8px;margin-bottom:3px;font-size:.66rem;color:var(--muted);border-left:2px solid var(--orange);display:flex;justify-content:space-between;align-items:center;gap:4px}
+.cart-itens-list{margin-top:7px}
+.cart-item-resumo{background:#2a2018;border-radius:6px;padding:4px 8px;margin-bottom:3px;font-size:.67rem;color:var(--muted);border-left:2px solid var(--orange);display:flex;justify-content:space-between;align-items:center;gap:4px}
 .cart-item-resumo span{flex:1}
-.rm{color:#e74c3c;cursor:pointer;font-size:.8rem;padding:0 3px;flex-shrink:0}
-.item-controls{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 8px;gap:5px;min-width:54px;background:#1a1612}
-.qty-btn{width:28px;height:28px;border-radius:50%;border:2px solid var(--orange);background:none;color:var(--orange);font-size:1.05rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;font-weight:700;line-height:1}
+.rm{color:#e74c3c;cursor:pointer;font-size:.82rem;padding:0 3px;flex-shrink:0}
+.item-controls{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:13px 11px;gap:8px;min-width:64px;background:#1a1612}
+.qty-btn{width:34px;height:34px;border-radius:50%;border:2px solid var(--orange);background:none;color:var(--orange);font-size:1.15rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;font-weight:700;line-height:1}
 .qty-btn:hover{background:var(--orange);color:#000}
 .qty-btn.dim{border-color:#3a3530;color:#3a3530;cursor:not-allowed}
 .qty-btn.dim:hover{background:none;color:#3a3530}
-.qty-display{font-family:'Bebas Neue',sans-serif;font-size:1.15rem;color:var(--cream);min-width:16px;text-align:center}
+.qty-display{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--cream);min-width:18px;text-align:center}
 
-/* EXTRAS */
+/* EXTRAS — layout horizontal compacto */
 .extra-item{background:var(--card);border-radius:10px;margin-bottom:7px;border:1px solid #2a2520;display:flex;align-items:center;overflow:hidden;transition:border-color .2s}
 .extra-item.has-items{border-color:var(--orange);background:#2a2018}
 .extra-emoji{width:50px;min-width:50px;background:#1a1612;display:flex;align-items:center;justify-content:center;font-size:1.3rem;padding:10px 0}

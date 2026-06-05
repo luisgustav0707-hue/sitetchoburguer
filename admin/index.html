@@ -133,6 +133,23 @@
         <label class="toggle-wrap"><input type="checkbox" id="cfg-print" checked onchange="salvarConfig()"><span class="slider"></span></label>
       </div>
     </div>
+    <div class="section">
+      <div class="sec-title">⏱ Prazo de entrega</div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-label">Tempo estimado (delivery)</div>
+          <div class="toggle-desc">Exibido para o cliente ao selecionar delivery</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <input type="number" id="cfg-prazo-min" min="5" max="180" value="30" onchange="salvarConfig()"
+            style="width:52px;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:6px;padding:5px 6px;font-size:.85rem;text-align:center;outline:none">
+          <span style="font-size:.8rem;color:var(--muted)">a</span>
+          <input type="number" id="cfg-prazo-max" min="5" max="180" value="45" onchange="salvarConfig()"
+            style="width:52px;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:6px;padding:5px 6px;font-size:.85rem;text-align:center;outline:none">
+          <span style="font-size:.8rem;color:var(--muted)">min</span>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ── CARDÁPIO ── -->

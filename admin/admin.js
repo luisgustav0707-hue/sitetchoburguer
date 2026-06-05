@@ -58,6 +58,8 @@ function salvarConfig(){
     retiradaAtiva:document.getElementById('cfg-retirada').checked,
     autoAceitar:autoAceitar,
     autoImprimir:document.getElementById('cfg-print').checked,
+    prazoMin:parseInt(document.getElementById('cfg-prazo-min').value)||30,
+    prazoMax:parseInt(document.getElementById('cfg-prazo-max').value)||45,
   };
   db.collection('config').doc('operacao').set(cfg,{merge:true}).catch(console.error);
   showToast('✅ Configuração salva!','tok-ok');
@@ -454,6 +456,8 @@ function iniciarApp(){
     document.getElementById('cfg-delivery').checked=cfg.deliveryAtivo!==false;
     document.getElementById('cfg-retirada').checked=cfg.retiradaAtiva!==false;
     document.getElementById('cfg-print').checked=cfg.autoImprimir!==false;
+    if(cfg.prazoMin) document.getElementById('cfg-prazo-min').value=cfg.prazoMin;
+    if(cfg.prazoMax) document.getElementById('cfg-prazo-max').value=cfg.prazoMax;
     autoAceitar=!!cfg.autoAceitar;
     atualizarBotaoAuto();
     atualizarBadgeLoja();

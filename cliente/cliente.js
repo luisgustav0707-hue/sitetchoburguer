@@ -33,14 +33,23 @@ let cupomAtual=null,descontoAtual=0;
 let orderCounter=Math.floor(Math.random()*100)+1;
 let modalId=null,pontoAtual=null,sacheAtual=null,removidosAtual=[],adicionaisAtual={};
 
-// ── LOJA ABERTA/FECHADA ────────────────────────────────────────
+// ── LOJA ABERTA/FECHADA + CONFIG ──────────────────────────────
+let prazoEntrega = { min: 30, max: 45 };
+
+function atualizarPrazoBadge(){
+  const el = document.getElementById('prazo-texto');
+  if(el) el.textContent = `${prazoEntrega.min}–${prazoEntrega.max} min`;
+}
+
 function verificarLoja(){
   db.collection('config').doc('operacao').onSnapshot(doc => {
     const data = doc.exists ? doc.data() : {};
     const lojaAberta = data.lojaAberta !== false;
     document.getElementById('loja-fechada').classList.toggle('show', !lojaAberta);
+    if(data.prazoMin) prazoEntrega.min = data.prazoMin;
+    if(data.prazoMax) prazoEntrega.max = data.prazoMax;
+    atualizarPrazoBadge();
   }, () => {
-    // Firebase não configurado ainda — usa localStorage como fallback
     const lojaAberta = localStorage.getItem('tcho_loja_aberta') !== 'false';
     if(!lojaAberta) document.getElementById('loja-fechada').classList.add('show');
   });

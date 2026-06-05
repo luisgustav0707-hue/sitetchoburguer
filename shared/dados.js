@@ -39,7 +39,7 @@ const TCHO = {
     { id:'rla', emoji:'🥤', nome:'Refrigerante Lata', preco:6,  opcoes:['Coca-Cola','Guaraná','Fanta Laranja','Fanta Uva','Sprite'],        ativo:true },
     { id:'suc', emoji:'🧃', nome:'Suco Lata',         preco:7,  opcoes:['Del Valle Uva','Del Valle Pêssego','Del Valle Laranja','Goiaba'], ativo:true },
     { id:'agu', emoji:'💧', nome:'Água com Gás',      preco:5,                                              ativo:true },
-    { id:'cmb', emoji:'🍟', nome:'Combo +R$15',       preco:15, desc:'Refrigerante lata + Batata frita',   ativo:true },
+    { id:'cmb', emoji:'🍟', nome:'Combo +R$15',       preco:15, desc:'Refrigerante lata + Batata frita',   opcoes:['Coca-Cola','Guaraná','Fanta Laranja','Fanta Uva','Sprite'], ativo:true },
   ],
 
   // ── ADICIONAIS ────────────────────────────────────────

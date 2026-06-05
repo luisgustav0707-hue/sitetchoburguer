@@ -386,7 +386,7 @@ function renderHistorico(){
 const PRODS = [
   ...TCHO.burguers.map(b => ({id:b.id, e:b.emoji, n:b.nome, p:b.preco, cat:'b'})),
   ...TCHO.extras.filter(e => e.id !== 'cmb').map(e => ({id:e.id, e:e.emoji, n:e.nome, p:e.preco, cat:'e', opcoes:e.opcoes})),
-  ...TCHO.extras.filter(e => e.id === 'cmb').map(e => ({id:e.id, e:e.emoji, n:`Combo (+R$${e.preco})`, p:e.preco, cat:'c'})),
+  ...TCHO.extras.filter(e => e.id === 'cmb').map(e => ({id:e.id, e:e.emoji, n:`Combo (+R$${e.preco})`, p:e.preco, cat:'c', opcoes:e.opcoes})),
 ];
 const est={};PRODS.forEach(p=>{est[p.id]={ativo:true,modo:'inf',qtd:10};});
 
@@ -523,7 +523,7 @@ function renderOpcoes(id){
 function renderLista(cat,containerId){
   document.getElementById(containerId).innerHTML=PRODS.filter(p=>p.cat===cat).map(p=>{
     const ev=est[p.id];
-    const temOpcoes=cat==='e'&&(p.opcoes||getOpcoesAdmin(p.id).length>0);
+    const temOpcoes=(cat==='e'||cat==='c')&&(p.opcoes||getOpcoesAdmin(p.id).length>0);
     const temFoto=!!getFotoAdmin(p.id);
     return`<div class="prod-item" id="prow-${p.id}">
       <div class="prod-row">

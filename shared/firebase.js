@@ -12,4 +12,4 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-db.settings({ experimentalForceLongPolling: true, merge: true });
+db.settings({ experimentalAutoDetectLongPolling: true, merge: true });

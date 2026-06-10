@@ -1367,7 +1367,7 @@ function iniciarApp(){
   if(fimEl) fimEl.value = hoje;
 
   // Carrega config do Firestore
-  db.collection('config').doc('operacao').get().then(doc=>{
+  db.collection('config').doc('operacao').onSnapshot(doc=>{
     if(!doc.exists) return;
     const cfg=doc.data();
     document.getElementById('cfg-loja').checked=cfg.lojaAberta!==false;
@@ -1379,7 +1379,7 @@ function iniciarApp(){
     autoAceitar=!!cfg.autoAceitar;
     atualizarBotaoAuto();
     atualizarBadgeLoja();
-  }).catch(console.error);
+  },()=>{});
 
   // ── Fallback local: polling + BroadcastChannel ───────────────
   // Lê imediatamente pedidos já salvos no localStorage

@@ -1,14 +1,13 @@
 // ── CONFIGURAÇÃO FIREBASE ─────────────────────────────────────────
-// Substitua pelos dados do seu projeto em:
-// console.firebase.google.com → Seu projeto → ⚙️ Configurações → Apps → Adicionar app web
 const firebaseConfig = {
-  apiKey:            "AIzaSyDgHsEkqkYg4BT6xtLJKMefegKu49xhVTM",
-  authDomain:        "tcho-burguer.firebaseapp.com",
-  projectId:         "tcho-burguer",
-  storageBucket:     "tcho-burguer.firebasestorage.app",
-  messagingSenderId: "452780220212",
-  appId:             "1:452780220212:web:56e47063c8fad07224cf61"
+  apiKey:            "AIzaSyAQSUTgLuviU94_SfeRyVh_nLZBDeCzV0Y",
+  authDomain:        "tcho-burguer-app.firebaseapp.com",
+  projectId:         "tcho-burguer-app",
+  storageBucket:     "tcho-burguer-app.firebasestorage.app",
+  messagingSenderId: "163710694948",
+  appId:             "1:163710694948:web:c8d578b95bb472316ccab1"
 };
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+console.warn('🔥 Firebase projeto: ' + firebaseConfig.projectId);

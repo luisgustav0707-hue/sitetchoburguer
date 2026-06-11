@@ -1424,7 +1424,11 @@ function iniciarApp(){
         }
       });
       renderAll();renderHistorico();
-    },()=>{ /* Firebase não configurado — polling local já está rodando */ });
+    },(err)=>{
+      console.error('Firestore listener erro:', err.code, err.message);
+      showToast('⚠️ Firestore offline: ' + (err.code || err.message), 'tok-err');
+      /* polling local já está rodando como fallback */
+    });
 
   // Listener cupons (Firestore)
   db.collection('cupons').onSnapshot(snapshot=>{

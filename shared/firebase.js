@@ -12,5 +12,4 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
-db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+db.settings({ experimentalForceLongPolling: true, experimentalAutoDetectLongPolling: false, merge: true });

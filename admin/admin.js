@@ -1393,10 +1393,17 @@ function iniciarApp(){
   } catch(e){}
 
   // ── Firestore: listener em tempo real (quando configurado) ────
+  let primeiroSnapshot = true;
   db.collection('pedidos')
     .where('status','in',['novo','prep','pronto','entrega'])
     .onSnapshot(snapshot=>{
       clearInterval(pollingLocal); // Firebase funcionando → para o polling local
+      if(primeiroSnapshot){
+        // Na primeira resposta do Firestore, descarta pedidos do localStorage
+        // para evitar que pedidos já deletados voltem a aparecer
+        pedidos = [];
+        primeiroSnapshot = false;
+      }
       snapshot.docChanges().forEach(change=>{
         const data=change.doc.data();
         const p={...data,_id:change.doc.id,hora:data.hora?data.hora.toDate():new Date()};

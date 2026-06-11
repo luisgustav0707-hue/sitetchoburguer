@@ -5,6 +5,7 @@ function fazerLogin(){
   const u=document.getElementById('login-user').value.trim();
   const p=document.getElementById('login-pass').value;
   if(u===CREDENCIAIS.usuario && p===CREDENCIAIS.senha){
+    localStorage.setItem('tcho_admin_logado','true');
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app').classList.add('show');
     iniciarApp();
@@ -14,10 +15,17 @@ function fazerLogin(){
   }
 }
 function logout(){
+  localStorage.removeItem('tcho_admin_logado');
   document.getElementById('app').classList.remove('show');
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('login-pass').value='';
   document.getElementById('login-err').textContent='';
+}
+// Auto-login se já estava logado antes
+if(localStorage.getItem('tcho_admin_logado')==='true'){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').classList.add('show');
+  iniciarApp();
 }
 
 // ── NAVEGAÇÃO ──────────────────────────────────────────────────

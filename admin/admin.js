@@ -1402,6 +1402,7 @@ function iniciarApp(){
         // Na primeira resposta do Firestore, descarta pedidos do localStorage
         // para evitar que pedidos já deletados voltem a aparecer
         pedidos = [];
+        localStorage.removeItem('tcho_pedidos');
         primeiroSnapshot = false;
       }
       snapshot.docChanges().forEach(change=>{

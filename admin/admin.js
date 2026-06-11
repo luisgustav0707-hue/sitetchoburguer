@@ -34,7 +34,7 @@ function showPage(p){
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
   if(p==='cardapio')  renderCardapio();
-  if(p==='pedidos')   renderHistorico();
+  if(p==='pedidos')   carregarLog();
   if(p==='marketing') renderCupons();
   if(p==='financeiro') carregarFinanceiro();
 }
@@ -376,19 +376,75 @@ function atualizarBadgeNovos(){
   badge.textContent=n;
 }
 
-// ── HISTÓRICO ──────────────────────────────────────────────────
-function renderHistorico(){
-  const todos=[...pedidos].sort((a,b)=>b.id-a.id);
-  if(!todos.length){document.getElementById('hist-lista').innerHTML=`<div class="empty"><div class="empty-icon">📋</div><div>Nenhum pedido ainda</div></div>`;return;}
+// ── LOG DE PEDIDOS ─────────────────────────────────────────────
+let logPedidos=[];
+
+async function carregarLog(){
+  const hoje=new Date().toISOString().split('T')[0];
+  const iniEl=document.getElementById('log-ini');
+  const fimEl=document.getElementById('log-fim');
+  if(!iniEl.value)iniEl.value=hoje;
+  if(!fimEl.value)fimEl.value=hoje;
+  const ini=new Date(iniEl.value+'T00:00:00');
+  const fim=new Date(fimEl.value+'T23:59:59');
+  document.getElementById('hist-lista').innerHTML='<div style="color:var(--muted);font-size:.78rem;padding:8px 0">Carregando...</div>';
+  try{
+    const snap=await db.collection('pedidos')
+      .where('criadoEm','>=',firebase.firestore.Timestamp.fromDate(ini))
+      .where('criadoEm','<', firebase.firestore.Timestamp.fromDate(new Date(fim.getTime()+1000)))
+      .get();
+    if(snap&&snap.docs&&snap.docs.length>0){
+      logPedidos=snap.docs.map(d=>{const data=d.data();return{...data,_id:d.id,hora:data.hora?.toDate?.()||new Date(data.hora||0)};});
+    } else {
+      logPedidos=[...pedidos];
+    }
+  }catch(e){
+    logPedidos=[...pedidos];
+  }
+  renderLog();
+}
+
+function renderLog(){
+  const nome=(document.getElementById('log-nome')?.value||'').toLowerCase().trim();
+  const tel=(document.getElementById('log-tel')?.value||'').replace(/\D/g,'');
+  const end=(document.getElementById('log-end')?.value||'').toLowerCase().trim();
+  let lista=[...logPedidos].sort((a,b)=>new Date(b.hora)-new Date(a.hora));
+  if(nome)lista=lista.filter(p=>(p.nome||'').toLowerCase().includes(nome));
+  if(tel)lista=lista.filter(p=>(p.tel||'').replace(/\D/g,'').includes(tel));
+  if(end)lista=lista.filter(p=>(p.bairro||'').toLowerCase().includes(end)||(p.endereco||'').toLowerCase().includes(end));
+  const countEl=document.getElementById('log-count');
+  if(countEl)countEl.textContent=lista.length?`${lista.length} pedido${lista.length!==1?'s':''} encontrado${lista.length!==1?'s':''}` :'';
+  if(!lista.length){document.getElementById('hist-lista').innerHTML='<div class="empty"><div class="empty-icon">🔍</div><div>Nenhum pedido encontrado</div></div>';return;}
   const statusLabel={novo:'Novo',prep:'Em preparo',pronto:'Pronto',entrega:'Em entrega',finalizado:'Finalizado'};
-  const statusClass={novo:'hs-novo',prep:'hs-prep',pronto:'hs-pronto',entrega:'hs-entrega',finalizado:'hs-finalizado'};
-  document.getElementById('hist-lista').innerHTML=todos.map(p=>`
-    <div class="hist-row">
-      <div><div class="hist-num">#${p.id}</div><div style="font-size:.7rem;color:var(--muted)">${p.nome}${p.bairro?' · '+p.bairro:''}</div></div>
-      <div style="font-size:.72rem;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.itens[0]}${p.itens.length>1?' +'+(p.itens.length-1)+' item(s)':''}</div>
-      <div style="text-align:right"><div class="hist-status ${statusClass[p.status]||'hs-finalizado'}">${statusLabel[p.status]||p.status}</div><div style="font-size:.68rem;color:var(--muted);margin-top:3px">R$${p.total+(p.frete||0)} · ${p.horaStr}</div></div>
+  const statusCor={novo:'#e74c3c',prep:'#f39c12',pronto:'#27ae60',entrega:'#3498db',finalizado:'var(--muted)'};
+  const r=n=>'R$'+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('hist-lista').innerHTML=lista.map(p=>`
+    <div class="log-card">
+      <div class="log-card-header">
+        <div>
+          <span class="log-num">${p.num||'#'+p.id}</span>
+          <span class="log-badge" style="background:${p.tipo==='delivery'?'#1a0e0e':'#081508'};color:${p.tipo==='delivery'?'#e74c3c':'#27ae60'}">${p.tipo==='delivery'?'🛵 DELIVERY':'🏃 RETIRADA'}</span>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:.65rem;font-weight:700;color:${statusCor[p.status]||'var(--muted)'}">${statusLabel[p.status]||p.status||'-'}</div>
+          <div style="font-size:.65rem;color:var(--muted)">${p.horaStr||''}</div>
+        </div>
+      </div>
+      <div class="log-nome">${p.nome||'-'}</div>
+      ${p.tel?`<div class="log-info">📞 ${p.tel}</div>`:''}
+      ${p.tipo==='delivery'&&(p.bairro||p.endereco)?`<div class="log-info">📍 ${[p.endereco,p.bairro,p.cidade].filter(Boolean).join(' — ')}</div>`:''}
+      <div class="log-sep"></div>
+      <div class="log-itens">${(p.itens||[]).map(i=>`<div>• ${i}</div>`).join('')}</div>
+      ${p.obs?`<div style="font-size:.7rem;color:#f39c12;margin-top:4px">⚠ ${p.obs}</div>`:''}
+      <div class="log-sep"></div>
+      <div class="log-footer">
+        <div class="log-pag">${p.pag||'-'}${(p.frete||0)>0?` · Frete: ${r(p.frete)}`:''}</div>
+        <div class="log-total">${r(p.total||0)}</div>
+      </div>
     </div>`).join('');
 }
+
+function renderHistorico(){renderLog();}
 
 // ── CARDÁPIO (estoque) — dados de shared/dados.js via TCHO ─────
 const PRODS = [
@@ -1367,12 +1423,16 @@ function lerPedidosLocal(){
 function iniciarApp(){
   renderAll();
   atualizarBotaoSom();
-  // Preenche datas padrão do filtro personalizado com hoje
+  // Preenche datas padrão com hoje
   const hoje = new Date().toISOString().split('T')[0];
   const iniEl = document.getElementById('fin-ini');
   const fimEl = document.getElementById('fin-fim');
   if(iniEl) iniEl.value = hoje;
   if(fimEl) fimEl.value = hoje;
+  const logIni = document.getElementById('log-ini');
+  const logFim = document.getElementById('log-fim');
+  if(logIni) logIni.value = hoje;
+  if(logFim) logFim.value = hoje;
 
   // Carrega config do Firestore
   db.collection('config').doc('operacao').onSnapshot(doc=>{

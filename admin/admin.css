@@ -1,6 +1,23 @@
 /* ── VARIÁVEL LOCAL ───────────────────────────────────────────── */
 :root { --surface: #1a1510; }
 
+/* LOG DE PEDIDOS */
+.log-input{background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:6px;padding:6px 10px;font-size:.78rem;outline:none;min-width:130px;font-family:'Barlow',sans-serif}
+.log-input::placeholder{color:var(--muted)}
+.log-input:focus{border-color:var(--orange)}
+.log-card{background:var(--card);border:1px solid #2a2520;border-radius:10px;padding:12px;margin-bottom:8px}
+.log-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.log-num{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--orange)}
+.log-badge{font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:4px;margin-left:6px}
+.log-nome{font-size:.85rem;font-weight:700;color:var(--cream);margin-bottom:2px}
+.log-info{font-size:.72rem;color:var(--muted);margin-bottom:3px}
+.log-sep{height:1px;background:#2a2520;margin:8px 0}
+.log-itens{font-size:.72rem;color:var(--muted)}
+.log-itens div{padding:1px 0}
+.log-footer{display:flex;justify-content:space-between;align-items:center}
+.log-pag{font-size:.72rem;color:var(--muted)}
+.log-total{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--orange)}
+
 body{background:var(--bg);color:var(--cream);font-family:'Barlow',sans-serif;font-size:14px;min-height:100vh}
 
 /* LOGIN */

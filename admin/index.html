@@ -102,8 +102,21 @@
   <!-- ── PEDIDOS ── -->
   <div class="page" id="page-pedidos">
     <div class="section">
-      <div class="sec-title">📋 Histórico de pedidos <span style="font-size:.7rem;color:var(--muted);font-weight:400;letter-spacing:0">atualizados em tempo real</span></div>
-      <div id="hist-lista"><div class="empty"><div class="empty-icon">📋</div><div>Nenhum pedido ainda</div></div></div>
+      <div class="sec-title">📋 Log de pedidos</div>
+      <!-- Filtros -->
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center">
+        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+          <input type="date" id="log-ini" class="fin-date-input">
+          <span style="color:var(--muted);font-size:.75rem">até</span>
+          <input type="date" id="log-fim" class="fin-date-input">
+        </div>
+        <input type="text" id="log-nome" placeholder="🔍 Nome" oninput="renderLog()" class="log-input">
+        <input type="tel"  id="log-tel"  placeholder="📞 Telefone" oninput="renderLog()" class="log-input">
+        <input type="text" id="log-end"  placeholder="📍 Bairro / Endereço" oninput="renderLog()" class="log-input">
+        <button class="fin-btn active" onclick="carregarLog()">Buscar</button>
+      </div>
+      <div id="log-count" style="font-size:.72rem;color:var(--muted);margin-bottom:8px"></div>
+      <div id="hist-lista"><div class="empty"><div class="empty-icon">📋</div><div>Selecione um período e clique em Buscar</div></div></div>
     </div>
   </div>
 

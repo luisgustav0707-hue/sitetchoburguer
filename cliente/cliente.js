@@ -474,7 +474,9 @@ async function finalizarPedido(){
   // Notifica admin instantaneamente via BroadcastChannel (quando em HTTP)
   try { new BroadcastChannel('tcho_pedidos').postMessage(pedidoLocal); } catch(e){}
   // Também envia ao Firestore quando configurado
-  db.collection('pedidos').add(pedido).catch(e => console.error('Firestore erro:', e));
+  db.collection('pedidos').add(pedido)
+    .then(() => console.log('Pedido salvo no Firestore!'))
+    .catch(e => console.error('Firestore erro:', e));
 
   [1,2,3].forEach(i=>document.getElementById('sc'+i).classList.remove('active'));
   document.getElementById('sc4').classList.add('active');

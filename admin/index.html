@@ -194,6 +194,7 @@
     <div class="inner-tabs">
       <div class="inner-tab active" onclick="showInner('cupons')">🎟️ Cupons</div>
       <div class="inner-tab" onclick="showInner('fidelidade')">🎁 Fidelidade</div>
+      <div class="inner-tab" onclick="showInner('recuperacao');initRecuperacao()">💌 Recuperação</div>
     </div>
 
     <!-- CUPONS -->
@@ -255,6 +256,34 @@
         • Burguers: X-Burguer, X-Salada ou X-Bacon<br>
         • Identificação pelo número de celular
       </div>
+    </div>
+
+    <!-- RECUPERAÇÃO -->
+    <div class="inner-page" id="inner-recuperacao">
+      <div class="section">
+        <div class="sec-title">💌 Recuperação de Clientes</div>
+        <div class="toggle-row" style="padding-top:0">
+          <div class="toggle-info">
+            <div class="toggle-label">Clientes inativos há mais de</div>
+            <div class="toggle-desc">Busca quem não pediu nos últimos X dias</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+            <input type="number" id="rec-dias" value="14" min="1" max="365"
+              style="width:58px;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:6px;padding:5px 6px;font-size:.85rem;text-align:center;outline:none">
+            <span style="font-size:.8rem;color:var(--muted)">dias</span>
+          </div>
+        </div>
+        <div style="margin-top:14px">
+          <div class="flabel">Cupom para enviar</div>
+          <select id="rec-cupom" class="fselect" onchange="atualizarMsgRecuperacao()" style="margin-bottom:10px">
+            <option value="">Sem cupom (mensagem de retorno)</option>
+          </select>
+          <div class="flabel">Mensagem (use {nome} para personalizar)</div>
+          <textarea id="rec-msg" rows="6" class="finput" style="resize:vertical;font-family:'Barlow',sans-serif;line-height:1.5;font-size:.78rem;width:100%;box-sizing:border-box"></textarea>
+        </div>
+        <button class="btn-criar" onclick="buscarInativos()" style="margin-top:12px;width:100%">🔍 Buscar Clientes Inativos</button>
+      </div>
+      <div id="rec-lista"></div>
     </div>
   </div>
 

@@ -1133,6 +1133,100 @@ function onFlagFidelidade(){
   else{status.className='fid-status fid-off';status.innerHTML='<span>🔒</span><span>Programa desativado — não visível para clientes</span>';}
 }
 
+// ── RECUPERAÇÃO DE CLIENTES ────────────────────────────────────
+let clientesInativos=[];
+
+function initRecuperacao(){
+  popularCuponsRec();
+  atualizarMsgRecuperacao();
+}
+
+function popularCuponsRec(){
+  const sel=document.getElementById('rec-cupom');if(!sel)return;
+  const ativos=cupons.filter(c=>c.ativo&&!isExp(c));
+  sel.innerHTML=`<option value="">Sem cupom (mensagem de retorno)</option>`+
+    ativos.map(c=>`<option value="${c._id}">${c.codigo} — ${descontoLabel(c)}</option>`).join('');
+}
+
+function atualizarMsgRecuperacao(){
+  const cupomId=document.getElementById('rec-cupom')?.value;
+  const cupom=cupons.find(c=>c._id===cupomId);
+  const link='https://tchoburguer.com/cliente/';
+  let msg;
+  if(cupom){
+    const desc=cupom.tipo==='pct'?`${cupom.valor}% de desconto`:
+               cupom.tipo==='fixo'?`R$${cupom.valor} de desconto`:
+               cupom.tipo==='frete'?'frete grátis':`${cupom.item||'item'} grátis`;
+    msg=`Olá {nome}! 👋\n\nSentimos sua falta no Tcho Burguer! 🍔\n\nQue tal voltar com um presente especial?\n\nUse o cupom *${cupom.codigo}* e ganhe *${desc}*!${cupom.descricao?'\n\n📌 '+cupom.descricao:''}\n\nPeça agora: ${link}\n\nTe esperamos! 🧡`;
+  }else{
+    msg=`Olá {nome}! 👋\n\nSentimos sua falta no Tcho Burguer! 🍔\n\nTemos novidades e continuamos fazendo os melhores burgers artesanais de BH!\n\nPeça agora: ${link}\n\nTe esperamos! 🧡`;
+  }
+  const el=document.getElementById('rec-msg');if(el)el.value=msg;
+}
+
+async function buscarInativos(){
+  const dias=parseInt(document.getElementById('rec-dias')?.value)||14;
+  const recLista=document.getElementById('rec-lista');
+  recLista.innerHTML='<div style="color:var(--muted);font-size:.78rem;padding:10px 0">🔍 Buscando clientes nos últimos 12 meses...</div>';
+  let todos=[];
+  try{
+    const limite=new Date();limite.setMonth(limite.getMonth()-12);
+    const snap=await db.collection('pedidos')
+      .where('criadoEm','>=',firebase.firestore.Timestamp.fromDate(limite)).get();
+    if(snap&&snap.docs&&snap.docs.length>0){
+      todos=snap.docs.map(d=>{const dt=d.data();return{...dt,_id:d.id,hora:dt.criadoEm?.toDate?.()||dt.hora?.toDate?.()||new Date()};});
+    }
+  }catch(e){todos=[...pedidos];}
+  if(!todos.length){recLista.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div>Sem dados suficientes</div></div>';return;}
+  // Agrupa por telefone
+  const mapa={};
+  todos.forEach(p=>{
+    const tel=(p.tel||'').replace(/\D/g,'');
+    if(!tel||tel.length<10)return;
+    if(!mapa[tel]){mapa[tel]={nome:p.nome,tel:p.tel,telLimpo:tel,ultimoPedido:p.hora,qtd:0,gasto:0};}
+    if(new Date(p.hora)>new Date(mapa[tel].ultimoPedido)){mapa[tel].ultimoPedido=p.hora;mapa[tel].nome=p.nome;}
+    mapa[tel].qtd++;mapa[tel].gasto+=(p.total||0);
+  });
+  const corte=new Date(Date.now()-dias*86400000);
+  clientesInativos=Object.values(mapa)
+    .filter(c=>new Date(c.ultimoPedido)<corte)
+    .sort((a,b)=>new Date(a.ultimoPedido)-new Date(b.ultimoPedido));
+  renderInativos();
+}
+
+function renderInativos(){
+  const lista=clientesInativos;
+  const el=document.getElementById('rec-lista');
+  if(!lista.length){el.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div>Nenhum cliente inativo nesse período!</div></div>';return;}
+  const agora=new Date();
+  const msgTpl=document.getElementById('rec-msg')?.value||'';
+  const r=n=>'R$'+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2});
+  el.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding:0 2px">
+      <div style="font-size:.78rem;color:var(--muted)">${lista.length} cliente${lista.length!==1?'s':''} inativo${lista.length!==1?'s':''}</div>
+    </div>
+    ${lista.map(c=>{
+      const diasInativo=Math.floor((agora-new Date(c.ultimoPedido))/86400000);
+      const cor=diasInativo>30?'#e74c3c':'#f39c12';
+      const msg=msgTpl.replace(/\{nome\}/g,c.nome||'cliente');
+      const waLink=`https://wa.me/55${c.telLimpo}?text=${encodeURIComponent(msg)}`;
+      return`<div style="background:var(--card);border:1px solid #2a2520;border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:.85rem;color:var(--cream)">${c.nome||'-'}</div>
+          <div style="font-size:.72rem;color:var(--muted)">📞 ${c.tel||'-'}</div>
+          <div style="font-size:.68rem;color:var(--muted);margin-top:2px">${c.qtd} pedido${c.qtd!==1?'s':''} · ${r(c.gasto)} no total</div>
+        </div>
+        <div style="text-align:center;flex-shrink:0">
+          <div style="font-size:1.2rem;font-weight:700;color:${cor}">${diasInativo}d</div>
+          <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase">inativo</div>
+        </div>
+        <a href="${waLink}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#25d366;color:#000;font-weight:700;font-size:.75rem;padding:8px 14px;border-radius:8px;text-decoration:none;flex-shrink:0;letter-spacing:.5px">
+          💬 Enviar
+        </a>
+      </div>`;
+    }).join('')}`;
+}
+
 // ── FINANCEIRO ─────────────────────────────────────────────────
 let finPeriodo = 'hoje';
 let finPedidosList = [];

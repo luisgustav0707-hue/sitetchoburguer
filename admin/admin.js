@@ -1202,26 +1202,31 @@ function renderInativos(){
   const msgTpl=document.getElementById('rec-msg')?.value||'';
   const r=n=>'R$'+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2});
   el.innerHTML=`
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding:0 2px">
-      <div style="font-size:.78rem;color:var(--muted)">${lista.length} cliente${lista.length!==1?'s':''} inativo${lista.length!==1?'s':''}</div>
+    <div style="font-size:.75rem;color:var(--muted);margin-bottom:10px;padding:0 2px">
+      ${lista.length} cliente${lista.length!==1?'s':''} inativo${lista.length!==1?'s':''}
     </div>
     ${lista.map(c=>{
       const diasInativo=Math.floor((agora-new Date(c.ultimoPedido))/86400000);
       const cor=diasInativo>30?'#e74c3c':'#f39c12';
       const msg=msgTpl.replace(/\{nome\}/g,c.nome||'cliente');
       const waLink=`https://wa.me/55${c.telLimpo}?text=${encodeURIComponent(msg)}`;
-      return`<div style="background:var(--card);border:1px solid #2a2520;border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:.85rem;color:var(--cream)">${c.nome||'-'}</div>
-          <div style="font-size:.72rem;color:var(--muted)">📞 ${c.tel||'-'}</div>
-          <div style="font-size:.68rem;color:var(--muted);margin-top:2px">${c.qtd} pedido${c.qtd!==1?'s':''} · ${r(c.gasto)} no total</div>
+      return`<div style="background:var(--card);border:1px solid #2a2520;border-radius:10px;padding:14px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+          <div>
+            <div style="font-weight:700;font-size:.95rem;color:var(--cream);margin-bottom:4px">${c.nome||'—'}</div>
+            <div style="font-size:.82rem;color:var(--orange);font-weight:600">📞 ${c.tel||'—'}</div>
+          </div>
+          <div style="text-align:center;background:#1a1510;border-radius:8px;padding:6px 10px;flex-shrink:0">
+            <div style="font-size:1.1rem;font-weight:700;color:${cor}">${diasInativo}d</div>
+            <div style="font-size:.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">sem pedir</div>
+          </div>
         </div>
-        <div style="text-align:center;flex-shrink:0">
-          <div style="font-size:1.2rem;font-weight:700;color:${cor}">${diasInativo}d</div>
-          <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase">inativo</div>
+        <div style="font-size:.68rem;color:var(--muted);margin-bottom:12px">
+          ${c.qtd} pedido${c.qtd!==1?'s':''} realizados · total gasto: ${r(c.gasto)}
         </div>
-        <a href="${waLink}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#25d366;color:#000;font-weight:700;font-size:.75rem;padding:8px 14px;border-radius:8px;text-decoration:none;flex-shrink:0;letter-spacing:.5px">
-          💬 Enviar
+        <a href="${waLink}" target="_blank"
+          style="display:flex;align-items:center;justify-content:center;gap:8px;background:#25d366;color:#000;font-weight:700;font-size:.85rem;padding:11px;border-radius:8px;text-decoration:none;letter-spacing:.5px;width:100%;box-sizing:border-box">
+          💬 Disparar mensagem no WhatsApp
         </a>
       </div>`;
     }).join('')}`;

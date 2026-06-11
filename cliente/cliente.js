@@ -56,7 +56,7 @@ const CUPONS_ATIVOS = [
 let cartBurguers={},cartExtras={},tipoPedido=null,pagamento=null,freteAtual=0,bairroAtendido=false;
 let cupomAtual=null,descontoAtual=0;
 let orderCounter=Math.floor(Math.random()*100)+1;
-let modalId=null,pontoAtual=null,sacheAtual=null,removidosAtual=[],adicionaisAtual={};
+let modalId=null,pontoAtual=null,sacheAtual=null,removidosAtual=[],adicionaisAtual={},comboAtual=null,comboSaborAtual=null;
 
 // ── LOJA ABERTA/FECHADA + CONFIG ──────────────────────────────
 let prazoEntrega = { min: 30, max: 45 };
@@ -207,7 +207,10 @@ function escolherSabor(id,sabor){
 // ── MODAL PERSONALIZAÇÃO ───────────────────────────────────────
 function abrirModal(id){
   const b=BURGUERS.find(x=>x.id===id)||{emoji:'🍔',nome:'Hamburguer',preco:0,ing:[]};
-  modalId=id;pontoAtual=null;sacheAtual=null;removidosAtual=[];adicionaisAtual={};
+  modalId=id;pontoAtual=null;sacheAtual=null;removidosAtual=[];adicionaisAtual={};comboAtual=null;comboSaborAtual=null;
+  const comboItem=[...COMBO].find(c=>c.id==='cmb');
+  const comboPreco=comboItem?.preco||15;
+  const comboOpcoes=getOpcoes('cmb');
   document.getElementById('modal-box').innerHTML=`
     <div class="modal-header"><div><div class="modal-title">${b.emoji} ${b.nome}</div><div class="modal-price">R$${b.preco}</div></div><button class="modal-close" onclick="fecharModal()">✕</button></div>
     <div class="modal-body">
@@ -218,6 +221,21 @@ function abrirModal(id){
       <div class="person-section"><div class="person-label">🧴 Sachê <span class="req">* obrigatório</span></div>
         <div class="sache-options">${SACHES.map(s=>`<div class="sache-btn" id="sch-${s.id}" onclick="selSache('${s.id}')"><span class="s-icon">${s.emoji}</span><span class="s-name">${s.nome}</span><span class="s-badge">grátis</span></div>`).join('')}</div>
         <div id="err-sache" class="err-msg">⚠ Selecione sua preferência de sachê</div></div>
+      <div class="modal-sep"></div>
+      <div class="person-section"><div class="person-label">🍟🥤 Adicionar Combo? <span class="req">* obrigatório</span></div>
+        <div style="font-size:.7rem;color:var(--muted);margin-bottom:10px">Batata frita + Refrigerante lata &nbsp;<strong style="color:var(--orange)">+R$${comboPreco}</strong></div>
+        <div class="ponto-options">
+          <div class="ponto-btn" id="combo-sim" onclick="selCombo(true,${comboPreco})"><span class="p-icon">✅</span><span class="p-name">Sim! +R$${comboPreco}</span></div>
+          <div class="ponto-btn" id="combo-nao" onclick="selCombo(false,${comboPreco})"><span class="p-icon">❌</span><span class="p-name">Não, obrigado</span></div>
+        </div>
+        <div id="combo-sabores" style="display:none;margin-top:10px">
+          <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px">Qual refrigerante?</div>
+          <div class="ponto-options" style="flex-wrap:wrap">
+            ${comboOpcoes.map(o=>`<div class="ponto-btn" id="csab-${o.replace(/[^a-zA-Z0-9]/g,'_')}" onclick="selComboSabor('${o.replace(/'/g,"\\'")}')"><span class="p-name" style="font-size:.8rem">${o}</span></div>`).join('')}
+          </div>
+          <div id="err-combo-sab" class="err-msg">⚠ Escolha o sabor do refrigerante</div>
+        </div>
+        <div id="err-combo" class="err-msg">⚠ Informe se deseja o combo</div></div>
       <div class="modal-sep"></div>
       <div class="person-section"><div class="person-label">➖ Retirar ingredientes <span class="opt-lbl">(opcional)</span></div>
         <div class="ing-grid">${b.ing.map(i=>`<div class="ing-btn" id="ing-${i.replace(/[\s&]/g,'_')}" onclick="togIng('${i}')">${i}</div>`).join('')}</div></div>
@@ -232,17 +250,46 @@ function abrirModal(id){
 
 function selPonto(id){pontoAtual=PONTOS.find(p=>p.id===id);document.querySelectorAll('.ponto-btn').forEach(e=>e.classList.remove('sel'));document.getElementById('pnt-'+id).classList.add('sel');document.getElementById('err-ponto').style.display='none';}
 function selSache(id){sacheAtual=SACHES.find(s=>s.id===id);document.querySelectorAll('.sache-btn').forEach(e=>e.classList.remove('sel'));document.getElementById('sch-'+id).classList.add('sel');document.getElementById('err-sache').style.display='none';}
+function selCombo(sim,preco){
+  comboAtual=sim;comboSaborAtual=null;
+  document.getElementById('combo-sim').classList.toggle('sel',sim);
+  document.getElementById('combo-nao').classList.toggle('sel',!sim);
+  document.getElementById('combo-sabores').style.display=sim?'block':'none';
+  document.getElementById('err-combo').style.display='none';
+  atualizarTotalModal(preco);
+}
+function selComboSabor(sabor){
+  comboSaborAtual=sabor;
+  document.querySelectorAll('[id^="csab-"]').forEach(e=>e.classList.remove('sel'));
+  document.getElementById('csab-'+sabor.replace(/[^a-zA-Z0-9]/g,'_')).classList.add('sel');
+  document.getElementById('err-combo-sab').style.display='none';
+}
 function togIng(ing){const idx=removidosAtual.indexOf(ing);if(idx>-1)removidosAtual.splice(idx,1);else removidosAtual.push(ing);document.getElementById('ing-'+ing.replace(/[\s&]/g,'_')).classList.toggle('removido',removidosAtual.includes(ing));}
-function togAdic(id,preco,nome){if(adicionaisAtual[id])delete adicionaisAtual[id];else adicionaisAtual[id]={preco,nome};document.getElementById('adi-'+id).classList.toggle('sel',!!adicionaisAtual[id]);const t=Object.values(adicionaisAtual).reduce((a,x)=>a+x.preco,0);document.getElementById('adic-total').textContent=t>0?`Acréscimos: +R$${t}`:'';}
+function togAdic(id,preco,nome){
+  if(adicionaisAtual[id])delete adicionaisAtual[id];else adicionaisAtual[id]={preco,nome};
+  document.getElementById('adi-'+id).classList.toggle('sel',!!adicionaisAtual[id]);
+  const comboItem=[...COMBO].find(c=>c.id==='cmb');
+  atualizarTotalModal(comboItem?.preco||15);
+}
+function atualizarTotalModal(comboPreco){
+  const tAdic=Object.values(adicionaisAtual).reduce((a,x)=>a+x.preco,0);
+  const tCombo=comboAtual===true?comboPreco:0;
+  const t=tAdic+tCombo;
+  document.getElementById('adic-total').textContent=t>0?`Total extras: +R$${t}`:'';
+}
 
 function confirmarModal(){
   let ok=true;
   if(!pontoAtual){document.getElementById('err-ponto').style.display='block';ok=false;}
   if(!sacheAtual){document.getElementById('err-sache').style.display='block';ok=false;}
+  if(comboAtual===null){document.getElementById('err-combo').style.display='block';ok=false;}
+  if(comboAtual===true&&!comboSaborAtual){document.getElementById('err-combo-sab').style.display='block';ok=false;}
   if(!ok)return;
-  const precoExtra=Object.values(adicionaisAtual).reduce((a,x)=>a+x.preco,0);
+  const comboItem=[...COMBO].find(c=>c.id==='cmb');
+  const comboPreco=comboAtual===true?(comboItem?.preco||15):0;
+  const precoExtra=Object.values(adicionaisAtual).reduce((a,x)=>a+x.preco,0)+comboPreco;
   if(!cartBurguers[modalId])cartBurguers[modalId]=[];
-  cartBurguers[modalId].push({ponto:pontoAtual,sache:sacheAtual,removidos:[...removidosAtual],adicionais:Object.values(adicionaisAtual),precoExtra});
+  cartBurguers[modalId].push({ponto:pontoAtual,sache:sacheAtual,removidos:[...removidosAtual],adicionais:Object.values(adicionaisAtual),precoExtra,combo:comboAtual===true?comboSaborAtual:null});
   fecharModal();renderBurguers();updateFloat();
 }
 
@@ -384,7 +431,7 @@ function renderResumo(){
     const b=BURGUERS.find(x=>x.id===id);if(!b)return;
     insts.forEach(inst=>{
       html+=`<div class="resumo-linha"><span>${b.emoji} ${b.nome}</span><span>R$${b.preco+inst.precoExtra}</span></div>`;
-      const det=[inst.ponto?`🥩 ${inst.ponto.emoji} ${inst.ponto.nome}`:'',inst.sache?`🧴 ${inst.sache.emoji} ${inst.sache.nome}`:'',inst.removidos.length?`➖ sem ${inst.removidos.join(', ')}`:'',inst.adicionais.length?`➕ ${inst.adicionais.map(a=>a.nome).join(', ')}`:''].filter(Boolean);
+      const det=[inst.ponto?`🥩 ${inst.ponto.emoji} ${inst.ponto.nome}`:'',inst.sache?`🧴 ${inst.sache.emoji} ${inst.sache.nome}`:'',inst.combo?`🍟🥤 Combo (${inst.combo})`:'',inst.removidos.length?`➖ sem ${inst.removidos.join(', ')}`:'',inst.adicionais.length?`➕ ${inst.adicionais.map(a=>a.nome).join(', ')}`:''].filter(Boolean);
       if(det.length)html+=`<div class="resumo-sub">${det.join(' • ')}</div>`;
     });
   });
@@ -489,7 +536,7 @@ function montarItensTexto(){
   Object.entries(cartBurguers).forEach(([id,insts])=>{
     const b=BURGUERS.find(x=>x.id===id);if(!b)return;
     insts.forEach((inst,i)=>{
-      const det=[inst.ponto?inst.ponto.nome:'',inst.sache&&inst.sache.id!=='sn'?'sachê '+inst.sache.nome:'',inst.removidos.length?'sem '+inst.removidos.join(', '):'',inst.adicionais.length?inst.adicionais.map(a=>'+'+a.nome).join(', '):''].filter(Boolean).join(' • ');
+      const det=[inst.ponto?inst.ponto.nome:'',inst.sache&&inst.sache.id!=='sn'?'sachê '+inst.sache.nome:'',inst.combo?`combo (${inst.combo})`:'',inst.removidos.length?'sem '+inst.removidos.join(', '):'',inst.adicionais.length?inst.adicionais.map(a=>'+'+a.nome).join(', '):''].filter(Boolean).join(' • ');
       lista.push(`${b.nome}${det?' ('+det+')':''} — R$${b.preco+inst.precoExtra}`);
     });
   });

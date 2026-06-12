@@ -3,28 +3,13 @@
 
 /* LOGIN */
 .login-overlay{position:fixed;inset:0;background:var(--bg);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px}
-.login-card{background:#1a1510;border:1px solid #2a2520;border-radius:16px;padding:32px 24px;width:100%;max-width:380px;text-align:center}
-.login-logo{height:72px;width:auto;object-fit:contain;margin-bottom:10px}
-.login-marca{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:3px;background:linear-gradient(135deg,var(--orange),var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
-.login-sub{font-size:.78rem;color:var(--muted);margin-bottom:24px}
-.btn-google{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#1a1a1a;border:none;border-radius:8px;padding:12px 16px;font-family:'Barlow',sans-serif;font-weight:700;font-size:.88rem;cursor:pointer;margin-bottom:16px;transition:opacity .2s}
-.btn-google:hover{opacity:.9}
-.login-divider{position:relative;text-align:center;margin:4px 0 16px;color:var(--muted);font-size:.75rem}
-.login-divider::before,.login-divider::after{content:'';position:absolute;top:50%;width:42%;height:1px;background:#2a2520}
-.login-divider::before{left:0}.login-divider::after{right:0}
-.login-divider span{background:#1a1510;padding:0 10px;position:relative}
-.login-input{width:100%;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:8px;padding:11px 14px;font-size:.85rem;outline:none;font-family:'Barlow',sans-serif;box-sizing:border-box;margin-bottom:10px}
-.login-input:focus{border-color:var(--orange)}
-.login-input::placeholder{color:var(--muted)}
-.btn-email-link{width:100%;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;padding:12px;font-family:'Barlow',sans-serif;font-weight:700;font-size:.88rem;cursor:pointer;transition:opacity .2s}
-.btn-email-link:hover{opacity:.9}
-.btn-email-link:disabled{opacity:.5;cursor:not-allowed}
-.login-msg{font-size:.75rem;color:#e74c3c;margin-top:8px;min-height:18px}
-.email-ok{padding:8px 0}
-.email-ok-titulo{font-weight:700;font-size:1rem;color:var(--cream);margin:10px 0 4px}
-.email-ok-dest{font-size:.82rem;color:var(--orange);font-weight:600;word-break:break-all}
-.email-ok-info{font-size:.74rem;color:var(--muted);margin-top:8px;line-height:1.5}
-.btn-voltar-email{margin-top:14px;background:transparent;border:1px solid #3a3530;color:var(--muted);padding:7px 14px;border-radius:6px;cursor:pointer;font-size:.75rem;font-family:'Barlow',sans-serif}
+.login-card{background:#1a1510;border:1px solid #2a2520;border-radius:20px;padding:40px 28px;width:100%;max-width:360px;text-align:center}
+.login-logo{height:90px;width:auto;object-fit:contain;margin-bottom:14px}
+.login-marca{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:4px;background:linear-gradient(135deg,var(--orange),var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
+.login-sub{font-size:.8rem;color:var(--muted);margin-bottom:32px;letter-spacing:.3px}
+.btn-google{width:100%;display:flex;align-items:center;justify-content:center;gap:12px;background:#fff;color:#1a1a1a;border:none;border-radius:10px;padding:14px 20px;font-family:'Barlow',sans-serif;font-weight:700;font-size:.95rem;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.3);transition:transform .15s,box-shadow .15s;letter-spacing:.3px}
+.btn-google:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.btn-google:active{transform:translateY(0)}
 
 /* BOTÃO WHATSAPP FLUTUANTE */
 .wpp-float{

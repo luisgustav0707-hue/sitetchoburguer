@@ -17,8 +17,8 @@
 .login-input{width:100%;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:8px;padding:11px 14px;font-size:.85rem;outline:none;font-family:'Barlow',sans-serif;box-sizing:border-box;margin-bottom:10px}
 .login-input:focus{border-color:var(--orange)}
 .login-input::placeholder{color:var(--muted)}
-.btn-email-link{width:100%;background:var(--card);color:var(--cream);border:1px solid #3a3530;border-radius:8px;padding:12px;font-family:'Barlow',sans-serif;font-weight:700;font-size:.88rem;cursor:pointer;transition:border-color .2s}
-.btn-email-link:hover{border-color:var(--orange)}
+.btn-email-link{width:100%;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;padding:13px;font-family:'Barlow',sans-serif;font-weight:700;font-size:.88rem;cursor:pointer;letter-spacing:.3px;transition:opacity .2s}
+.btn-email-link:hover{opacity:.9}
 .btn-email-link:disabled{opacity:.5;cursor:not-allowed}
 .login-msg{font-size:.75rem;color:#e74c3c;margin-top:6px;min-height:16px}
 .email-ok{padding:8px 0}

@@ -675,7 +675,11 @@ function loginGoogle(){
 // Captura resultado do redirect ao voltar do Google
 auth.getRedirectResult()
   .then(result=>{ if(result?.user) console.log('Login via redirect OK:', result.user.email); })
-  .catch(e=>{ if(e.code) console.error('Redirect erro:', e.code, e.message); });
+  .catch(e=>{
+    console.error('Redirect erro:', e.code, e.message);
+    const sub = document.getElementById('login-sub-msg');
+    if(sub) sub.textContent = 'Erro: ' + (e.code || e.message);
+  });
 
 function loginEmail(){
   const emailEl = document.getElementById('login-email');

@@ -9,5 +9,5 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-console.warn('🔥 Firebase projeto: ' + firebaseConfig.projectId);
+const db   = firebase.firestore();
+const auth = firebase.auth();

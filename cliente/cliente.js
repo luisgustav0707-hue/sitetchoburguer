@@ -628,3 +628,86 @@ verificarLoja();
 renderBurguers();
 renderExtras();
 renderCustomCategorias();
+
+// ── AUTENTICAÇÃO ───────────────────────────────────────────────
+const ACTION_CODE_SETTINGS = {
+  url: 'https://tchoburguer.com/cliente/',
+  handleCodeInApp: true,
+};
+
+// Completa login por email link se voltou do link
+if(auth.isSignInWithEmailLink(window.location.href)){
+  const emailSalvo = localStorage.getItem('tcho_email_login');
+  if(emailSalvo){
+    auth.signInWithEmailLink(emailSalvo, window.location.href)
+      .then(()=>{
+        localStorage.removeItem('tcho_email_login');
+        window.history.replaceState({},document.title,window.location.pathname);
+      })
+      .catch(e=>console.error('Erro ao confirmar email:', e));
+  }
+}
+
+// Observer — mostra/esconde tela de login conforme estado
+auth.onAuthStateChanged(user=>{
+  const overlay = document.getElementById('tela-login');
+  const btnLogout = document.getElementById('btn-logout');
+  if(user){
+    if(overlay) overlay.style.display='none';
+    if(btnLogout) btnLogout.style.display='block';
+    // Pré-preenche o nome se vier do Google e campo estiver vazio
+    const nomeEl = document.getElementById('f-nome');
+    if(nomeEl && !nomeEl.value && user.displayName){
+      nomeEl.value = user.displayName;
+    }
+  } else {
+    if(overlay) overlay.style.display='flex';
+    if(btnLogout) btnLogout.style.display='none';
+  }
+});
+
+function loginGoogle(){
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider)
+    .catch(e=>{
+      if(e.code !== 'auth/popup-closed-by-user'){
+        const msg = document.getElementById('login-msg');
+        if(msg) msg.textContent = '❌ Erro ao entrar com Google. Tente novamente.';
+      }
+    });
+}
+
+function loginEmail(){
+  const emailEl = document.getElementById('login-email');
+  const msgEl   = document.getElementById('login-msg');
+  const btnEl   = document.getElementById('login-btn-email');
+  const email   = emailEl?.value.trim();
+  if(!email || !email.includes('@')){
+    if(msgEl) msgEl.textContent = '⚠ Digite um email válido';
+    return;
+  }
+  if(btnEl){ btnEl.disabled=true; btnEl.textContent='Enviando...'; }
+  auth.sendSignInLinkToEmail(email, ACTION_CODE_SETTINGS)
+    .then(()=>{
+      localStorage.setItem('tcho_email_login', email);
+      document.getElementById('email-form').style.display='none';
+      document.getElementById('email-enviado').style.display='block';
+      const dest = document.getElementById('email-dest');
+      if(dest) dest.textContent = email;
+    })
+    .catch(e=>{
+      if(msgEl) msgEl.textContent = '❌ Erro ao enviar email. Tente novamente.';
+      if(btnEl){ btnEl.disabled=false; btnEl.textContent='Enviar link de acesso'; }
+    });
+}
+
+function voltarEmail(){
+  document.getElementById('email-enviado').style.display='none';
+  document.getElementById('email-form').style.display='block';
+  const btnEl = document.getElementById('login-btn-email');
+  if(btnEl){ btnEl.disabled=false; btnEl.textContent='Enviar link de acesso'; }
+}
+
+function logoutCliente(){
+  auth.signOut();
+}

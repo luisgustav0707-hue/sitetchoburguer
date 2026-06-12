@@ -10,6 +10,22 @@
 .btn-google{width:100%;display:flex;align-items:center;justify-content:center;gap:12px;background:#fff;color:#1a1a1a;border:none;border-radius:10px;padding:14px 20px;font-family:'Barlow',sans-serif;font-weight:700;font-size:.95rem;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.3);transition:transform .15s,box-shadow .15s;letter-spacing:.3px}
 .btn-google:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.4)}
 .btn-google:active{transform:translateY(0)}
+.login-divider{position:relative;text-align:center;margin:16px 0;color:var(--muted);font-size:.75rem}
+.login-divider::before,.login-divider::after{content:'';position:absolute;top:50%;width:42%;height:1px;background:#2a2520}
+.login-divider::before{left:0}.login-divider::after{right:0}
+.login-divider span{background:#1a1510;padding:0 10px;position:relative}
+.login-input{width:100%;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:8px;padding:11px 14px;font-size:.85rem;outline:none;font-family:'Barlow',sans-serif;box-sizing:border-box;margin-bottom:10px}
+.login-input:focus{border-color:var(--orange)}
+.login-input::placeholder{color:var(--muted)}
+.btn-email-link{width:100%;background:var(--card);color:var(--cream);border:1px solid #3a3530;border-radius:8px;padding:12px;font-family:'Barlow',sans-serif;font-weight:700;font-size:.88rem;cursor:pointer;transition:border-color .2s}
+.btn-email-link:hover{border-color:var(--orange)}
+.btn-email-link:disabled{opacity:.5;cursor:not-allowed}
+.login-msg{font-size:.75rem;color:#e74c3c;margin-top:6px;min-height:16px}
+.email-ok{padding:8px 0}
+.email-ok-titulo{font-weight:700;font-size:1rem;color:var(--cream);margin:10px 0 4px}
+.email-ok-dest{font-size:.82rem;color:var(--orange);font-weight:600;word-break:break-all}
+.email-ok-info{font-size:.74rem;color:var(--muted);margin-top:8px;line-height:1.5}
+.btn-voltar-email{margin-top:14px;background:transparent;border:1px solid #3a3530;color:var(--muted);padding:7px 14px;border-radius:6px;cursor:pointer;font-size:.75rem;font-family:'Barlow',sans-serif}
 
 /* BOTÃO WHATSAPP FLUTUANTE */
 .wpp-float{

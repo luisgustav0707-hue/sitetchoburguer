@@ -637,15 +637,27 @@ const ACTION_CODE_SETTINGS = {
 
 // Completa login por email link se voltou do link
 if(auth.isSignInWithEmailLink(window.location.href)){
-  const emailSalvo = localStorage.getItem('tcho_email_login');
+  console.log('Email link detectado, processando...');
+  let emailSalvo = localStorage.getItem('tcho_email_login');
+  if(!emailSalvo){
+    // Aberto em dispositivo diferente — pede o email novamente
+    emailSalvo = window.prompt('Para confirmar seu acesso, digite o email usado para solicitar o link:');
+  }
   if(emailSalvo){
     auth.signInWithEmailLink(emailSalvo, window.location.href)
       .then(()=>{
         localStorage.removeItem('tcho_email_login');
-        window.history.replaceState({},document.title,window.location.pathname);
+        window.history.replaceState({}, document.title, window.location.pathname);
+        console.log('Login por email confirmado!');
       })
-      .catch(e=>console.error('Erro ao confirmar email:', e));
+      .catch(e=>{
+        console.error('Erro ao confirmar email link:', e.code, e.message);
+        const msg = document.getElementById('login-msg');
+        if(msg) msg.textContent = '❌ Link inválido ou expirado. Solicite um novo link.';
+      });
   }
+} else if(window.location.search.includes('oobCode')){
+  console.warn('oobCode na URL mas isSignInWithEmailLink retornou false');
 }
 
 // Observer — mostra/esconde tela de login conforme estado

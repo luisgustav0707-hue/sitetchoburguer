@@ -668,18 +668,18 @@ auth.onAuthStateChanged(user=>{
 
 function loginGoogle(){
   const provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithRedirect(provider)
-    .catch(e=>console.error('Erro login Google:', e.code, e.message));
+  const subMsg = document.getElementById('login-sub-msg');
+  if(subMsg) subMsg.textContent = '';
+  auth.signInWithPopup(provider)
+    .catch(e=>{
+      console.error('Erro login Google:', e.code, e.message);
+      if(e.code === 'auth/popup-blocked'){
+        if(subMsg) subMsg.textContent = '⚠ Popup bloqueado — permita popups para este site e tente novamente.';
+      } else if(e.code !== 'auth/popup-closed-by-user'){
+        if(subMsg) subMsg.textContent = 'Erro: ' + (e.code || e.message);
+      }
+    });
 }
-
-// Captura resultado do redirect ao voltar do Google
-auth.getRedirectResult()
-  .then(result=>{ if(result?.user) console.log('Login via redirect OK:', result.user.email); })
-  .catch(e=>{
-    console.error('Redirect erro:', e.code, e.message);
-    const sub = document.getElementById('login-sub-msg');
-    if(sub) sub.textContent = 'Erro: ' + (e.code || e.message);
-  });
 
 function loginEmail(){
   const emailEl = document.getElementById('login-email');

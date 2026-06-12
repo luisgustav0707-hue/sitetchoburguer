@@ -668,14 +668,14 @@ auth.onAuthStateChanged(user=>{
 
 function loginGoogle(){
   const provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider)
-    .catch(e=>{
-      if(e.code !== 'auth/popup-closed-by-user'){
-        const msg = document.getElementById('login-msg');
-        if(msg) msg.textContent = '❌ Erro ao entrar com Google. Tente novamente.';
-      }
-    });
+  auth.signInWithRedirect(provider)
+    .catch(e=>console.error('Erro login Google:', e.code, e.message));
 }
+
+// Captura resultado do redirect ao voltar do Google
+auth.getRedirectResult()
+  .then(result=>{ if(result?.user) console.log('Login via redirect OK:', result.user.email); })
+  .catch(e=>{ if(e.code) console.error('Redirect erro:', e.code, e.message); });
 
 function loginEmail(){
   const emailEl = document.getElementById('login-email');

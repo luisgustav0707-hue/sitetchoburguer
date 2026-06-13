@@ -571,14 +571,14 @@ const PASSOS_RETIRADA  = ['novo','prep','pronto','finalizado'];
 const LABELS_DELIVERY = {
   novo:      { icon:'🔔', texto:'Pedido recebido!',          desc:'Aguardando confirmação da cozinha' },
   prep:      { icon:'👨‍🍳', texto:'Em preparo',               desc:'Sua comida está sendo preparada' },
-  pronto:    { icon:'✅', texto:'Pronto!',                    desc:'Aguardando saída para entrega' },
+  pronto:    { icon:'🍔', texto:'Pronto!',                    desc:'Aguardando saída para entrega' },
   entrega:   { icon:'🛵', texto:'Saiu para entrega!',         desc:'Seu pedido está a caminho' },
   finalizado:{ icon:'🎉', texto:'Entregue!',                  desc:'Bom apetite! 😋' },
 };
 const LABELS_RETIRADA = {
   novo:      { icon:'🔔', texto:'Pedido recebido!',           desc:'Aguardando confirmação da cozinha' },
   prep:      { icon:'👨‍🍳', texto:'Em preparo',                desc:'Sua comida está sendo preparada' },
-  pronto:    { icon:'✅', texto:'Pronto para retirar!',        desc:'Venha buscar seu pedido' },
+  pronto:    { icon:'🍔', texto:'Pronto para retirar!',        desc:'Venha buscar seu pedido' },
   finalizado:{ icon:'🎉', texto:'Retirado!',                  desc:'Bom apetite! 😋' },
 };
 

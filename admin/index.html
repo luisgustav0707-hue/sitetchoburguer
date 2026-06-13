@@ -74,11 +74,17 @@
         </div>
         <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
           <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:700">Notificação</div>
-          <button id="btn-som" onclick="toggleSom()" style="display:flex;align-items:center;gap:6px;background:#1a1510;border:1.5px solid #27ae60;color:#27ae60;border-radius:8px;padding:6px 12px;font-weight:700;font-size:.72rem;cursor:pointer;transition:all .2s">
-            <span id="som-icone">🔔</span><span id="som-txt">Ativado</span>
-          </button>
+          <div style="display:flex;gap:4px">
+            <button id="btn-som" onclick="toggleSom()" style="display:flex;align-items:center;gap:6px;background:#1a1510;border:1.5px solid #27ae60;color:#27ae60;border-radius:8px;padding:6px 10px;font-weight:700;font-size:.72rem;cursor:pointer;transition:all .2s">
+              <span id="som-icone">🔔</span><span id="som-txt">Ativado</span>
+            </button>
+            <button onclick="tocarNotificacao()" title="Testar som" style="background:#1a1510;border:1.5px solid #3a3530;color:var(--muted);border-radius:8px;padding:6px 9px;font-size:.82rem;cursor:pointer;transition:all .2s" onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='#3a3530'">🔊</button>
+          </div>
         </div>
-        <button onclick="simularPedido()" style="background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:7px;padding:8px 14px;font-weight:700;font-size:.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:1px">+ Simular</button>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+          <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:700">Teste</div>
+          <button onclick="simularPedido()" style="background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;padding:6px 12px;font-weight:700;font-size:.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:1px">+ Simular</button>
+        </div>
       </div>
     </div>
     <div class="kanban">

@@ -59,8 +59,46 @@ function atualizarBadgeLoja(){
 }
 
 // ── CONFIGS ────────────────────────────────────────────────────
+function lojaAbertaAgora(){
+  const agora=new Date(),dia=agora.getDay(),hora=agora.getHours();
+  return [0,4,5,6].includes(dia)&&hora>=19&&hora<23;
+}
+
+function proximoEvento(){
+  const dias=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const agora=new Date(),dia=agora.getDay(),hora=agora.getHours();
+  const diasAtivos=[4,5,6,0]; // Qui Sex Sab Dom
+  if(lojaAbertaAgora()) return `🟢 Aberta agora — fecha às 23h`;
+  // Próximo dia ativo
+  for(let i=1;i<=7;i++){
+    const proximo=(dia+i)%7;
+    if(diasAtivos.includes(proximo)){
+      const label=i===1?'amanhã':dias[proximo];
+      return `🔴 Fechada — abre ${label} às 19h`;
+    }
+  }
+  return '🔴 Fechada';
+}
+
+function atualizarStatusAutoHorario(){
+  const el=document.getElementById('auto-horario-status');
+  if(!el)return;
+  const auto=document.getElementById('cfg-auto-horario')?.checked;
+  if(auto){
+    el.style.color=lojaAbertaAgora()?'#27ae60':'#e74c3c';
+    el.textContent=proximoEvento()+' (automático)';
+  } else {
+    el.style.color='var(--muted)';
+    el.textContent='⚙️ Controle manual ativo — use o toggle "Loja aberta" abaixo';
+  }
+  // Dimma o toggle manual quando automático está ativo
+  const lojaRow=document.getElementById('cfg-loja-row');
+  if(lojaRow) lojaRow.style.opacity=auto?'0.4':'1';
+}
+
 function salvarConfig(){
   atualizarBadgeLoja();
+  atualizarStatusAutoHorario();
   const cfg={
     lojaAberta:document.getElementById('cfg-loja').checked,
     deliveryAtivo:document.getElementById('cfg-delivery').checked,
@@ -69,6 +107,7 @@ function salvarConfig(){
     autoImprimir:document.getElementById('cfg-print').checked,
     prazoMin:parseInt(document.getElementById('cfg-prazo-min').value)||30,
     prazoMax:parseInt(document.getElementById('cfg-prazo-max').value)||45,
+    autoHorario:document.getElementById('cfg-auto-horario')?.checked!==false,
   };
   db.collection('config').doc('operacao').set(cfg,{merge:true}).catch(console.error);
   showToast('✅ Configuração salva!','tok-ok');
@@ -1544,9 +1583,16 @@ function iniciarApp(){
     if(cfg.prazoMin) document.getElementById('cfg-prazo-min').value=cfg.prazoMin;
     if(cfg.prazoMax) document.getElementById('cfg-prazo-max').value=cfg.prazoMax;
     autoAceitar=!!cfg.autoAceitar;
+    if(document.getElementById('cfg-auto-horario'))
+      document.getElementById('cfg-auto-horario').checked=cfg.autoHorario!==false;
     atualizarBotaoAuto();
     atualizarBadgeLoja();
+    atualizarStatusAutoHorario();
   },()=>{});
+
+  // Atualiza status do horário automático a cada minuto
+  atualizarStatusAutoHorario();
+  setInterval(atualizarStatusAutoHorario, 60000);
 
   // ── Fallback local: polling + BroadcastChannel ───────────────
   // Lê imediatamente pedidos já salvos no localStorage

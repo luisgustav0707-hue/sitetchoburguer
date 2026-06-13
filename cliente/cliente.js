@@ -66,18 +66,43 @@ function atualizarPrazoBadge(){
   if(el) el.textContent = `${prazoEntrega.min}–${prazoEntrega.max} min`;
 }
 
+// Verifica se está dentro do horário de funcionamento
+function lojaAbertaAgora(){
+  const agora = new Date();
+  const dia   = agora.getDay(); // 0=Dom 4=Qui 5=Sex 6=Sab
+  const hora  = agora.getHours();
+  return [0,4,5,6].includes(dia) && hora >= 19 && hora < 23;
+}
+
+function aplicarEstadoLoja(data){
+  let aberta;
+  if(data.autoHorario !== false){
+    // Modo automático: segue o horário
+    aberta = lojaAbertaAgora();
+  } else {
+    // Modo manual: usa o toggle do admin
+    aberta = data.lojaAberta !== false;
+  }
+  document.getElementById('loja-fechada').classList.toggle('show', !aberta);
+}
+
 function verificarLoja(){
   db.collection('config').doc('operacao').onSnapshot(doc => {
     const data = doc.exists ? doc.data() : {};
-    const lojaAberta = data.lojaAberta !== false;
-    document.getElementById('loja-fechada').classList.toggle('show', !lojaAberta);
+    aplicarEstadoLoja(data);
     if(data.prazoMin) prazoEntrega.min = data.prazoMin;
     if(data.prazoMax) prazoEntrega.max = data.prazoMax;
     atualizarPrazoBadge();
   }, () => {
-    const lojaAberta = localStorage.getItem('tcho_loja_aberta') !== 'false';
-    if(!lojaAberta) document.getElementById('loja-fechada').classList.add('show');
+    aplicarEstadoLoja({autoHorario: true});
   });
+
+  // Re-verifica a cada minuto (para abrir/fechar no horário exato)
+  setInterval(()=>{
+    db.collection('config').doc('operacao').get()
+      .then(doc=>aplicarEstadoLoja(doc.exists ? doc.data() : {}))
+      .catch(()=>aplicarEstadoLoja({autoHorario: true}));
+  }, 60000);
 }
 
 // ── FOTOS (localStorage tem prioridade sobre o mapa estático) ──

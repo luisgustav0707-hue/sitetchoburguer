@@ -123,9 +123,20 @@
   <!-- ── CONFIG ── -->
   <div class="page" id="page-config">
     <div class="section">
-      <div class="sec-title">🛵 Operação</div>
+      <div class="sec-title">🕐 Horário automático</div>
       <div class="toggle-row">
-        <div class="toggle-info"><div class="toggle-label">Loja aberta</div><div class="toggle-desc">Quando desligado, site exibe mensagem de fechado</div></div>
+        <div class="toggle-info">
+          <div class="toggle-label">Abrir/fechar automaticamente</div>
+          <div class="toggle-desc">Qui–Dom • 19h às 23h — loja abre e fecha sozinha</div>
+        </div>
+        <label class="toggle-wrap"><input type="checkbox" id="cfg-auto-horario" checked onchange="salvarConfig()"><span class="slider"></span></label>
+      </div>
+      <div id="auto-horario-status" style="font-size:.75rem;padding:8px 10px;background:#1a1510;border-radius:8px;margin-top:6px"></div>
+    </div>
+    <div class="section">
+      <div class="sec-title">🛵 Operação manual</div>
+      <div id="cfg-loja-row" class="toggle-row">
+        <div class="toggle-info"><div class="toggle-label">Loja aberta</div><div class="toggle-desc">Usado somente quando o horário automático está desligado</div></div>
         <label class="toggle-wrap"><input type="checkbox" id="cfg-loja" checked onchange="salvarConfig()"><span class="slider"></span></label>
       </div>
       <div class="toggle-row">

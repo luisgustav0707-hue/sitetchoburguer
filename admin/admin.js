@@ -129,14 +129,14 @@ function tocarNotificacao(){
   if(!somAtivo) return;
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    [[880, 0, 0.15], [1046, 0.22, 0.2]].forEach(([freq, delay, dur]) => {
+    [[987, 0, 0.18], [1318, 0.22, 0.18], [987, 0.44, 0.18], [1318, 0.66, 0.28]].forEach(([freq, delay, dur]) => {
       const osc  = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.frequency.value = freq;
-      osc.type = 'sine';
-      gain.gain.setValueAtTime(0.35, ctx.currentTime + delay);
+      osc.type = 'square';
+      gain.gain.setValueAtTime(0.75, ctx.currentTime + delay);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + dur);
       osc.start(ctx.currentTime + delay);
       osc.stop(ctx.currentTime + delay + dur);

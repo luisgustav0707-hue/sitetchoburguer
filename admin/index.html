@@ -131,12 +131,19 @@
         </div>
         <label class="toggle-wrap"><input type="checkbox" id="cfg-auto-horario" checked onchange="salvarConfig()"><span class="slider"></span></label>
       </div>
-      <div id="auto-horario-status" style="font-size:.75rem;padding:8px 10px;background:#1a1510;border-radius:8px;margin-top:6px"></div>
+      <div class="toggle-row" style="margin-top:4px">
+        <div class="toggle-info">
+          <div class="toggle-label">⚡ Forçar abertura agora</div>
+          <div class="toggle-desc">Abre a loja imediatamente, ignorando o horário automático</div>
+        </div>
+        <label class="toggle-wrap"><input type="checkbox" id="cfg-forcar-aberta" onchange="salvarConfig()"><span class="slider"></span></label>
+      </div>
+      <div id="auto-horario-status" style="font-size:.75rem;padding:8px 10px;background:#1a1510;border-radius:8px;margin-top:8px"></div>
     </div>
     <div class="section">
-      <div class="sec-title">🛵 Operação manual</div>
+      <div class="sec-title">🛵 Operação</div>
       <div id="cfg-loja-row" class="toggle-row">
-        <div class="toggle-info"><div class="toggle-label">Loja aberta</div><div class="toggle-desc">Usado somente quando o horário automático está desligado</div></div>
+        <div class="toggle-info"><div class="toggle-label">Loja aberta</div><div class="toggle-desc">Usado quando horário automático está desligado</div></div>
         <label class="toggle-wrap"><input type="checkbox" id="cfg-loja" checked onchange="salvarConfig()"><span class="slider"></span></label>
       </div>
       <div class="toggle-row">

@@ -76,11 +76,11 @@ function lojaAbertaAgora(){
 
 function aplicarEstadoLoja(data){
   let aberta;
-  if(data.autoHorario !== false){
-    // Modo automático: segue o horário
+  if(data.forcarAberta){
+    aberta = true;
+  } else if(data.autoHorario !== false){
     aberta = lojaAbertaAgora();
   } else {
-    // Modo manual: usa o toggle do admin
     aberta = data.lojaAberta !== false;
   }
   document.getElementById('loja-fechada').classList.toggle('show', !aberta);

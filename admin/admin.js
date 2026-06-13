@@ -84,16 +84,19 @@ function atualizarStatusAutoHorario(){
   const el=document.getElementById('auto-horario-status');
   if(!el)return;
   const auto=document.getElementById('cfg-auto-horario')?.checked;
-  if(auto){
+  const forcar=document.getElementById('cfg-forcar-aberta')?.checked;
+  const lojaRow=document.getElementById('cfg-loja-row');
+  if(forcar){
+    el.style.color='#27ae60';
+    el.textContent='⚡ Loja aberta forçadamente — clique novamente para voltar ao automático';
+  } else if(auto){
     el.style.color=lojaAbertaAgora()?'#27ae60':'#e74c3c';
     el.textContent=proximoEvento()+' (automático)';
   } else {
     el.style.color='var(--muted)';
     el.textContent='⚙️ Controle manual ativo — use o toggle "Loja aberta" abaixo';
   }
-  // Dimma o toggle manual quando automático está ativo
-  const lojaRow=document.getElementById('cfg-loja-row');
-  if(lojaRow) lojaRow.style.opacity=auto?'0.4':'1';
+  if(lojaRow) lojaRow.style.opacity=(auto&&!forcar)?'0.4':'1';
 }
 
 function salvarConfig(){
@@ -108,6 +111,7 @@ function salvarConfig(){
     prazoMin:parseInt(document.getElementById('cfg-prazo-min').value)||30,
     prazoMax:parseInt(document.getElementById('cfg-prazo-max').value)||45,
     autoHorario:document.getElementById('cfg-auto-horario')?.checked!==false,
+    forcarAberta:document.getElementById('cfg-forcar-aberta')?.checked||false,
   };
   db.collection('config').doc('operacao').set(cfg,{merge:true}).catch(console.error);
   showToast('✅ Configuração salva!','tok-ok');
@@ -1585,6 +1589,8 @@ function iniciarApp(){
     autoAceitar=!!cfg.autoAceitar;
     if(document.getElementById('cfg-auto-horario'))
       document.getElementById('cfg-auto-horario').checked=cfg.autoHorario!==false;
+    if(document.getElementById('cfg-forcar-aberta'))
+      document.getElementById('cfg-forcar-aberta').checked=!!cfg.forcarAberta;
     atualizarBotaoAuto();
     atualizarBadgeLoja();
     atualizarStatusAutoHorario();

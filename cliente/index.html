@@ -99,6 +99,20 @@
         <button class="btn-cep" onclick="buscarCep()">Buscar</button>
       </div>
       <div class="cep-msg" id="cep-msg"></div>
+      <div style="margin-top:6px">
+        <button type="button" onclick="toggleBuscarCepRua()" style="background:none;border:none;color:var(--orange);font-size:.74rem;cursor:pointer;padding:0;text-decoration:underline;font-family:'Barlow',sans-serif">
+          🔍 Não sei meu CEP
+        </button>
+      </div>
+      <!-- BUSCA CEP POR RUA -->
+      <div id="busca-cep-rua" style="display:none;margin-top:10px;background:var(--card);border:1px solid #2a2520;border-radius:10px;padding:12px">
+        <div style="font-size:.75rem;color:var(--muted);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">Buscar CEP pelo nome da rua</div>
+        <div class="cep-row" style="margin-bottom:8px">
+          <input id="f-busca-rua" type="text" placeholder="Ex: Rua das Flores" style="flex:1;background:var(--bg);border:1px solid #3a3530;color:var(--cream);border-radius:6px;padding:9px 12px;font-size:.82rem;outline:none;font-family:'Barlow',sans-serif">
+          <button class="btn-cep" onclick="buscarCepPorRua()">Buscar</button>
+        </div>
+        <div id="busca-cep-resultado"></div>
+      </div>
     </div>
     <div class="aviso-bairro" id="aviso-bairro">
       <div class="aviso-titulo">😕 Não entregamos nessa região</div>

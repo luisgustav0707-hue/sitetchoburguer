@@ -428,6 +428,42 @@ async function buscarCep(){
 function renderListaBairros(){const s=[...BAIRROS_TAXA].sort((a,b)=>a.nome.localeCompare(b.nome));document.getElementById('bairros-grid').innerHTML=s.map(b=>`<div class="bairro-chip"><span>${b.nome}</span><span class="bairro-taxa">R$${b.taxa}</span></div>`).join('');}
 function toggleListaBairros(){const el=document.getElementById('bairros-lista');if(!el.classList.contains('show')){renderListaBairros();el.classList.add('show');}else el.classList.remove('show');}
 
+function toggleBuscarCepRua(){
+  const el=document.getElementById('busca-cep-rua');
+  el.style.display=el.style.display==='none'?'block':'none';
+  if(el.style.display==='block') document.getElementById('f-busca-rua').focus();
+}
+
+async function buscarCepPorRua(){
+  const rua=document.getElementById('f-busca-rua').value.trim();
+  const res=document.getElementById('busca-cep-resultado');
+  if(!rua){res.innerHTML='<div style="font-size:.74rem;color:#e74c3c">Digite o nome da rua</div>';return;}
+  res.innerHTML='<div style="font-size:.74rem;color:var(--muted)">🔍 Buscando...</div>';
+  try{
+    const r=await fetch(`https://viacep.com.br/ws/MG/Belo%20Horizonte/${encodeURIComponent(rua)}/json/`);
+    const d=await r.json();
+    if(!Array.isArray(d)||d.length===0){
+      res.innerHTML='<div style="font-size:.74rem;color:#e74c3c">Nenhum resultado encontrado. Tente um nome diferente.</div>';
+      return;
+    }
+    res.innerHTML=d.slice(0,6).map(e=>`
+      <div onclick="selecionarCepEncontrado('${e.cep}','${(e.logradouro||'').replace(/'/g,"\\'")}','${(e.bairro||'').replace(/'/g,"\\'")}')}"
+        style="padding:8px 10px;border-radius:7px;cursor:pointer;margin-bottom:4px;background:var(--bg);border:1px solid #3a3530;font-size:.78rem">
+        <div style="color:var(--cream);font-weight:600">${e.logradouro||'-'}</div>
+        <div style="color:var(--muted);font-size:.7rem">${e.bairro||''} • ${e.cep}</div>
+      </div>`).join('');
+  }catch(e){
+    res.innerHTML='<div style="font-size:.74rem;color:#e74c3c">Erro ao buscar. Tente novamente.</div>';
+  }
+}
+
+function selecionarCepEncontrado(cep,rua,bairro){
+  const cepFormatado=cep.replace('-','');
+  document.getElementById('f-cep').value=cep;
+  document.getElementById('busca-cep-rua').style.display='none';
+  buscarCep();
+}
+
 // ── NAVEGAÇÃO ENTRE TELAS ──────────────────────────────────────
 function goStep(n){
   if(n>1&&getCount()===0){alert('Adicione pelo menos um item!');return;}

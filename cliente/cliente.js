@@ -545,15 +545,83 @@ async function finalizarPedido(){
   }
   // Notifica admin instantaneamente via BroadcastChannel (quando em HTTP)
   try { new BroadcastChannel('tcho_pedidos').postMessage(pedidoLocal); } catch(e){}
-  // Também envia ao Firestore quando configurado
+  // Envia ao Firestore e inicia rastreamento
   db.collection('pedidos').add(pedido)
-    .then(() => console.log('Pedido salvo no Firestore!'))
-    .catch(e => console.error('Firestore erro:', e));
+    .then(docRef=>{
+      console.log('Pedido salvo no Firestore!');
+      iniciarRastreamento(docRef.id, tipoPedido);
+    })
+    .catch(e=>{
+      console.error('Firestore erro:', e);
+      iniciarRastreamento(null, tipoPedido);
+    });
 
   [1,2,3].forEach(i=>document.getElementById('sc'+i).classList.remove('active'));
   document.getElementById('sc4').classList.add('active');
   document.getElementById('cartFloat').classList.remove('visible');
   window.scrollTo(0,0);
+}
+
+// ── RASTREAMENTO DO PEDIDO ─────────────────────────────────────
+let unsubRastreamento = null;
+
+const PASSOS_DELIVERY  = ['novo','prep','pronto','entrega','finalizado'];
+const PASSOS_RETIRADA  = ['novo','prep','pronto','finalizado'];
+
+const LABELS_DELIVERY = {
+  novo:      { icon:'🔔', texto:'Pedido recebido!',          desc:'Aguardando confirmação da cozinha' },
+  prep:      { icon:'👨‍🍳', texto:'Em preparo',               desc:'Sua comida está sendo preparada' },
+  pronto:    { icon:'✅', texto:'Pronto!',                    desc:'Aguardando saída para entrega' },
+  entrega:   { icon:'🛵', texto:'Saiu para entrega!',         desc:'Seu pedido está a caminho' },
+  finalizado:{ icon:'🎉', texto:'Entregue!',                  desc:'Bom apetite! 😋' },
+};
+const LABELS_RETIRADA = {
+  novo:      { icon:'🔔', texto:'Pedido recebido!',           desc:'Aguardando confirmação da cozinha' },
+  prep:      { icon:'👨‍🍳', texto:'Em preparo',                desc:'Sua comida está sendo preparada' },
+  pronto:    { icon:'✅', texto:'Pronto para retirar!',        desc:'Venha buscar seu pedido' },
+  finalizado:{ icon:'🎉', texto:'Retirado!',                  desc:'Bom apetite! 😋' },
+};
+
+function iniciarRastreamento(docId, tipo){
+  if(unsubRastreamento){ unsubRastreamento(); unsubRastreamento=null; }
+  atualizarRastreamento('novo', tipo);
+  if(!docId) return;
+  unsubRastreamento = db.collection('pedidos').doc(docId)
+    .onSnapshot(doc=>{
+      if(!doc.exists) return;
+      atualizarRastreamento(doc.data().status, tipo);
+    }, e=>console.error('Rastreamento erro:', e));
+}
+
+function atualizarRastreamento(status, tipo){
+  const passos = tipo==='delivery' ? PASSOS_DELIVERY : PASSOS_RETIRADA;
+  const labels  = tipo==='delivery' ? LABELS_DELIVERY  : LABELS_RETIRADA;
+  const atual   = labels[status] || labels['novo'];
+  const idx     = passos.indexOf(status);
+
+  // Mensagem de status
+  const msgEl = document.getElementById('tracking-status-msg');
+  if(msgEl){
+    msgEl.innerHTML = `<span class="tracking-icon">${atual.icon}</span><span><strong>${atual.texto}</strong><br><span style="font-size:.72rem;opacity:.8">${atual.desc}</span></span>`;
+    msgEl.className = 'tracking-status-msg ' + (status==='finalizado'?'ts-done':status==='entrega'?'ts-entrega':'ts-active');
+  }
+
+  // Steps
+  const stepsEl = document.getElementById('tracking-steps');
+  if(!stepsEl) return;
+  stepsEl.innerHTML = passos.map((p,i)=>{
+    const concluido = i < idx;
+    const ativo     = i === idx;
+    const cls       = concluido?'ts-concluido':ativo?'ts-atual':'ts-pendente';
+    const lbl       = labels[p];
+    return `
+      <div class="t-step ${cls}">
+        <div class="t-dot">${concluido?'✓':lbl.icon}</div>
+        <div class="t-nome">${lbl.texto.replace('!','')}</div>
+      </div>
+      ${i<passos.length-1?'<div class="t-linha '+(concluido?'tl-concluida':'')+'"></div>':''}
+    `;
+  }).join('');
 }
 
 function montarItensTexto(){
@@ -578,6 +646,7 @@ function montarItensTexto(){
 }
 
 function novoPedido(){
+  if(unsubRastreamento){ unsubRastreamento(); unsubRastreamento=null; }
   cartBurguers={};cartExtras={};tipoPedido=null;pagamento=null;freteAtual=0;bairroAtendido=false;cupomAtual=null;descontoAtual=0;
   renderBurguers();renderExtras();goStep(1);
 }

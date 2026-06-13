@@ -145,14 +145,22 @@
   <button class="btn-secondary" onclick="goStep(2)">← VOLTAR</button>
 </div>
 
-<!-- TELA 4: SUCESSO -->
+<!-- TELA 4: SUCESSO + RASTREAMENTO -->
 <div class="screen" id="sc4">
   <div class="success-box">
     <div class="success-icon">🎉</div>
     <div class="success-title">PEDIDO RECEBIDO!</div>
     <div class="order-num" id="order-num">#001</div>
     <p class="success-sub" id="success-msg"></p>
-    <div style="margin-top:18px"><p style="color:var(--muted);font-size:.8rem">Dúvidas? Fala com a gente:</p>
+
+    <!-- RASTREAMENTO EM TEMPO REAL -->
+    <div class="tracking-box" id="tracking-box">
+      <div class="tracking-titulo">Acompanhe seu pedido</div>
+      <div class="tracking-status-msg" id="tracking-status-msg">Aguardando confirmação...</div>
+      <div class="tracking-steps" id="tracking-steps"></div>
+    </div>
+
+    <div style="margin-top:20px"><p style="color:var(--muted);font-size:.8rem">Dúvidas? Fala com a gente:</p>
       <a href="https://wa.me/5531983094152" style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;background:#25d366;color:#000;font-weight:700;font-size:.85rem;padding:9px 18px;border-radius:30px;text-decoration:none;letter-spacing:1px">💬 WhatsApp</a>
     </div>
     <button class="btn-primary" style="margin-top:18px;max-width:300px" onclick="novoPedido()">FAZER NOVO PEDIDO</button>

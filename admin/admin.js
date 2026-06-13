@@ -213,7 +213,7 @@ async function simularPedido(){
 }
 
 // ── IMPRESSÃO ──────────────────────────────────────────────────
-const CSS_CUPOM = `*{margin:0;padding:0}body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:280px}.c{text-align:center}.b{font-weight:bold}.line{border-top:1px dashed #000;margin:6px 0}.row{display:flex;justify-content:space-between;margin:2px 0}.big{font-size:15px;font-weight:bold}.obs-box{border:2px solid #000;padding:4px 6px;margin:4px 0;font-weight:800;font-size:13px;text-align:center}@media print{@page{margin:3mm;size:80mm auto}}`;
+const CSS_CUPOM = `*{margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;font-size:14px;padding:10px;max-width:280px}.c{text-align:center}.b{font-weight:bold}.line{border-top:1px dashed #000;margin:7px 0}.row{display:flex;justify-content:space-between;margin:3px 0}.big{font-size:18px;font-weight:bold}.obs-box{border:2px solid #000;padding:5px 6px;margin:5px 0;font-weight:800;font-size:15px;text-align:center}@media print{@page{margin:3mm;size:80mm auto}}`;
 
 function abrirJanelaImpressao(html, largura=420){
   const win = window.open('','_blank',`width=${largura},height=560`);
@@ -227,8 +227,8 @@ function cupomCozinha(p){
     ? `<div class="line"></div><div class="obs-box">⚠ OBS: ${p.obs.toUpperCase()} ⚠</div>`
     : '';
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${CSS_CUPOM}</style></head><body>
-    <div class="c b" style="font-size:14px">— COZINHA —</div>
-    <div class="c" style="font-size:10px">TCHO BURGUER</div>
+    <div class="c b" style="font-size:16px">— COZINHA —</div>
+    <div class="c" style="font-size:13px">TCHO BURGUER</div>
     <div class="line"></div>
     <div class="row"><span class="big">${p.num||'#'+p.id}</span><span>${p.horaStr}</span></div>
     <div class="row"><span class="b">${p.tipo==='delivery'?'🛵 DELIVERY':'🏃 RETIRADA'}</span><span>${p.nome}</span></div>
@@ -248,11 +248,11 @@ function cupomEntrega(p){
     <div class="line"></div>
     ${p.endereco ? `<div style="margin:2px 0">End: ${p.endereco}</div>` : ''}
     ${p.bairro   ? `<div class="row"><span>Bairro:</span><span>${p.bairro}</span></div>` : ''}
-    ${p.cidade   ? `<div style="margin:2px 0;font-size:10px">${p.cidade}</div>` : ''}
+    ${p.cidade   ? `<div style="margin:2px 0;font-size:12px">${p.cidade}</div>` : ''}
     <div class="row"><span>Frete:</span><span>R$${p.frete||0}</span></div>` : '';
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${CSS_CUPOM}</style></head><body>
     <div class="c"><img src="${logoUrl}" style="max-width:160px;max-height:70px;margin-bottom:4px"></div>
-    <div class="c" style="font-size:10px">Qui–Dom 19h–23h | (31) 98309-4152</div>
+    <div class="c" style="font-size:12px">Qui–Dom 19h–23h | (31) 98309-4152</div>
     <div class="line"></div>
     <div class="row"><span class="big">${p.num||'#'+p.id}</span><span>${p.horaStr}</span></div>
     <div class="row b"><span>${p.tipo==='delivery'?'🛵 DELIVERY':'🏃 RETIRADA'}</span></div>

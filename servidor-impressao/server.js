@@ -10,14 +10,20 @@ const path = require('path');
 const { exec } = require('child_process');
 const os   = require('os');
 
-// ── Localiza o Chrome instalado no Windows ────────────────────
+// ── Localiza Chrome ou Edge instalado no Windows ─────────────
 function getChromePath() {
   const candidatos = [
-    process.env['PROGRAMFILES']       + '\\Google\\Chrome\\Application\\chrome.exe',
-    process.env['PROGRAMFILES(X86)']  + '\\Google\\Chrome\\Application\\chrome.exe',
-    (process.env['LOCALAPPDATA'] || '') + '\\Google\\Chrome\\Application\\chrome.exe',
+    // Google Chrome
+    process.env['PROGRAMFILES']        + '\\Google\\Chrome\\Application\\chrome.exe',
+    process.env['PROGRAMFILES(X86)']   + '\\Google\\Chrome\\Application\\chrome.exe',
+    (process.env['LOCALAPPDATA']||'')  + '\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    // Microsoft Edge (já vem no Windows 10/11)
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    (process.env['PROGRAMFILES(X86)']||'') + '\\Microsoft\\Edge\\Application\\msedge.exe',
+    (process.env['PROGRAMFILES']||'')      + '\\Microsoft\\Edge\\Application\\msedge.exe',
   ];
   for (const p of candidatos) {
     try { if (p && fs.existsSync(p)) return p; } catch(e) {}

@@ -1,5 +1,5 @@
 ﻿// ── LOGIN ──────────────────────────────────────────────────────
-const CREDENCIAIS = { usuario:'admin', senha:'tcho2025' };
+const CREDENCIAIS = { usuario:'tcho', senha:'Lgferreir@07' };
 
 function fazerLogin(){
   const u=document.getElementById('login-user').value.trim();

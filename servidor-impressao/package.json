@@ -1,0 +1,9 @@
+{
+  "name": "tcho-burguer-impressao",
+  "version": "1.0.0",
+  "description": "Servidor de impressão automática do Tcho Burguer",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

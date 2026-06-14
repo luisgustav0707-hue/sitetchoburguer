@@ -1633,6 +1633,7 @@ function iniciarApp(){
             tocarNotificacao();
             showToast(`🔔 Novo pedido ${p.num||'#'+p.id} — ${p.nome}`,'tok-info');
             atualizarBadgeNovos();
+            if(!primeiroSnapshot) imprimirPedido(p);
             if(autoAceitar)setTimeout(()=>moverStatus(p._id,'prep',true),600);
           }
         } else if(change.type==='modified'){

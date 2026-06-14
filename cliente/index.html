@@ -50,6 +50,17 @@
 
 <!-- TELA 1: CARDÁPIO -->
 <div class="screen active" id="sc1">
+  <!-- BANNER REPETIR ÚLTIMO PEDIDO -->
+  <div class="banner-repetir" id="banner-repetir" style="display:none">
+    <div class="br-info">
+      <div class="br-titulo">🔄 Repetir último pedido?</div>
+      <div class="br-itens" id="br-itens"></div>
+    </div>
+    <div class="br-actions">
+      <button class="br-btn" onclick="repetirPedido()">Repetir →</button>
+      <button class="br-fechar" onclick="fecharBannerRepetir()">✕</button>
+    </div>
+  </div>
   <div class="section-title" id="cat-title-burguers">Hamburguers</div>
   <div id="menu-burguers"></div>
   <div class="section-title" id="cat-title-extras">Porção & Bebidas</div>
@@ -65,6 +76,10 @@
 
 <!-- TELA 2: CHECKOUT -->
 <div class="screen" id="sc2">
+  <div class="banner-dados" id="banner-dados-salvos" style="display:none">
+    <span>✅ Dados preenchidos automaticamente</span>
+    <button onclick="limparDadosSalvos()">Limpar dados</button>
+  </div>
   <div class="sec-mini">👤 Seus dados</div>
   <div class="form-row">
     <div class="form-group"><label>Nome <span class="label-req">*</span></label><input id="f-nome" type="text" placeholder="Seu nome completo"></div>
@@ -180,6 +195,7 @@
       <a href="https://wa.me/5531983094152" style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;background:#25d366;color:#000;font-weight:700;font-size:.85rem;padding:9px 18px;border-radius:30px;text-decoration:none;letter-spacing:1px">💬 WhatsApp</a>
     </div>
     <button class="btn-primary" style="margin-top:18px;max-width:300px" onclick="novoPedido()">FAZER NOVO PEDIDO</button>
+    <button class="btn-repetir-sc4" id="btn-repetir-sc4" style="display:none" onclick="repetirPedido()">🔄 REPETIR ESTE PEDIDO</button>
   </div>
 </div>
 

@@ -471,6 +471,7 @@ function goStep(n){
   ['s1','s2','s3'].forEach((id,i)=>{document.getElementById(id).classList.toggle('active',i+1===n);document.getElementById(id).classList.toggle('done',i+1<n);});
   document.getElementById('cartFloat').classList.toggle('visible',n===1&&getCount()>0);
   window.scrollTo(0,0);
+  if(n===2 && !document.getElementById('f-nome').value) preencherDadosSalvos();
 }
 
 function irResumo(){
@@ -592,9 +593,13 @@ async function finalizarPedido(){
       iniciarRastreamento(null, tipoPedido);
     });
 
+  salvarDadosCliente();
+  salvarUltimoPedido();
   [1,2,3].forEach(i=>document.getElementById('sc'+i).classList.remove('active'));
   document.getElementById('sc4').classList.add('active');
   document.getElementById('cartFloat').classList.remove('visible');
+  const btnRep=document.getElementById('btn-repetir-sc4');
+  if(btnRep) btnRep.style.display='block';
   window.scrollTo(0,0);
 }
 
@@ -687,7 +692,10 @@ function montarItensTexto(){
 function novoPedido(){
   if(unsubRastreamento){ unsubRastreamento(); unsubRastreamento=null; }
   cartBurguers={};cartExtras={};tipoPedido=null;pagamento=null;freteAtual=0;bairroAtendido=false;cupomAtual=null;descontoAtual=0;
+  const btnRep=document.getElementById('btn-repetir-sc4');
+  if(btnRep) btnRep.style.display='none';
   renderBurguers();renderExtras();goStep(1);
+  mostrarBannerRepetir();
 }
 
 
@@ -749,6 +757,114 @@ function renderCustomCategorias(){
   });
 }
 
+// ── DADOS SALVOS DO CLIENTE ───────────────────────────────────
+function salvarDadosCliente(){
+  localStorage.setItem('tcho_cliente',JSON.stringify({
+    nome: document.getElementById('f-nome').value,
+    tel:  document.getElementById('f-tel').value,
+    tipo: tipoPedido,
+    pag:  pagamento,
+    cep:  document.getElementById('f-cep')?.value||'',
+    rua:  document.getElementById('f-rua')?.value||'',
+    num:  document.getElementById('f-num')?.value||'',
+    comp: document.getElementById('f-comp')?.value||'',
+    bairro: document.getElementById('f-bairro')?.value||'',
+    cidade: document.getElementById('f-cidade')?.value||'',
+    frete: freteAtual,
+  }));
+}
+
+function preencherDadosSalvos(){
+  const s=JSON.parse(localStorage.getItem('tcho_cliente')||'null');
+  if(!s||!s.nome) return;
+  document.getElementById('f-nome').value=s.nome;
+  document.getElementById('f-tel').value=s.tel||'';
+  if(s.pag) selectPag(s.pag);
+  if(s.tipo) selectTipo(s.tipo);
+  if(s.tipo==='delivery'&&s.bairro){
+    document.getElementById('f-cep').value=s.cep||'';
+    document.getElementById('f-rua').value=s.rua||'';
+    document.getElementById('f-num').value=s.num||'';
+    document.getElementById('f-comp').value=s.comp||'';
+    document.getElementById('f-bairro').value=s.bairro||'';
+    document.getElementById('f-cidade').value=s.cidade||'';
+    document.getElementById('campos-endereco').style.display='block';
+    document.getElementById('bairro-nome-ok').textContent=s.bairro;
+    document.getElementById('frete-val').textContent=`R$${s.frete||0}`;
+    document.getElementById('cep-msg').className='cep-msg ok';
+    document.getElementById('cep-msg').textContent=`✅ Entregamos em ${s.bairro}!`;
+    document.getElementById('f-cep').className='ok';
+    freteAtual=s.frete||0; bairroAtendido=true;
+  }
+  document.getElementById('banner-dados-salvos').style.display='flex';
+}
+
+function limparDadosSalvos(){
+  localStorage.removeItem('tcho_cliente');
+  document.getElementById('banner-dados-salvos').style.display='none';
+  document.getElementById('f-nome').value='';
+  document.getElementById('f-tel').value='';
+  tipoPedido=null; pagamento=null; freteAtual=0; bairroAtendido=false;
+  ['t-ret','t-del'].forEach(id=>document.getElementById(id).classList.remove('selected'));
+  document.getElementById('form-delivery').style.display='none';
+  ['p-pix','p-din','p-car'].forEach(id=>document.getElementById(id).classList.remove('selected'));
+  document.getElementById('pix-info').classList.remove('visible');
+  document.getElementById('troco-box').style.display='none';
+  document.getElementById('campos-endereco').style.display='none';
+  document.getElementById('cep-msg').textContent='';
+  document.getElementById('cep-msg').className='cep-msg';
+}
+
+// ── REPETIR PEDIDO ─────────────────────────────────────────────
+function salvarUltimoPedido(){
+  localStorage.setItem('tcho_ultimo_pedido',JSON.stringify({
+    burguers: cartBurguers,
+    extras:   cartExtras,
+  }));
+}
+
+function mostrarBannerRepetir(){
+  const saved=JSON.parse(localStorage.getItem('tcho_ultimo_pedido')||'null');
+  const banner=document.getElementById('banner-repetir');
+  if(!saved||!banner) return;
+  const nomes=[];
+  Object.entries(saved.burguers||{}).forEach(([id,insts])=>{
+    const b=BURGUERS.find(x=>x.id===id);
+    if(b) insts.forEach(()=>nomes.push(b.nome));
+  });
+  [...EXTRAS,...COMBO].forEach(e=>{
+    const q=saved.extras?.[e.id];
+    if(!q) return;
+    const n=Array.isArray(q)?q.length:q;
+    if(n>0) nomes.push(n>1?`${e.nome} x${n}`:e.nome);
+  });
+  if(!nomes.length) return;
+  document.getElementById('br-itens').textContent=nomes.join(' · ');
+  banner.style.display='flex';
+}
+
+function fecharBannerRepetir(){
+  document.getElementById('banner-repetir').style.display='none';
+}
+
+function repetirPedido(){
+  const saved=JSON.parse(localStorage.getItem('tcho_ultimo_pedido')||'null');
+  if(!saved) return;
+  cartBurguers={};cartExtras={};
+  Object.entries(saved.burguers||{}).forEach(([id,insts])=>{
+    if(BURGUERS.find(x=>x.id===id)) cartBurguers[id]=insts;
+  });
+  Object.entries(saved.extras||{}).forEach(([id,val])=>{
+    if([...EXTRAS,...COMBO].find(x=>x.id===id)) cartExtras[id]=val;
+  });
+  if(getCount()===0) return;
+  fecharBannerRepetir();
+  const btnRep=document.getElementById('btn-repetir-sc4');
+  if(btnRep) btnRep.style.display='none';
+  renderBurguers();renderExtras();renderCustomCategorias();updateFloat();
+  goStep(2);
+}
+
 // ── INICIALIZAÇÃO ──────────────────────────────────────────────
 (function aplicarNomesCategorias(){
   const saved=JSON.parse(localStorage.getItem('tcho_cat_nomes')||'{}');
@@ -760,6 +876,7 @@ function renderCustomCategorias(){
 verificarLoja();
 // Render imediato com localStorage, depois sincroniza do Firestore
 renderBurguers();renderExtras();renderCustomCategorias();
+mostrarBannerRepetir();
 db.collection('cardapio').get().then(snapshot=>{
   if(snapshot.empty) return;
   let mudou=false;

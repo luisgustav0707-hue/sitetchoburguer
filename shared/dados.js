@@ -13,7 +13,7 @@ const TCHO = {
     whatsapp:      '5531983094152',
     instagram:     '@TchoBurguer',
     horario:       'Qui–Dom • 19h às 23h',
-    pixKey:        '(31) 98309-4152',
+    pixKey:        '63.633.508/0001-47',
     corPrimaria:   '#f5820a',
     corSecundaria: '#ff6b00',
     gold:          '#e8a825',

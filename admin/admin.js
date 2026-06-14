@@ -310,7 +310,7 @@ function moverStatus(id,novoStatus,auto=false){
       localStorage.setItem('tcho_pedidos',JSON.stringify(ls));
     }
   }catch(e){}
-  if(novoStatus==='prep' && statusAnterior==='novo') setTimeout(()=>imprimirPedido(p),200);
+  if(novoStatus==='prep' && statusAnterior==='novo' && !auto) setTimeout(()=>imprimirPedido(p),200);
   if(novoStatus==='finalizado') setTimeout(()=>mostrarCardFinalizado({...p}),200);
   atualizarBadgeNovos();
   renderAll();
@@ -1641,7 +1641,8 @@ function iniciarApp(){
     .where('status','in',['novo','prep','pronto','entrega'])
     .onSnapshot(snapshot=>{
       clearInterval(pollingLocal); // Firebase funcionando → para o polling local
-      if(primeiroSnapshot){
+      const ehPrimeiro = primeiroSnapshot;
+      if(ehPrimeiro){
         // Na primeira resposta do Firestore, descarta pedidos do localStorage
         // para evitar que pedidos já deletados voltem a aparecer
         pedidos = [];
@@ -1654,11 +1655,15 @@ function iniciarApp(){
         if(change.type==='added'){
           if(!pedidos.find(x=>x._id===p._id)){
             pedidos.push(p);totalHoje++;
-            tocarNotificacao();
-            showToast(`🔔 Novo pedido ${p.num||'#'+p.id} — ${p.nome}`,'tok-info');
-            atualizarBadgeNovos();
-            if(!primeiroSnapshot) imprimirPedido(p);
-            if(autoAceitar)setTimeout(()=>moverStatus(p._id,'prep',true),600);
+            if(!ehPrimeiro){
+              tocarNotificacao();
+              showToast(`🔔 Novo pedido ${p.num||'#'+p.id} — ${p.nome}`,'tok-info');
+              atualizarBadgeNovos();
+              imprimirPedido(p);
+              if(autoAceitar)setTimeout(()=>moverStatus(p._id,'prep',true),600);
+            } else {
+              atualizarBadgeNovos();
+            }
           }
         } else if(change.type==='modified'){
           const idx=pedidos.findIndex(x=>x._id===p._id);

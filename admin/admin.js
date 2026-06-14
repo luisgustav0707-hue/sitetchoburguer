@@ -266,7 +266,7 @@ function cupomEntrega(p){
     ${p.itens.map(i=>`<div style="margin:2px 0">• ${i}</div>`).join('')}
     ${obsBloco}
     <div class="line"></div>
-    <div class="row big"><span>TOTAL:</span><span>R$${p.total+(p.frete||0)}</span></div>
+    <div class="row big"><span>TOTAL:</span><span>R$${p.total}</span></div>
     <div class="c b" style="margin-top:8px">Obrigado! 😋</div>
     <script>window.onload=function(){window.print();setTimeout(()=>window.close(),1500)};<\/script>
   </body></html>`;
@@ -392,7 +392,7 @@ function renderCard(p){
     <div class="card-cli">${p.nome}${p.bairro?` · ${p.bairro}`:''}</div>
     <div class="card-itens">${p.itens.join(' · ')}</div>
     ${p.obs?`<div class="card-obs">⚠ ${p.obs}</div>`:''}
-    <div class="card-ftr"><div class="card-total">R$${p.total+(p.frete||0)}</div><div class="timer ${cls}">⏱ ${tt(m)}</div></div>
+    <div class="card-ftr"><div class="card-total">R$${p.total}</div><div class="timer ${cls}">⏱ ${tt(m)}</div></div>
     <div class="card-btns">${btns}</div>
     ${dragHint}
   </div>`;

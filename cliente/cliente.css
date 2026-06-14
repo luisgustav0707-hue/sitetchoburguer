@@ -35,6 +35,7 @@
 .ts-active{border-left:3px solid var(--orange)}
 .ts-entrega{border-left:3px solid #3498db}
 .ts-done{border-left:3px solid #27ae60}
+.ts-cancelado{border-left:3px solid #e74c3c;opacity:.85}
 .tracking-steps{display:flex;align-items:center;justify-content:center;gap:0;flex-wrap:nowrap;overflow-x:auto;padding:4px 0}
 .t-step{display:flex;flex-direction:column;align-items:center;gap:5px;flex-shrink:0}
 .t-dot{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.9rem;font-weight:700;transition:all .3s;flex-shrink:0}

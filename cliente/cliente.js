@@ -610,12 +610,14 @@ const LABELS_DELIVERY = {
   pronto:    { icon:'🍔', texto:'Pronto!',                    desc:'Aguardando saída para entrega' },
   entrega:   { icon:'🛵', texto:'Saiu para entrega!',         desc:'Seu pedido está a caminho' },
   finalizado:{ icon:'🎉', texto:'Entregue!',                  desc:'Bom apetite! 😋' },
+  cancelado: { icon:'❌', texto:'Pedido cancelado',           desc:'Entre em contato pelo WhatsApp.' },
 };
 const LABELS_RETIRADA = {
   novo:      { icon:'🔔', texto:'Pedido recebido!',           desc:'Aguardando confirmação da cozinha' },
   prep:      { icon:'👨‍🍳', texto:'Em preparo',                desc:'Sua comida está sendo preparada' },
   pronto:    { icon:'🍔', texto:'Pronto para retirar!',        desc:'Venha buscar seu pedido' },
   finalizado:{ icon:'🎉', texto:'Retirado!',                  desc:'Bom apetite! 😋' },
+  cancelado: { icon:'❌', texto:'Pedido cancelado',           desc:'Entre em contato pelo WhatsApp.' },
 };
 
 function iniciarRastreamento(docId, tipo){
@@ -624,7 +626,7 @@ function iniciarRastreamento(docId, tipo){
   if(!docId) return;
   unsubRastreamento = db.collection('pedidos').doc(docId)
     .onSnapshot(doc=>{
-      if(!doc.exists) return;
+      if(!doc.exists){ atualizarRastreamento('cancelado', tipo); return; }
       atualizarRastreamento(doc.data().status, tipo);
     }, e=>console.error('Rastreamento erro:', e));
 }
@@ -639,12 +641,13 @@ function atualizarRastreamento(status, tipo){
   const msgEl = document.getElementById('tracking-status-msg');
   if(msgEl){
     msgEl.innerHTML = `<span class="tracking-icon">${atual.icon}</span><span><strong>${atual.texto}</strong><br><span style="font-size:.72rem;opacity:.8">${atual.desc}</span></span>`;
-    msgEl.className = 'tracking-status-msg ' + (status==='finalizado'?'ts-done':status==='entrega'?'ts-entrega':'ts-active');
+    msgEl.className = 'tracking-status-msg ' + (status==='finalizado'?'ts-done':status==='entrega'?'ts-entrega':status==='cancelado'?'ts-cancelado':'ts-active');
   }
 
   // Steps
   const stepsEl = document.getElementById('tracking-steps');
   if(!stepsEl) return;
+  if(status === 'cancelado'){ stepsEl.innerHTML = ''; return; }
   stepsEl.innerHTML = passos.map((p,i)=>{
     const concluido = i < idx;
     const ativo     = i === idx;
@@ -755,7 +758,48 @@ function renderCustomCategorias(){
   });
 })();
 verificarLoja();
-renderBurguers();
-renderExtras();
-renderCustomCategorias();
+// Render imediato com localStorage, depois sincroniza do Firestore
+renderBurguers();renderExtras();renderCustomCategorias();
+db.collection('cardapio').get().then(snapshot=>{
+  if(snapshot.empty) return;
+  let mudou=false;
+  const chk=(k,v)=>{if(v && v!==localStorage.getItem(k)){localStorage.setItem(k,v);mudou=true;}};
+  snapshot.forEach(doc=>{
+    const d=doc.data();
+    if(doc.id==='prods_edits'  && d.data ) chk('tcho_prods_edits', JSON.stringify(d.data));
+    if(doc.id==='prods_custom' && d.lista) chk('tcho_prods_custom',JSON.stringify(d.lista));
+    if(doc.id==='cats_custom'  && d.lista) chk('tcho_cats_custom', JSON.stringify(d.lista));
+    if(doc.id==='cat_nomes'    && d.data ) chk('tcho_cat_nomes',   JSON.stringify(d.data));
+    if(doc.id==='opcoes'       && d.data ) chk('tcho_opcoes',      JSON.stringify(d.data));
+    if(doc.id==='ing_edits'    && d.data ) chk('tcho_ing_edits',   JSON.stringify(d.data));
+    if(doc.id==='adicionais'   && d.lista) chk('tcho_adicionais',  JSON.stringify(d.lista));
+  });
+  if(!mudou) return;
+  // Re-aplica edições nos objetos TCHO em memória
+  const edits=JSON.parse(localStorage.getItem('tcho_prods_edits')||'{}');
+  [...TCHO.burguers,...TCHO.extras].forEach(item=>{
+    if(edits[item.id]){
+      if(edits[item.id].nome) item.nome=edits[item.id].nome;
+      if(edits[item.id].preco!==undefined) item.preco=edits[item.id].preco;
+      if(edits[item.id].desc!==undefined) item.desc=edits[item.id].desc;
+    }
+  });
+  const ings=JSON.parse(localStorage.getItem('tcho_ing_edits')||'{}');
+  TCHO.burguers.forEach(b=>{if(ings[b.id])b.ing=ings[b.id];});
+  const adicSaved=localStorage.getItem('tcho_adicionais');
+  if(adicSaved){const adics=JSON.parse(adicSaved);TCHO.adicionais.length=0;adics.forEach(a=>TCHO.adicionais.push(a));}
+  // Atualiza produtos custom nos arrays (limpa e re-adiciona)
+  [BURGUERS,EXTRAS,COMBO].forEach(arr=>{for(let i=arr.length-1;i>=0;i--){if(arr[i].id.startsWith('cp_'))arr.splice(i,1);}});
+  JSON.parse(localStorage.getItem('tcho_prods_custom')||'[]').filter(p=>p.ativo!==false).forEach(p=>{
+    const prod={id:p.id,emoji:p.emoji,nome:p.n||p.nome,preco:p.p!==undefined?p.p:p.preco,desc:p.desc||'',opcoes:p.opcoes||[],ativo:true,customCat:p.cat.startsWith('cat_')?p.cat:null};
+    if(p.tipo==='b'||p.cat==='b'||p.cat==='burguers')BURGUERS.push(prod);
+    else if(p.tipo==='c'||p.cat==='c'||p.cat==='combo')COMBO.push(prod);
+    else EXTRAS.push(prod);
+  });
+  // Atualiza nomes de categorias
+  const catNomes=JSON.parse(localStorage.getItem('tcho_cat_nomes')||'{}');
+  const map={burguers:'cat-title-burguers',extras:'cat-title-extras',combo:'cat-title-combo'};
+  Object.entries(map).forEach(([id,elId])=>{if(catNomes[id]){const el=document.getElementById(elId);if(el)el.textContent=catNomes[id];}});
+  renderBurguers();renderExtras();renderCustomCategorias();updateFloat();
+}).catch(()=>{});
 

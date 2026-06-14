@@ -294,6 +294,7 @@ function moverStatus(id,novoStatus,auto=false){
   const horaStr=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   const update={status:novoStatus,horaStr,hora:firebase.firestore.FieldValue.serverTimestamp()};
   if(novoStatus==='finalizado') update.horaFim=horaStr;
+  const statusAnterior=p.status;
   p.status=novoStatus;p.hora=new Date();p.horaStr=horaStr;
   if(novoStatus==='finalizado') p.horaFim=horaStr;
   db.collection('pedidos').doc(id).update(update).catch(console.error);
@@ -309,7 +310,7 @@ function moverStatus(id,novoStatus,auto=false){
       localStorage.setItem('tcho_pedidos',JSON.stringify(ls));
     }
   }catch(e){}
-  if(novoStatus==='prep') setTimeout(()=>imprimirPedido(p),200);
+  if(novoStatus==='prep' && statusAnterior==='novo') setTimeout(()=>imprimirPedido(p),200);
   if(novoStatus==='finalizado') setTimeout(()=>mostrarCardFinalizado({...p}),200);
   atualizarBadgeNovos();
   renderAll();
@@ -356,7 +357,7 @@ function fecharCardFinalizado(){
 function cancelar(id){
   const p=pedidos.find(x=>x._id===id);
   if(!p||!confirm(`Cancelar pedido ${p.num||('#'+p.id)}?`))return;
-  db.collection('pedidos').doc(id).delete().catch(console.error);
+  db.collection('pedidos').doc(id).update({status:'cancelado'}).catch(console.error);
   pedidos=pedidos.filter(x=>x._id!==id);
   totalHoje=Math.max(0,totalHoje-1);
   renderAll();renderHistorico();
@@ -502,10 +503,11 @@ const PRODS = [
 const est={};PRODS.forEach(p=>{est[p.id]={ativo:true,modo:'inf',qtd:10};});
 
 // ── HELPERS CUSTOM ─────────────────────────────────────────────
+function salvarCardapioFS(chave,dados){db.collection('cardapio').doc(chave).set(dados).catch(console.error);}
 function getProdsCustom(){return JSON.parse(localStorage.getItem('tcho_prods_custom')||'[]');}
-function saveProdsCustom(arr){localStorage.setItem('tcho_prods_custom',JSON.stringify(arr));}
+function saveProdsCustom(arr){localStorage.setItem('tcho_prods_custom',JSON.stringify(arr));salvarCardapioFS('prods_custom',{lista:arr});}
 function getCatsCustom(){return JSON.parse(localStorage.getItem('tcho_cats_custom')||'[]');}
-function saveCatsCustom(arr){localStorage.setItem('tcho_cats_custom',JSON.stringify(arr));}
+function saveCatsCustom(arr){localStorage.setItem('tcho_cats_custom',JSON.stringify(arr));salvarCardapioFS('cats_custom',{lista:arr});}
 getProdsCustom().forEach(p=>{if(!est[p.id])est[p.id]={ativo:p.ativo!==false,modo:'inf',qtd:10};});
 
 // ── FOTOS DOS PRODUTOS ─────────────────────────────────────────
@@ -597,6 +599,7 @@ function salvarOpcoes(id,arr){
   const saved=JSON.parse(localStorage.getItem('tcho_opcoes')||'{}');
   saved[id]=arr;
   localStorage.setItem('tcho_opcoes',JSON.stringify(saved));
+  salvarCardapioFS('opcoes',{data:saved});
 }
 function adicionarOpcao(id){
   const inp=document.getElementById(`opc-inp-${id}`);
@@ -671,7 +674,7 @@ function salvarEditProd(id){
     const p=PRODS.find(x=>x.id===id);if(!p)return;
     p.n=nome;p.p=preco;
     const edits=JSON.parse(localStorage.getItem('tcho_prods_edits')||'{}');
-    edits[id]={nome,preco,desc};localStorage.setItem('tcho_prods_edits',JSON.stringify(edits));
+    edits[id]={nome,preco,desc};localStorage.setItem('tcho_prods_edits',JSON.stringify(edits));salvarCardapioFS('prods_edits',{data:edits});
     // atualiza TCHO em memória para refletir no cliente sem reload
     const tItem=[...TCHO.burguers,...TCHO.extras].find(x=>x.id===id);
     if(tItem){tItem.nome=nome;tItem.preco=preco;tItem.desc=desc;}
@@ -710,6 +713,7 @@ function getIngAdmin(id){
 function salvarIngredientes(id,arr){
   const saved=JSON.parse(localStorage.getItem('tcho_ing_edits')||'{}');
   saved[id]=arr;localStorage.setItem('tcho_ing_edits',JSON.stringify(saved));
+  salvarCardapioFS('ing_edits',{data:saved});
 }
 function adicionarIngrediente(id){
   const inp=document.getElementById('ing-inp-'+id);
@@ -1001,7 +1005,7 @@ function salvarCategoria(id){
   const nome=inp.value.trim();
   if(!nome){showToast('⚠️ Digite o nome da categoria','tok-err');return;}
   const saved=JSON.parse(localStorage.getItem('tcho_cat_nomes')||'{}');
-  saved[id]=nome;localStorage.setItem('tcho_cat_nomes',JSON.stringify(saved));
+  saved[id]=nome;localStorage.setItem('tcho_cat_nomes',JSON.stringify(saved));salvarCardapioFS('cat_nomes',{data:saved});
   if(id.startsWith('cat_')){
     const emoji=document.getElementById('cat-emoji-'+id)?.value.trim();
     if(emoji){const cats=getCatsCustom(),idx=cats.findIndex(c=>c.id===id);if(idx!==-1){cats[idx].emoji=emoji;saveCatsCustom(cats);}}
@@ -1015,7 +1019,7 @@ function getAdicionaisAdmin(){
   const saved=localStorage.getItem('tcho_adicionais');
   return saved?JSON.parse(saved):[...TCHO.adicionais];
 }
-function saveAdicionaisAdmin(arr){localStorage.setItem('tcho_adicionais',JSON.stringify(arr));}
+function saveAdicionaisAdmin(arr){localStorage.setItem('tcho_adicionais',JSON.stringify(arr));salvarCardapioFS('adicionais',{lista:arr});}
 
 let editAdicId=null,addAdicAberto=false;
 
@@ -1595,6 +1599,26 @@ function iniciarApp(){
     atualizarBadgeLoja();
     atualizarStatusAutoHorario();
   },()=>{});
+
+  // Carrega cardápio do Firestore (sincroniza entre dispositivos)
+  db.collection('cardapio').get().then(snapshot=>{
+    snapshot.forEach(doc=>{
+      const d=doc.data();
+      if(doc.id==='prods_edits'  && d.data ) localStorage.setItem('tcho_prods_edits', JSON.stringify(d.data));
+      if(doc.id==='prods_custom' && d.lista) localStorage.setItem('tcho_prods_custom',JSON.stringify(d.lista));
+      if(doc.id==='cats_custom'  && d.lista) localStorage.setItem('tcho_cats_custom', JSON.stringify(d.lista));
+      if(doc.id==='cat_nomes'    && d.data ) localStorage.setItem('tcho_cat_nomes',   JSON.stringify(d.data));
+      if(doc.id==='opcoes'       && d.data ) localStorage.setItem('tcho_opcoes',      JSON.stringify(d.data));
+      if(doc.id==='ing_edits'    && d.data ) localStorage.setItem('tcho_ing_edits',   JSON.stringify(d.data));
+      if(doc.id==='adicionais'   && d.lista) localStorage.setItem('tcho_adicionais',  JSON.stringify(d.lista));
+    });
+    // Re-aplica edições aos produtos base em memória
+    const edits=JSON.parse(localStorage.getItem('tcho_prods_edits')||'{}');
+    PRODS.forEach(p=>{if(edits[p.id]){if(edits[p.id].nome)p.n=edits[p.id].nome;if(edits[p.id].preco!==undefined)p.p=edits[p.id].preco;}});
+    // Re-renderiza cardápio se a aba estiver ativa
+    const tabAtiva=document.querySelector('.nav-tab.active');
+    if(tabAtiva&&(tabAtiva.getAttribute('onclick')||'').includes('cardapio')) renderCardapio();
+  }).catch(console.error);
 
   // Atualiza status do horário automático a cada minuto
   atualizarStatusAutoHorario();

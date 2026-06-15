@@ -400,7 +400,11 @@ function renderCard(p){
 
 function renderAll(){
   const cols={novo:[],prep:[],pronto:[],entrega:[]};
-  pedidos.filter(p=>p.status!=='finalizado').forEach(p=>{if(cols[p.status])cols[p.status].push(p);});
+  const finHoje=[];
+  pedidos.forEach(p=>{
+    if(cols[p.status]) cols[p.status].push(p);
+    else if(p.status==='finalizado'||p.status==='cancelado') finHoje.push(p);
+  });
   ['novo','prep','pronto','entrega'].forEach(s=>{
     document.getElementById('cnt-'+s).textContent=cols[s].length;
   });
@@ -411,6 +415,30 @@ function renderAll(){
   document.getElementById('st').textContent=totalHoje;
   const vazio={novo:'Aguardando pedidos...',prep:'Nada em preparo',pronto:'Nenhum pronto',entrega:'Nenhuma entrega'};
   Object.entries(cols).forEach(([s,list])=>{document.getElementById('body-'+s).innerHTML=list.length?list.map(renderCard).join(''):`<div class="vazio-col">${vazio[s]}</div>`;});
+  renderFinalizadosHoje(finHoje);
+}
+
+function renderFinalizadosHoje(lista){
+  const sec=document.getElementById('secao-fin-hoje');
+  if(!sec) return;
+  if(!lista.length){sec.style.display='none';return;}
+  lista.sort((a,b)=>(b.hora||new Date(0))-(a.hora||new Date(0)));
+  document.getElementById('cnt-fin-hoje').textContent=lista.length;
+  document.getElementById('body-fin-hoje').innerHTML=lista.map(p=>{
+    const cancel=p.status==='cancelado';
+    const cor=cancel?'#e74c3c':'#27ae60';
+    return`<div style="background:var(--card);border:1px solid ${cancel?'#3a1010':'#0d2010'};border-radius:10px;padding:10px 12px;opacity:${cancel?'.75':'1'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:.92rem;color:${cor}">${cancel?'❌':'✅'} ${p.num||'#'+p.id}</span>
+        <span style="font-size:.62rem;color:var(--muted)">${p.horaFim||p.horaStr||''}</span>
+      </div>
+      <div style="font-size:.78rem;font-weight:700;margin-bottom:2px">${p.nome}</div>
+      ${p.bairro?`<div style="font-size:.66rem;color:var(--muted)">📍 ${p.bairro}</div>`:''}
+      <div style="font-size:.67rem;color:var(--muted);margin:3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(p.itens||[]).join(' · ')}</div>
+      <div style="font-weight:700;color:${cor};font-size:.82rem;margin-top:4px">R$${p.total||0}</div>
+    </div>`;
+  }).join('');
+  sec.style.display='block';
 }
 
 function atualizarBadgeNovos(){
@@ -1635,16 +1663,16 @@ function iniciarApp(){
     canal.onmessage = (e) => receberPedidoLocal(e.data);
   } catch(e){}
 
-  // ── Firestore: listener em tempo real (quando configurado) ────
+  // ── Firestore: listener em tempo real — todos os pedidos de hoje ─
+  const inicioHoje=new Date();inicioHoje.setHours(0,0,0,0);
+  const tsHoje=firebase.firestore.Timestamp.fromDate(inicioHoje);
   let primeiroSnapshot = true;
   db.collection('pedidos')
-    .where('status','in',['novo','prep','pronto','entrega'])
+    .where('criadoEm','>=',tsHoje)
     .onSnapshot(snapshot=>{
-      clearInterval(pollingLocal); // Firebase funcionando → para o polling local
+      clearInterval(pollingLocal);
       const ehPrimeiro = primeiroSnapshot;
       if(ehPrimeiro){
-        // Na primeira resposta do Firestore, descarta pedidos do localStorage
-        // para evitar que pedidos já deletados voltem a aparecer
         pedidos = [];
         localStorage.removeItem('tcho_pedidos');
         primeiroSnapshot = false;
@@ -1655,7 +1683,7 @@ function iniciarApp(){
         if(change.type==='added'){
           if(!pedidos.find(x=>x._id===p._id)){
             pedidos.push(p);totalHoje++;
-            if(!ehPrimeiro){
+            if(!ehPrimeiro && p.status==='novo'){
               tocarNotificacao();
               showToast(`🔔 Novo pedido ${p.num||'#'+p.id} — ${p.nome}`,'tok-info');
               atualizarBadgeNovos();

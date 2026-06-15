@@ -364,6 +364,43 @@
 </div><!-- fim .app -->
 
 <!-- Modal: Pedido Finalizado -->
+<!-- MODAL EDITAR PEDIDO -->
+<div id="modal-editar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:500;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto">
+  <div style="background:var(--surface);border:2px solid var(--orange);border-radius:16px;width:100%;max-width:420px;padding:20px;margin:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--orange);letter-spacing:2px">✏️ EDITAR PEDIDO <span id="edit-num"></span></div>
+      <button onclick="fecharModalEditar()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label class="edit-lbl">👤 Nome</label><input id="edit-nome" class="edit-inp" type="text"></div>
+        <div><label class="edit-lbl">📞 Telefone</label><input id="edit-tel" class="edit-inp" type="tel"></div>
+      </div>
+      <div>
+        <label class="edit-lbl">💳 Pagamento</label>
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <button class="edit-pag-btn" id="epag-pix"    onclick="selEditPag('pix')">📱 PIX</button>
+          <button class="edit-pag-btn" id="epag-dinheiro" onclick="selEditPag('dinheiro')">💵 Dinheiro</button>
+          <button class="edit-pag-btn" id="epag-cartao" onclick="selEditPag('cartao')">💳 Cartão</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label class="edit-lbl">🛵 Frete (R$)</label><input id="edit-frete" class="edit-inp" type="number" min="0" step="1" oninput="recalcEditTotal()"></div>
+        <div><label class="edit-lbl">💰 Total (R$)</label><input id="edit-total" class="edit-inp" type="number" min="0" step="1"></div>
+      </div>
+      <div>
+        <label class="edit-lbl">🛒 Itens <span style="font-size:.65rem;color:var(--muted)">(um por linha)</span></label>
+        <textarea id="edit-itens" class="edit-inp" rows="5" style="resize:vertical;font-size:.74rem;line-height:1.5"></textarea>
+      </div>
+      <div><label class="edit-lbl">📝 Observações</label><textarea id="edit-obs" class="edit-inp" rows="2" style="resize:vertical"></textarea></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button onclick="fecharModalEditar()" style="flex:1;padding:11px;background:var(--card);color:var(--muted);border:1px solid #3a3530;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:.95rem;cursor:pointer">CANCELAR</button>
+      <button onclick="salvarEdicaoPedido()" style="flex:2;padding:11px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:.95rem;font-weight:700;cursor:pointer">✓ SALVAR ALTERAÇÕES</button>
+    </div>
+  </div>
+</div>
+
 <div id="modal-finalizado" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:400;align-items:center;justify-content:center;padding:16px">
   <div id="card-fin-box" style="background:var(--surface);border:2px solid #27ae60;border-radius:16px;width:100%;max-width:360px;padding:20px;max-height:90vh;overflow-y:auto"></div>
 </div>

@@ -393,9 +393,70 @@ function renderCard(p){
     <div class="card-itens">${p.itens.join(' · ')}</div>
     ${p.obs?`<div class="card-obs">⚠ ${p.obs}</div>`:''}
     <div class="card-ftr"><div class="card-total">R$${p.total}</div><div class="timer ${cls}">⏱ ${tt(m)}</div></div>
-    <div class="card-btns">${btns}</div>
+    <div class="card-btns">${btns}<button class="btn-editar-card" onclick="abrirModalEditar('${fid}')">✏️ Editar</button></div>
     ${dragHint}
   </div>`;
+}
+
+// ── EDITAR PEDIDO ──────────────────────────────────────────────
+let editandoPedidoId = null;
+let editandoPag = null;
+
+function abrirModalEditar(id){
+  const p=pedidos.find(x=>x._id===id);
+  if(!p) return;
+  editandoPedidoId=id;
+  editandoPag=p.pag||'pix';
+  document.getElementById('edit-num').textContent=p.num||'#'+p.id;
+  document.getElementById('edit-nome').value=p.nome||'';
+  document.getElementById('edit-tel').value=p.tel||'';
+  document.getElementById('edit-frete').value=p.frete||0;
+  document.getElementById('edit-total').value=p.total||0;
+  document.getElementById('edit-itens').value=(p.itens||[]).join('\n');
+  document.getElementById('edit-obs').value=p.obs||'';
+  selEditPag(editandoPag);
+  document.getElementById('modal-editar').style.display='flex';
+}
+
+function selEditPag(pag){
+  editandoPag=pag;
+  ['pix','dinheiro','cartao'].forEach(k=>{
+    document.getElementById('epag-'+k).classList.toggle('sel',k===pag);
+  });
+}
+
+function recalcEditTotal(){
+  const p=pedidos.find(x=>x._id===editandoPedidoId);
+  if(!p) return;
+  const frete=parseFloat(document.getElementById('edit-frete').value)||0;
+  const subtotal=(p.total||0)-(p.frete||0);
+  document.getElementById('edit-total').value=subtotal+frete;
+}
+
+function fecharModalEditar(){
+  document.getElementById('modal-editar').style.display='none';
+  editandoPedidoId=null;editandoPag=null;
+}
+
+function salvarEdicaoPedido(){
+  const p=pedidos.find(x=>x._id===editandoPedidoId);
+  if(!p) return;
+  const nome=document.getElementById('edit-nome').value.trim();
+  const tel=document.getElementById('edit-tel').value.trim();
+  const frete=parseFloat(document.getElementById('edit-frete').value)||0;
+  const total=parseFloat(document.getElementById('edit-total').value)||0;
+  const obs=document.getElementById('edit-obs').value.trim();
+  const itens=document.getElementById('edit-itens').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  if(!nome){showToast('⚠️ Nome obrigatório','tok-err');return;}
+  if(!itens.length){showToast('⚠️ Adicione pelo menos um item','tok-err');return;}
+  const update={nome,tel,pag:editandoPag,frete,total,obs,itens};
+  // Atualiza localmente
+  Object.assign(p,update);
+  // Persiste no Firestore
+  db.collection('pedidos').doc(editandoPedidoId).update(update).catch(console.error);
+  fecharModalEditar();
+  renderAll();renderHistorico();
+  showToast(`✅ Pedido ${p.num||'#'+p.id} atualizado!`,'tok-ok');
 }
 
 function renderAll(){

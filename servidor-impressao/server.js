@@ -13,7 +13,7 @@ const os   = require('os');
 // ── Localiza Chrome ou Edge instalado no Windows ─────────────
 function getChromePath() {
   const candidatos = [
-    // Google Chrome
+    // Google Chrome — caminhos comuns
     process.env['PROGRAMFILES']        + '\\Google\\Chrome\\Application\\chrome.exe',
     process.env['PROGRAMFILES(X86)']   + '\\Google\\Chrome\\Application\\chrome.exe',
     (process.env['LOCALAPPDATA']||'')  + '\\Google\\Chrome\\Application\\chrome.exe',
@@ -28,6 +28,13 @@ function getChromePath() {
   for (const p of candidatos) {
     try { if (p && fs.existsSync(p)) return p; } catch(e) {}
   }
+  // Tenta localizar via registro do Windows
+  try {
+    const { execSync } = require('child_process');
+    const resultado = execSync('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe" /ve', {encoding:'utf8'});
+    const match = resultado.match(/REG_SZ\s+(.+\.exe)/i);
+    if (match && fs.existsSync(match[1].trim())) return match[1].trim();
+  } catch(e) {}
   return null;
 }
 

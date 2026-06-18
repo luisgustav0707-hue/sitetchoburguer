@@ -16,6 +16,7 @@ function fazerLogin(){
 }
 function logout(){
   localStorage.removeItem('tcho_admin_logado');
+  pedidos=[];pedidosFinHoje=[];totalHoje=0;
   document.getElementById('app').classList.remove('show');
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('login-pass').value='';
@@ -161,7 +162,26 @@ function atualizarBotaoSom(){
 }
 
 // ── KANBAN & PEDIDOS ───────────────────────────────────────────
-let pedidos=[],totalHoje=0,contPed=100,autoAceitar=false,dragId=null,dragSrc=null;
+let pedidos=[],pedidosFinHoje=[],totalHoje=0,contPed=100,autoAceitar=false,dragId=null,dragSrc=null;
+
+function carregarFinalizadosHoje(){
+  const ini=new Date();ini.setHours(0,0,0,0);
+  const ts=firebase.firestore.Timestamp.fromDate(ini);
+  db.collection('pedidos')
+    .where('status','in',['finalizado','cancelado'])
+    .where('criadoEm','>=',ts)
+    .get()
+    .then(snap=>{
+      snap.forEach(doc=>{
+        const d=doc.data();
+        const p={...d,_id:doc.id,hora:d.hora?d.hora.toDate():new Date()};
+        if(!pedidosFinHoje.find(x=>x._id===p._id)) pedidosFinHoje.push(p);
+      });
+      totalHoje+=pedidosFinHoje.length;
+      renderAll();
+    })
+    .catch(()=>{});
+}
 const STATUS_COLS=['novo','prep','pronto','entrega'];
 function canDrop(from,to){const fi=STATUS_COLS.indexOf(from),ti=STATUS_COLS.indexOf(to);return ti===fi+1||ti===fi-1;}
 
@@ -461,11 +481,8 @@ function salvarEdicaoPedido(){
 
 function renderAll(){
   const cols={novo:[],prep:[],pronto:[],entrega:[]};
-  const finHoje=[];
-  pedidos.forEach(p=>{
-    if(cols[p.status]) cols[p.status].push(p);
-    else if(p.status==='finalizado'||p.status==='cancelado') finHoje.push(p);
-  });
+  pedidos.forEach(p=>{if(cols[p.status]) cols[p.status].push(p);});
+  const finHoje=[...pedidosFinHoje];
   ['novo','prep','pronto','entrega'].forEach(s=>{
     document.getElementById('cnt-'+s).textContent=cols[s].length;
   });
@@ -1724,12 +1741,10 @@ function iniciarApp(){
     canal.onmessage = (e) => receberPedidoLocal(e.data);
   } catch(e){}
 
-  // ── Firestore: listener em tempo real — todos os pedidos de hoje ─
-  const inicioHoje=new Date();inicioHoje.setHours(0,0,0,0);
-  const tsHoje=firebase.firestore.Timestamp.fromDate(inicioHoje);
+  // ── Firestore: listener em tempo real (pedidos ativos) ───────
   let primeiroSnapshot = true;
   db.collection('pedidos')
-    .where('criadoEm','>=',tsHoje)
+    .where('status','in',['novo','prep','pronto','entrega'])
     .onSnapshot(snapshot=>{
       clearInterval(pollingLocal);
       const ehPrimeiro = primeiroSnapshot;
@@ -1737,6 +1752,8 @@ function iniciarApp(){
         pedidos = [];
         localStorage.removeItem('tcho_pedidos');
         primeiroSnapshot = false;
+        // Carrega finalizados de hoje separadamente (não bloqueia o listener)
+        carregarFinalizadosHoje();
       }
       snapshot.docChanges().forEach(change=>{
         const data=change.doc.data();
@@ -1744,7 +1761,7 @@ function iniciarApp(){
         if(change.type==='added'){
           if(!pedidos.find(x=>x._id===p._id)){
             pedidos.push(p);totalHoje++;
-            if(!ehPrimeiro && p.status==='novo'){
+            if(!ehPrimeiro){
               tocarNotificacao();
               showToast(`🔔 Novo pedido ${p.num||'#'+p.id} — ${p.nome}`,'tok-info');
               atualizarBadgeNovos();
@@ -1758,7 +1775,13 @@ function iniciarApp(){
           const idx=pedidos.findIndex(x=>x._id===p._id);
           if(idx!==-1) pedidos[idx]={...pedidos[idx],...p};
         } else if(change.type==='removed'){
-          pedidos=pedidos.filter(x=>x._id!==p._id);
+          // Pedido saiu da query (foi finalizado ou cancelado) — move para finalizados
+          const idx=pedidos.findIndex(x=>x._id===p._id);
+          if(idx!==-1){
+            const pfin={...pedidos[idx],...p};
+            pedidos.splice(idx,1);
+            if(!pedidosFinHoje.find(x=>x._id===pfin._id)) pedidosFinHoje.push(pfin);
+          }
         }
       });
       renderAll();renderHistorico();

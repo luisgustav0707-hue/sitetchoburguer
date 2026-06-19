@@ -15,6 +15,9 @@ function fazerLogin(){
   }
 }
 function logout(){
+  if(unsubPedidos){ unsubPedidos(); unsubPedidos=null; }
+  if(unsubConfig){ unsubConfig(); unsubConfig=null; }
+  if(pollingLocalInterval){ clearInterval(pollingLocalInterval); pollingLocalInterval=null; }
   localStorage.removeItem('tcho_admin_logado');
   pedidos=[];pedidosFinHoje=[];totalHoje=0;
   document.getElementById('app').classList.remove('show');
@@ -163,6 +166,7 @@ function atualizarBotaoSom(){
 
 // ── KANBAN & PEDIDOS ───────────────────────────────────────────
 let pedidos=[],pedidosFinHoje=[],totalHoje=0,contPed=100,autoAceitar=false,dragId=null,dragSrc=null;
+let unsubPedidos=null,unsubConfig=null,pollingLocalInterval=null;
 
 function carregarFinalizadosHoje(){
   const ini=new Date();ini.setHours(0,0,0,0);
@@ -1687,7 +1691,11 @@ function iniciarApp(){
   if(logFim) logFim.value = hoje;
 
   // Carrega config do Firestore
-  db.collection('config').doc('operacao').onSnapshot(doc=>{
+  if(unsubPedidos){ unsubPedidos(); unsubPedidos=null; }
+  if(unsubConfig){ unsubConfig(); unsubConfig=null; }
+  if(pollingLocalInterval){ clearInterval(pollingLocalInterval); pollingLocalInterval=null; }
+
+  unsubConfig=db.collection('config').doc('operacao').onSnapshot(doc=>{
     if(!doc.exists) return;
     const cfg=doc.data();
     document.getElementById('cfg-loja').checked=cfg.lojaAberta!==false;
@@ -1734,7 +1742,7 @@ function iniciarApp(){
   // Lê imediatamente pedidos já salvos no localStorage
   lerPedidosLocal();
   // Polling a cada 2s (captura pedidos quando Firebase não está configurado)
-  let pollingLocal = setInterval(lerPedidosLocal, 2000);
+  pollingLocalInterval = setInterval(lerPedidosLocal, 2000);
   // BroadcastChannel: recebe pedidos em tempo real entre abas (HTTP)
   try {
     const canal = new BroadcastChannel('tcho_pedidos');
@@ -1743,10 +1751,10 @@ function iniciarApp(){
 
   // ── Firestore: listener em tempo real (pedidos ativos) ───────
   let primeiroSnapshot = true;
-  db.collection('pedidos')
+  unsubPedidos=db.collection('pedidos')
     .where('status','in',['novo','prep','pronto','entrega'])
     .onSnapshot(snapshot=>{
-      clearInterval(pollingLocal);
+      if(pollingLocalInterval){ clearInterval(pollingLocalInterval); pollingLocalInterval=null; }
       const ehPrimeiro = primeiroSnapshot;
       if(ehPrimeiro){
         pedidos = [];

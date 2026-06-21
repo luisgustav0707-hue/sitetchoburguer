@@ -374,7 +374,11 @@ function imprimirPedido(p){
     abrirJanelaImpressao(cupomCozinha(p), 380);
     setTimeout(()=>abrirJanelaImpressao(cupomEntrega(p), 420), 600);
   });
-  p.impresso=true;renderAll();
+  p.impresso=true;
+  // Persiste "impresso" no Firestore para não reimprimir após recarregar a página
+  if(p._id && !/^(local|man|sim)-/.test(String(p._id)))
+    db.collection('pedidos').doc(p._id).update({impresso:true}).catch(()=>{});
+  renderAll();
 }
 
 // ── MOVER STATUS / CANCELAR ────────────────────────────────────
@@ -399,7 +403,8 @@ function moverStatus(id,novoStatus,auto=false){
       localStorage.setItem('tcho_pedidos',JSON.stringify(ls));
     }
   }catch(e){}
-  if(novoStatus==='prep' && statusAnterior==='novo' && !auto) setTimeout(()=>imprimirPedido(p),200);
+  // Só imprime ao aceitar se ainda NÃO foi impresso (evita 2ª via ao mover pra preparando)
+  if(novoStatus==='prep' && statusAnterior==='novo' && !auto && !p.impresso) setTimeout(()=>imprimirPedido(p),200);
   if(novoStatus==='finalizado') setTimeout(()=>mostrarCardFinalizado({...p}),200);
   atualizarBadgeNovos();
   renderAll();

@@ -111,9 +111,41 @@ function getFotoCliente(id){
   return salvas[id]||FOTOS[id]||null;
 }
 
+// ── ESTOQUE (sincronizado do admin) ────────────────────────────
+// Produto some do cardápio se estiver inativo ou esgotado (modo qtd e qtd<=0).
+function produtoDisponivel(id){
+  const est=JSON.parse(localStorage.getItem('tcho_estoque')||'{}');
+  const e=est[id];
+  if(!e) return true;                                  // sem registro = sempre disponível
+  if(e.ativo===false) return false;                    // desativado no admin
+  if(e.modo==='qtd' && (e.qtd||0)<=0) return false;    // esgotado
+  return true;
+}
+
+// Baixa automática: desconta do estoque os itens do carrinho (só os em modo quantidade).
+// Usa transação pra ser seguro mesmo com vários clientes comprando ao mesmo tempo.
+function baixarEstoque(){
+  const consumo={};
+  Object.entries(cartBurguers).forEach(([id,insts])=>{consumo[id]=(consumo[id]||0)+insts.length;});
+  Object.entries(cartExtras).forEach(([id,v])=>{consumo[id]=(consumo[id]||0)+(Array.isArray(v)?v.length:v);});
+  if(!Object.keys(consumo).length) return;
+  const ref=db.collection('cardapio').doc('estoque');
+  db.runTransaction(async t=>{
+    const snap=await t.get(ref);
+    if(!snap.exists) return;
+    const data=snap.data().data||{};
+    let mudou=false;
+    Object.entries(consumo).forEach(([id,qty])=>{
+      const e=data[id];
+      if(e && e.modo==='qtd'){ e.qtd=Math.max(0,(e.qtd||0)-qty); mudou=true; }
+    });
+    if(mudou) t.set(ref,{data},{merge:true});
+  }).catch(e=>console.error('baixa de estoque:',e));
+}
+
 // ── RENDER CARDÁPIO ────────────────────────────────────────────
 function renderBurguers(){
-  document.getElementById('menu-burguers').innerHTML=BURGUERS.filter(b=>!b.customCat).map(b=>{
+  document.getElementById('menu-burguers').innerHTML=BURGUERS.filter(b=>!b.customCat&&produtoDisponivel(b.id)).map(b=>{
     const insts=cartBurguers[b.id]||[],qty=insts.length;
     const resumo=insts.map((inst,i)=>{
       const pts=[inst.ponto?`${inst.ponto.emoji} ${inst.ponto.nome}`:'',inst.sache?`🧴 ${inst.sache.nome}`:'',inst.removidos.length?'sem '+inst.removidos.join(', '):'',inst.adicionais.length?'+ '+inst.adicionais.map(a=>a.nome).join(', '):''].filter(Boolean).join(' • ');
@@ -149,7 +181,7 @@ function getOpcoes(id){
 
 function renderExtras(){
   const render=(arr,id)=>{
-    document.getElementById(id).innerHTML=arr.filter(e=>!e.customCat).map(e=>{
+    document.getElementById(id).innerHTML=arr.filter(e=>!e.customCat&&produtoDisponivel(e.id)).map(e=>{
       const opc=getOpcoes(e.id);
       const temOpc=opc.length>0;
       const escolhas=temOpc&&Array.isArray(cartExtras[e.id])?cartExtras[e.id]:[];
@@ -592,6 +624,7 @@ async function finalizarPedido(){
       iniciarRastreamento(null, tipoPedido);
     });
 
+  baixarEstoque();   // desconta do estoque os itens vendidos (modo quantidade)
   salvarDadosCliente();
   salvarUltimoPedido();
   [1,2,3].forEach(i=>document.getElementById('sc'+i).classList.remove('active'));
@@ -706,7 +739,7 @@ function renderCustomCategorias(){
   if(!container)return;
   container.innerHTML='';
   customCats.forEach(cat=>{
-    const prods=[...BURGUERS,...EXTRAS,...COMBO].filter(p=>p.customCat===cat.id);
+    const prods=[...BURGUERS,...EXTRAS,...COMBO].filter(p=>p.customCat===cat.id&&produtoDisponivel(p.id));
     if(!prods.length)return;
     const nome=catNomes[cat.id]||cat.nome;
     const listId='menu-'+cat.id;
@@ -889,6 +922,7 @@ db.collection('cardapio').get().then(snapshot=>{
     if(doc.id==='opcoes'       && d.data ) chk('tcho_opcoes',      JSON.stringify(d.data));
     if(doc.id==='ing_edits'    && d.data ) chk('tcho_ing_edits',   JSON.stringify(d.data));
     if(doc.id==='adicionais'   && d.lista) chk('tcho_adicionais',  JSON.stringify(d.lista));
+    if(doc.id==='estoque'      && d.data ) chk('tcho_estoque',     JSON.stringify(d.data));
   });
   if(!mudou) return;
   // Re-aplica edições nos objetos TCHO em memória
@@ -918,4 +952,14 @@ db.collection('cardapio').get().then(snapshot=>{
   Object.entries(map).forEach(([id,elId])=>{if(catNomes[id]){const el=document.getElementById(elId);if(el)el.textContent=catNomes[id];}});
   renderBurguers();renderExtras();renderCustomCategorias();updateFloat();
 }).catch(()=>{});
+
+// Estoque ao vivo: a bebida some do cardápio assim que esgota, sem recarregar a página
+db.collection('cardapio').doc('estoque').onSnapshot(doc=>{
+  if(!doc.exists) return;
+  const novo=JSON.stringify(doc.data().data||{});
+  if(novo!==localStorage.getItem('tcho_estoque')){
+    localStorage.setItem('tcho_estoque',novo);
+    renderBurguers();renderExtras();renderCustomCategorias();updateFloat();
+  }
+},()=>{});
 

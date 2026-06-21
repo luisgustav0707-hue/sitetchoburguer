@@ -684,6 +684,18 @@ function saveProdsCustom(arr){localStorage.setItem('tcho_prods_custom',JSON.stri
 function getCatsCustom(){return JSON.parse(localStorage.getItem('tcho_cats_custom')||'[]');}
 function saveCatsCustom(arr){localStorage.setItem('tcho_cats_custom',JSON.stringify(arr));salvarCardapioFS('cats_custom',{lista:arr});}
 getProdsCustom().forEach(p=>{if(!est[p.id])est[p.id]={ativo:p.ativo!==false,modo:'inf',qtd:10};});
+// Aplica o estoque salvo (localStorage; sincronizado do Firestore no login)
+(function(){
+  const saved=JSON.parse(localStorage.getItem('tcho_estoque')||'{}');
+  Object.keys(saved).forEach(id=>{est[id]={...(est[id]||{ativo:true,modo:'inf',qtd:10}),...saved[id]};});
+})();
+// Salva o estoque na nuvem (por produto, sem apagar os outros)
+function salvarEstoque(id){
+  localStorage.setItem('tcho_estoque',JSON.stringify(est));
+  const ref=db.collection('cardapio').doc('estoque');
+  if(id) ref.set({data:{[id]:est[id]}},{merge:true}).catch(console.error);
+  else   ref.set({data:est},{merge:true}).catch(console.error);
+}
 
 // ── FOTOS DOS PRODUTOS ─────────────────────────────────────────
 function getFotoAdmin(id){
@@ -1273,11 +1285,12 @@ function renderCardapio(){renderLista('b','lista-burguers');renderLista('e','lis
 function toggleAtivo(id,val){
   est[id].ativo=val;
   if(id.startsWith('cp_')){const arr=getProdsCustom(),idx=arr.findIndex(x=>x.id===id);if(idx!==-1){arr[idx].ativo=val;saveProdsCustom(arr);}}
+  salvarEstoque(id);
   const p=PRODS.find(x=>x.id===id)||getProdsCustom().find(x=>x.id===id);
   renderCardapio();showToast(`${val?'✅':'🔒'} ${p?.n||p?.nome||id} ${val?'ativo':'inativo'}`,'tok-ok');
 }
-function setModo(id,modo){est[id].modo=modo;document.getElementById(`inp-${id}`).style.display=modo==='qtd'?'block':'none';document.querySelectorAll(`#stock-${id} .stock-btn`).forEach(b=>b.classList.toggle('active',b.textContent.trim()===(modo==='inf'?'∞':'Qtd')));const row=document.getElementById(`prow-${id}`);if(row){row.querySelectorAll('.sbadge').forEach(b=>b.remove());document.getElementById(`stock-${id}`).insertAdjacentHTML('beforeend',renderEstoqueBadge(id));}}
-function setQtd(id,val){est[id].qtd=Math.max(0,parseInt(val)||0);const row=document.getElementById(`prow-${id}`);if(row){row.querySelectorAll('.sbadge').forEach(b=>b.remove());document.getElementById(`stock-${id}`).insertAdjacentHTML('beforeend',renderEstoqueBadge(id));}}
+function setModo(id,modo){est[id].modo=modo;salvarEstoque(id);document.getElementById(`inp-${id}`).style.display=modo==='qtd'?'block':'none';document.querySelectorAll(`#stock-${id} .stock-btn`).forEach(b=>b.classList.toggle('active',b.textContent.trim()===(modo==='inf'?'∞':'Qtd')));const row=document.getElementById(`prow-${id}`);if(row){row.querySelectorAll('.sbadge').forEach(b=>b.remove());document.getElementById(`stock-${id}`).insertAdjacentHTML('beforeend',renderEstoqueBadge(id));}}
+function setQtd(id,val){est[id].qtd=Math.max(0,parseInt(val)||0);salvarEstoque(id);const row=document.getElementById(`prow-${id}`);if(row){row.querySelectorAll('.sbadge').forEach(b=>b.remove());document.getElementById(`stock-${id}`).insertAdjacentHTML('beforeend',renderEstoqueBadge(id));}}
 
 // ── CUPONS ─────────────────────────────────────────────────────
 let cupons=[],editandoId=null;
@@ -1790,14 +1803,31 @@ function iniciarApp(){
       if(doc.id==='opcoes'       && d.data ) localStorage.setItem('tcho_opcoes',      JSON.stringify(d.data));
       if(doc.id==='ing_edits'    && d.data ) localStorage.setItem('tcho_ing_edits',   JSON.stringify(d.data));
       if(doc.id==='adicionais'   && d.lista) localStorage.setItem('tcho_adicionais',  JSON.stringify(d.lista));
+      if(doc.id==='estoque'      && d.data ) localStorage.setItem('tcho_estoque',     JSON.stringify(d.data));
     });
     // Re-aplica edições aos produtos base em memória
     const edits=JSON.parse(localStorage.getItem('tcho_prods_edits')||'{}');
     PRODS.forEach(p=>{if(edits[p.id]){if(edits[p.id].nome)p.n=edits[p.id].nome;if(edits[p.id].preco!==undefined)p.p=edits[p.id].preco;}});
+    // Re-aplica o estoque salvo aos objetos em memória
+    const estSalvo=JSON.parse(localStorage.getItem('tcho_estoque')||'{}');
+    Object.keys(estSalvo).forEach(id=>{est[id]={...(est[id]||{ativo:true,modo:'inf',qtd:10}),...estSalvo[id]};});
     // Re-renderiza cardápio se a aba estiver ativa
     const tabAtiva=document.querySelector('.nav-tab.active');
     if(tabAtiva&&(tabAtiva.getAttribute('onclick')||'').includes('cardapio')) renderCardapio();
   }).catch(console.error);
+
+  // ── Estoque ao vivo: reflete a baixa automática feita pelos pedidos ──
+  db.collection('cardapio').doc('estoque').onSnapshot(doc=>{
+    if(!doc.exists) return;
+    const data=doc.data().data||{};
+    Object.keys(data).forEach(id=>{est[id]={...(est[id]||{ativo:true,modo:'inf',qtd:10}),...data[id]};});
+    localStorage.setItem('tcho_estoque',JSON.stringify(est));
+    const tab=document.querySelector('.nav-tab.active');
+    const noCardapio=tab&&(tab.getAttribute('onclick')||'').includes('cardapio');
+    // não re-renderiza enquanto o dono digita uma quantidade (evita perder o foco)
+    const editando=document.activeElement&&document.activeElement.classList&&document.activeElement.classList.contains('stock-input');
+    if(noCardapio && !editando) renderCardapio();
+  },()=>{});
 
   // Atualiza status do horário automático a cada minuto
   atualizarStatusAutoHorario();

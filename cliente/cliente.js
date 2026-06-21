@@ -503,6 +503,7 @@ function goStep(n){
   ['s1','s2','s3'].forEach((id,i)=>{document.getElementById(id).classList.toggle('active',i+1===n);document.getElementById(id).classList.toggle('done',i+1<n);});
   document.getElementById('cartFloat').classList.toggle('visible',n===1&&getCount()>0);
   window.scrollTo(0,0);
+  if(n===1) mostrarBotaoAcompanhar();
   if(n===2 && !document.getElementById('f-nome').value) preencherDadosSalvos();
 }
 
@@ -614,14 +615,17 @@ async function finalizarPedido(){
   // Notifica admin instantaneamente via BroadcastChannel (quando em HTTP)
   try { new BroadcastChannel('tcho_pedidos').postMessage(pedidoLocal); } catch(e){}
   // Envia ao Firestore e inicia rastreamento
+  const tipoAtual=tipoPedido;
   db.collection('pedidos').add(pedido)
     .then(docRef=>{
       console.log('Pedido salvo no Firestore!');
-      iniciarRastreamento(docRef.id, tipoPedido);
+      // Salva o pedido atual pra o cliente poder voltar e acompanhar depois
+      localStorage.setItem('tcho_pedido_atual',JSON.stringify({docId:docRef.id,tipo:tipoAtual,num:`#${num}`}));
+      iniciarRastreamento(docRef.id, tipoAtual);
     })
     .catch(e=>{
       console.error('Firestore erro:', e);
-      iniciarRastreamento(null, tipoPedido);
+      iniciarRastreamento(null, tipoAtual);
     });
 
   baixarEstoque();   // desconta do estoque os itens vendidos (modo quantidade)
@@ -663,9 +667,40 @@ function iniciarRastreamento(docId, tipo){
   if(!docId) return;
   unsubRastreamento = db.collection('pedidos').doc(docId)
     .onSnapshot(doc=>{
-      if(!doc.exists){ atualizarRastreamento('cancelado', tipo); return; }
-      atualizarRastreamento(doc.data().status, tipo);
+      if(!doc.exists){ atualizarRastreamento('cancelado', tipo); localStorage.removeItem('tcho_pedido_atual'); return; }
+      const st=doc.data().status;
+      atualizarRastreamento(st, tipo);
+      // Pedido concluído ou cancelado: para de oferecer "acompanhar" nas próximas visitas
+      if(st==='finalizado'||st==='cancelado') localStorage.removeItem('tcho_pedido_atual');
     }, e=>console.error('Rastreamento erro:', e));
+}
+
+// ── ACOMPANHAR PEDIDO (ponto fixo de retorno) ──────────────────
+function mostrarBotaoAcompanhar(){
+  const el=document.getElementById('banner-acompanhar');
+  if(!el) return;
+  const saved=JSON.parse(localStorage.getItem('tcho_pedido_atual')||'null');
+  if(saved&&saved.docId){
+    const numEl=document.getElementById('ba-num'); if(numEl) numEl.textContent=saved.num||'';
+    el.style.display='flex';
+  } else {
+    el.style.display='none';
+  }
+}
+function acompanharPedido(){
+  const saved=JSON.parse(localStorage.getItem('tcho_pedido_atual')||'null');
+  if(!saved||!saved.docId){ alert('Você ainda não tem um pedido para acompanhar.'); return; }
+  document.getElementById('order-num').textContent=saved.num||'';
+  const sucEl=document.getElementById('success-msg');
+  if(sucEl) sucEl.textContent='Acompanhe seu pedido em tempo real. '+(saved.tipo==='delivery'?'🛵':'🍔');
+  // Mostra a tela de rastreamento (sem passar pelo goStep, que exige itens no carrinho)
+  [1,2,3,4].forEach(i=>document.getElementById('sc'+i).classList.remove('active'));
+  document.getElementById('sc4').classList.add('active');
+  document.getElementById('cartFloat').classList.remove('visible');
+  const btnRep=document.getElementById('btn-repetir-sc4');
+  if(btnRep) btnRep.style.display='block';
+  window.scrollTo(0,0);
+  iniciarRastreamento(saved.docId, saved.tipo);
 }
 
 function atualizarRastreamento(status, tipo){
@@ -909,6 +944,7 @@ verificarLoja();
 // Render imediato com localStorage, depois sincroniza do Firestore
 renderBurguers();renderExtras();renderCustomCategorias();
 mostrarBannerRepetir();
+mostrarBotaoAcompanhar();   // mostra "Acompanhar meu pedido" se houver pedido ativo
 db.collection('cardapio').get().then(snapshot=>{
   if(snapshot.empty) return;
   let mudou=false;

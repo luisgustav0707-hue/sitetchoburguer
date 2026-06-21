@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Evita que o navegador guarde versão antiga da página -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Tcho Burguer — Peça aqui!</title>
 <link rel="icon" href="../logo/logo.png?v=2" type="image/png">
 <link rel="apple-touch-icon" href="../logo/logo.png">
@@ -213,8 +217,15 @@
 <!-- SCRIPTS -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="../shared/dados.js"></script>
-<script src="../shared/firebase.js?v=11"></script>
-<script src="cliente.js?v=11"></script>
+<!-- Carrega os scripts locais sempre na versão mais recente (anti-cache automático).
+     O ?v= muda a cada carregamento, então o navegador nunca usa um arquivo antigo. -->
+<script>
+(function(){
+  var v = Date.now();
+  ['../shared/dados.js','../shared/firebase.js','cliente.js'].forEach(function(src){
+    document.write('<scr'+'ipt src="'+src+'?v='+v+'"><\/scr'+'ipt>');
+  });
+})();
+</script>
 </body>
 </html>

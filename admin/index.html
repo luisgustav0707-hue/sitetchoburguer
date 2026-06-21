@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Evita que o navegador guarde versão antiga da página -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Tcho Burguer — Admin</title>
 <link rel="icon" href="../logo/logo.png?v=2" type="image/png">
 <link rel="apple-touch-icon" href="../logo/logo.png">
@@ -82,8 +86,8 @@
           </div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
-          <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:700">Teste</div>
-          <button onclick="simularPedido()" style="background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;padding:6px 12px;font-weight:700;font-size:.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:1px">+ Simular</button>
+          <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:700">Pedido</div>
+          <button onclick="abrirModalManual()" style="background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;padding:6px 12px;font-weight:700;font-size:.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:1px">+ Manual</button>
         </div>
       </div>
     </div>
@@ -401,6 +405,58 @@
   </div>
 </div>
 
+<!-- MODAL PEDIDO MANUAL -->
+<div id="modal-manual" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:500;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto">
+  <div style="background:var(--surface);border:2px solid var(--orange);border-radius:16px;width:100%;max-width:420px;padding:20px;margin:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--orange);letter-spacing:2px">➕ NOVO PEDIDO MANUAL</div>
+      <button onclick="fecharModalManual()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label class="edit-lbl">👤 Nome</label><input id="man-nome" class="edit-inp" type="text" placeholder="Nome do cliente"></div>
+        <div><label class="edit-lbl">📞 Telefone</label><input id="man-tel" class="edit-inp" type="tel" placeholder="(opcional)"></div>
+      </div>
+      <div>
+        <label class="edit-lbl">📦 Tipo</label>
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <button class="edit-pag-btn" id="man-tipo-del" onclick="selManualTipo('delivery')">🛵 Delivery</button>
+          <button class="edit-pag-btn" id="man-tipo-ret" onclick="selManualTipo('retirada')">🏃 Retirada</button>
+        </div>
+      </div>
+      <div id="man-bairro-wrap">
+        <label class="edit-lbl">📍 Bairro</label>
+        <select id="man-bairro" class="edit-inp" onchange="onManualBairro()"></select>
+      </div>
+      <div>
+        <label class="edit-lbl">💳 Pagamento</label>
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <button class="edit-pag-btn" id="mpag-pix"      onclick="selManualPag('pix')">📱 PIX</button>
+          <button class="edit-pag-btn" id="mpag-dinheiro" onclick="selManualPag('dinheiro')">💵 Dinheiro</button>
+          <button class="edit-pag-btn" id="mpag-cartao"   onclick="selManualPag('cartao')">💳 Cartão</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label class="edit-lbl">🍔 Valor dos itens (R$)</label><input id="man-subtotal" class="edit-inp" type="number" min="0" step="1" placeholder="0" oninput="recalcManualTotal()"></div>
+        <div id="man-frete-wrap"><label class="edit-lbl">🛵 Frete (R$)</label><input id="man-frete" class="edit-inp" type="number" min="0" step="1" placeholder="0" oninput="recalcManualTotal()"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid #3a3530;border-radius:8px;padding:9px 12px">
+        <span style="font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Total</span>
+        <span id="man-total-disp" style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--orange)">R$0</span>
+      </div>
+      <div>
+        <label class="edit-lbl">🛒 Itens <span style="font-size:.65rem;color:var(--muted)">(um por linha)</span></label>
+        <textarea id="man-itens" class="edit-inp" rows="5" style="resize:vertical;font-size:.74rem;line-height:1.5" placeholder="Ex: X-Bacon (ao ponto)&#10;Refrigerante Lata"></textarea>
+      </div>
+      <div><label class="edit-lbl">📝 Observações</label><textarea id="man-obs" class="edit-inp" rows="2" style="resize:vertical" placeholder="(opcional)"></textarea></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button onclick="fecharModalManual()" style="flex:1;padding:11px;background:var(--card);color:var(--muted);border:1px solid #3a3530;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:.95rem;cursor:pointer">CANCELAR</button>
+      <button onclick="salvarPedidoManual()" style="flex:2;padding:11px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:.95rem;font-weight:700;cursor:pointer">✓ ADICIONAR PEDIDO</button>
+    </div>
+  </div>
+</div>
+
 <div id="modal-finalizado" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:400;align-items:center;justify-content:center;padding:16px">
   <div id="card-fin-box" style="background:var(--surface);border:2px solid #27ae60;border-radius:16px;width:100%;max-width:360px;padding:20px;max-height:90vh;overflow-y:auto"></div>
 </div>
@@ -411,8 +467,15 @@
 <!-- SCRIPTS -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="../shared/dados.js"></script>
-<script src="../shared/firebase.js?v=11"></script>
-<script src="admin.js?v=11"></script>
+<!-- Carrega os scripts locais sempre na versão mais recente (anti-cache automático).
+     O ?v= muda a cada carregamento, então o navegador nunca usa um arquivo antigo. -->
+<script>
+(function(){
+  var v = Date.now();
+  ['../shared/dados.js','../shared/firebase.js','admin.js'].forEach(function(src){
+    document.write('<scr'+'ipt src="'+src+'?v='+v+'"><\/scr'+'ipt>');
+  });
+})();
+</script>
 </body>
 </html>

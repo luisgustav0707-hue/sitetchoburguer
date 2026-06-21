@@ -509,7 +509,7 @@ function renderResumo(){
   html+=`<div class="divider"></div>`;
   const nome=document.getElementById('f-nome').value,tel=document.getElementById('f-tel').value;
   html+=`<div class="resumo-linha"><span>👤 ${nome}</span><span>📞 ${tel}</span></div>`;
-  const sub=getSubtotal(),frete=tipoPedido==='delivery'?freteAtual:0;
+  const frete=tipoPedido==='delivery'?freteAtual:0;
   if(tipoPedido==='delivery'){
     const rua=document.getElementById('f-rua').value,num=document.getElementById('f-num').value,comp=document.getElementById('f-comp').value,bairro=document.getElementById('f-bairro').value,cidade=document.getElementById('f-cidade').value;
     html+=`<div class="resumo-linha"><span>🛵 Delivery — ${bairro}</span><span>+R$${frete}</span></div>`;
@@ -517,16 +517,15 @@ function renderResumo(){
   }else{html+=`<div class="resumo-linha"><span>🏃 Retirada no local</span><span>Grátis</span></div>`;}
   const pLabel={pix:'PIX',dinheiro:'Dinheiro',cartao:'Cartão na entrega'};
   html+=`<div class="resumo-linha"><span>💳 ${pLabel[pagamento]}</span></div>`;
-  getTotal();
-  let freteReal=frete;
-  if(cupomAtual&&cupomAtual.tipo==='frete')freteReal=0;
+  // Fonte de verdade única: getTotal() já faz subtotal + frete − desconto
+  // (e zera o frete quando há cupom de frete grátis). Evita cálculo duplicado.
+  const total=getTotal();
   if(cupomAtual){
     if(descontoAtual>0)html+=`<div class="desconto-linha"><span>🎟️ Cupom ${cupomAtual.codigo}</span><span>−R$${descontoAtual}</span></div>`;
     else if(cupomAtual.tipo==='frete')html+=`<div class="desconto-linha"><span>🎟️ Frete grátis (${cupomAtual.codigo})</span><span>−R$${frete}</span></div>`;
   }
   const obs=document.getElementById('f-obs').value;
   if(obs)html+=`<div class="resumo-linha" style="flex-direction:column;gap:2px"><span style="color:var(--muted);font-size:.7rem">📝 OBS</span><span style="font-size:.78rem">${obs}</span></div>`;
-  const total=sub+freteReal-descontoAtual;
   document.getElementById('resumo-content').innerHTML=html+`<div class="resumo-total"><span>TOTAL</span><span>R$${Math.max(0,total)}</span></div>`;
 }
 

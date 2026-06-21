@@ -15,15 +15,13 @@ function fazerLogin(){
   }
 }
 function logout(){
+  // Remove o flag de login e cancela listeners antes de recarregar
+  localStorage.removeItem('tcho_admin_logado');
   if(unsubPedidos){ unsubPedidos(); unsubPedidos=null; }
   if(unsubConfig){ unsubConfig(); unsubConfig=null; }
   if(pollingLocalInterval){ clearInterval(pollingLocalInterval); pollingLocalInterval=null; }
-  localStorage.removeItem('tcho_admin_logado');
-  pedidos=[];pedidosFinHoje=[];totalHoje=0;
-  document.getElementById('app').classList.remove('show');
-  document.getElementById('login-screen').style.display='flex';
-  document.getElementById('login-pass').value='';
-  document.getElementById('login-err').textContent='';
+  // Recarrega a página: garante estado 100% limpo e código mais novo (volta pro login)
+  location.reload();
 }
 // Auto-login se já estava logado antes
 if(localStorage.getItem('tcho_admin_logado')==='true'){
@@ -207,32 +205,99 @@ function atualizarBotaoAuto(){
   document.getElementById('auto-banner').classList.toggle('show',autoAceitar);
 }
 
-// ── SIMULAÇÃO DE PEDIDO (para testes) ─────────────────────────
-const NOMES=['João','Maria','Pedro','Ana','Carlos','Lucas','Fernanda','Rafael','Beatriz','Guilherme'];
-const BAIRROS_SIMULACAO=['Copacabana','Floramar','Heliópolis','Jardim Europa','Lagoa','Planalto','Tupi','Venda Nova'];
-const MOCK=[['X-Burguer (🥩 Ao ponto • 🍅 Ketchup)'],['X-Bacon (🔥 Bem passado • 🤍 Maionese)','Refrigerante Lata'],['X-Picles (🩸 Mal passado)','Porção de Batata'],['X-Tropical (🥩 Ao ponto)'],['X-Bacon Duplo (🔥 Bem passado)','Suco Lata'],['X-Romeu & Julieta (🥩 Ao ponto • + Queijo)']];
+// ── PEDIDO MANUAL (lançado pelo balcão/telefone) ──────────────
+let manualPag='pix', manualTipo='delivery';
 
-async function simularPedido(){
-  const num=++contPed,tipo=Math.random()>.35?'delivery':'retirada';
-  const itens=MOCK[Math.floor(Math.random()*MOCK.length)];
-  const nome=NOMES[Math.floor(Math.random()*NOMES.length)];
-  const bairro=tipo==='delivery'?BAIRROS_SIMULACAO[Math.floor(Math.random()*BAIRROS_SIMULACAO.length)]:'';
-  const pag=['PIX','Dinheiro','Cartão'][Math.floor(Math.random()*3)];
-  const total=Math.floor(Math.random()*70)+25,frete=tipo==='delivery'?[4,5,6,7,8][Math.floor(Math.random()*5)]:0;
-  const obs=Math.random()>.72?'Sem cebola':'';
-  const pedido={id:num,num:`#${String(num).padStart(3,'0')}`,tipo,nome,bairro,pag,total,frete,obs,itens,status:'novo',
-    hora:firebase.firestore.FieldValue.serverTimestamp(),
-    horaStr:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),impresso:false};
+function abrirModalManual(){
+  manualPag='pix'; manualTipo='delivery';
+  ['man-nome','man-tel','man-subtotal','man-frete','man-itens','man-obs'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  // Popula o select de bairros (uma vez) a partir dos bairros atendidos
+  const sel=document.getElementById('man-bairro');
+  if(sel && !sel.options.length){
+    sel.innerHTML=(TCHO.bairros||[]).slice().sort((a,b)=>a.nome.localeCompare(b.nome))
+      .map(b=>`<option value="${b.nome}">${b.nome} — R$${b.taxa}</option>`).join('');
+  }
+  selManualPag('pix');
+  selManualTipo('delivery');
+  document.getElementById('modal-manual').style.display='flex';
+}
+function fecharModalManual(){ document.getElementById('modal-manual').style.display='none'; }
+
+function selManualTipo(tipo){
+  manualTipo=tipo;
+  document.getElementById('man-tipo-del').classList.toggle('sel',tipo==='delivery');
+  document.getElementById('man-tipo-ret').classList.toggle('sel',tipo==='retirada');
+  document.getElementById('man-bairro-wrap').style.display=tipo==='delivery'?'block':'none';
+  document.getElementById('man-frete-wrap').style.display=tipo==='delivery'?'block':'none';
+  if(tipo==='retirada'){ document.getElementById('man-frete').value=0; }
+  else { onManualBairro(); }
+  recalcManualTotal();
+}
+function selManualPag(pag){
+  manualPag=pag;
+  ['pix','dinheiro','cartao'].forEach(k=>document.getElementById('mpag-'+k).classList.toggle('sel',k===pag));
+}
+function onManualBairro(){
+  const nome=document.getElementById('man-bairro').value;
+  const b=(TCHO.bairros||[]).find(x=>x.nome===nome);
+  if(b) document.getElementById('man-frete').value=b.taxa;
+  recalcManualTotal();
+}
+function recalcManualTotal(){
+  const subtotal=parseFloat(document.getElementById('man-subtotal').value)||0;
+  const frete=manualTipo==='delivery'?(parseFloat(document.getElementById('man-frete').value)||0):0;
+  document.getElementById('man-total-disp').textContent='R$'+(subtotal+frete);
+}
+
+async function salvarPedidoManual(){
+  const nome=document.getElementById('man-nome').value.trim();
+  if(!nome){ showToast('⚠️ Informe o nome do cliente','tok-err'); return; }
+  const itens=document.getElementById('man-itens').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  if(!itens.length){ showToast('⚠️ Adicione pelo menos um item','tok-err'); return; }
+
+  const tel=document.getElementById('man-tel').value.trim();
+  const obs=document.getElementById('man-obs').value.trim();
+  const subtotal=parseFloat(document.getElementById('man-subtotal').value)||0;
+  const frete=manualTipo==='delivery'?(parseFloat(document.getElementById('man-frete').value)||0):0;
+  const total=subtotal+frete;                              // total inclui o frete (igual aos pedidos do cliente)
+  const bairro=manualTipo==='delivery'?document.getElementById('man-bairro').value:'';
+
+  // Número sequencial: usa o mesmo contador dos pedidos do cliente
+  let numOrdem;
   try{
-    await db.collection('pedidos').add(pedido);
-    showToast(`🔔 Novo pedido #${num} — ${nome}`,'tok-info');
+    const contRef=db.collection('config').doc('contador');
+    numOrdem=await db.runTransaction(async t=>{
+      const d=await t.get(contRef);
+      const next=(d.exists?d.data().ultimo:0)+1;
+      t.set(contRef,{ultimo:next},{merge:true});
+      return next;
+    });
+  }catch(e){ numOrdem=++contPed; }
+
+  const pedido={
+    id:numOrdem, num:`#${String(numOrdem).padStart(3,'0')}`,
+    tipo:manualTipo, nome, tel, bairro,
+    pag:manualPag, frete, total, desconto:0, cupom:'',
+    obs, itens, status:'novo', origem:'manual',
+    hora:firebase.firestore.FieldValue.serverTimestamp(),
+    horaStr:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
+    impresso:false,
+    criadoEm:firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  fecharModalManual();
+  try{
+    await db.collection('pedidos').add(pedido);            // o listener cuida de render/notificação/impressão
+    showToast(`✅ Pedido ${pedido.num} adicionado — ${nome}`,'tok-ok');
   }catch(e){
-    const p={...pedido,_id:'sim-'+num,hora:new Date()};
+    const p={...pedido,_id:'man-'+numOrdem,hora:new Date()};
     pedidos.push(p);totalHoje++;
-    showToast(`🔔 Novo pedido #${num} — ${nome}`,'tok-info');
     atualizarBadgeNovos();
     if(autoAceitar)setTimeout(()=>moverStatus(p._id,'prep',true),600);
     else renderAll();
+    showToast(`✅ Pedido ${pedido.num} adicionado — ${nome}`,'tok-ok');
   }
 }
 

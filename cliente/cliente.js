@@ -682,6 +682,9 @@ function mostrarBotaoAcompanhar(){
   const saved=JSON.parse(localStorage.getItem('tcho_pedido_atual')||'null');
   if(saved&&saved.docId){
     const numEl=document.getElementById('ba-num'); if(numEl) numEl.textContent=saved.num||'';
+    // Fixa o banner logo abaixo do cabeçalho (sticky), alinhando pela altura real do header
+    const hdr=document.querySelector('header');
+    el.style.top=((hdr?hdr.offsetHeight:90)+6)+'px';
     el.style.display='flex';
   } else {
     el.style.display='none';

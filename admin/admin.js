@@ -496,8 +496,16 @@ function renderCard(p){
 let editandoPedidoId = null;
 let editandoPag = null;
 
+// Acha o pedido em qualquer lista (ativos, finalizados de hoje ou log)
+function acharPedido(id){
+  return pedidos.find(x=>x._id===id)
+      || pedidosFinHoje.find(x=>x._id===id)
+      || logPedidos.find(x=>x._id===id)
+      || null;
+}
+
 function abrirModalEditar(id){
-  const p=pedidos.find(x=>x._id===id);
+  const p=acharPedido(id);
   if(!p) return;
   editandoPedidoId=id;
   editandoPag=p.pag||'pix';
@@ -520,7 +528,7 @@ function selEditPag(pag){
 }
 
 function recalcEditTotal(){
-  const p=pedidos.find(x=>x._id===editandoPedidoId);
+  const p=acharPedido(editandoPedidoId);
   if(!p) return;
   const frete=parseFloat(document.getElementById('edit-frete').value)||0;
   const subtotal=(p.total||0)-(p.frete||0);
@@ -533,7 +541,7 @@ function fecharModalEditar(){
 }
 
 function salvarEdicaoPedido(){
-  const p=pedidos.find(x=>x._id===editandoPedidoId);
+  const p=acharPedido(editandoPedidoId);
   if(!p) return;
   const nome=document.getElementById('edit-nome').value.trim();
   const tel=document.getElementById('edit-tel').value.trim();
@@ -544,8 +552,8 @@ function salvarEdicaoPedido(){
   if(!nome){showToast('⚠️ Nome obrigatório','tok-err');return;}
   if(!itens.length){showToast('⚠️ Adicione pelo menos um item','tok-err');return;}
   const update={nome,tel,pag:editandoPag,frete,total,obs,itens};
-  // Atualiza localmente
-  Object.assign(p,update);
+  // Atualiza em todas as listas onde o pedido apareça (ativos, finalizados, log)
+  [pedidos,pedidosFinHoje,logPedidos].forEach(arr=>{const it=arr.find(x=>x._id===editandoPedidoId);if(it)Object.assign(it,update);});
   // Persiste no Firestore
   db.collection('pedidos').doc(editandoPedidoId).update(update).catch(console.error);
   fecharModalEditar();
@@ -587,7 +595,10 @@ function renderFinalizadosHoje(lista){
       <div style="font-size:.78rem;font-weight:700;margin-bottom:2px">${p.nome}</div>
       ${p.bairro?`<div style="font-size:.66rem;color:var(--muted)">📍 ${p.bairro}</div>`:''}
       <div style="font-size:.67rem;color:var(--muted);margin:3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(p.itens||[]).join(' · ')}</div>
-      <div style="font-weight:700;color:${cor};font-size:.82rem;margin-top:4px">R$${p.total||0}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+        <div style="font-weight:700;color:${cor};font-size:.82rem">R$${p.total||0}</div>
+        <button class="btn-editar-card" onclick="abrirModalEditar('${p._id}')">✏️ Editar</button>
+      </div>
     </div>`;
   }).join('');
   sec.style.display='block';
@@ -664,6 +675,9 @@ function renderLog(){
       <div class="log-footer">
         <div class="log-pag">${p.pag||'-'}${(p.frete||0)>0?` · Frete: ${r(p.frete)}`:''}</div>
         <div class="log-total">${r(p.total||0)}</div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:8px">
+        <button class="btn-editar-card" onclick="abrirModalEditar('${p._id}')">✏️ Editar</button>
       </div>
     </div>`).join('');
 }

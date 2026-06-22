@@ -337,11 +337,27 @@ function cupomCozinha(p){
   </body></html>`;
 }
 
+// Monta o endereço completo do cliente em texto
+function enderecoCompleto(p){
+  return [p.endereco, p.bairro, p.cidade].filter(Boolean).join(', ');
+}
+// Link do Google Maps com o endereço do cliente
+function mapsUrl(p){
+  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(enderecoCompleto(p));
+}
+
 function cupomEntrega(p){
   const logoUrl = new URL('../logo/logo.png', window.location.href).href;
   const obsBloco = p.obs
     ? `<div class="line"></div><div class="obs-box">⚠ OBS: ${p.obs.toUpperCase()} ⚠</div>`
     : '';
+  // QR code que abre o Google Maps no endereço do cliente (para o motoboy)
+  const endTxt = enderecoCompleto(p);
+  const qrBloco = (p.tipo==='delivery' && endTxt) ? `
+    <div class="line"></div>
+    <div class="c b" style="font-size:12px;margin-bottom:4px">🛵 ROTA — escaneie no Maps</div>
+    <div class="c"><img src="https://api.qrserver.com/v1/create-qr-code/?size=170x170&qzone=1&data=${encodeURIComponent(mapsUrl(p))}" alt="QR Google Maps" style="width:160px;height:160px"></div>
+    <div class="c" style="font-size:11px">${endTxt}</div>` : '';
   const enderecoBloco = p.tipo==='delivery' ? `
     <div class="line"></div>
     ${p.endereco ? `<div style="margin:2px 0">End: ${p.endereco}</div>` : ''}
@@ -365,6 +381,7 @@ function cupomEntrega(p){
     ${obsBloco}
     <div class="line"></div>
     <div class="row big"><span>TOTAL:</span><span>R$${p.total}</span></div>
+    ${qrBloco}
     <div class="c b" style="margin-top:8px">Obrigado! 😋</div>
     <script>window.onload=function(){window.print();setTimeout(()=>window.close(),1500)};<\/script>
   </body></html>`;
@@ -374,7 +391,7 @@ function imprimirPedido(p){
   if(!document.getElementById('cfg-print').checked)return;
   fetch('http://localhost:3333/imprimir',{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(p)
+    body:JSON.stringify({cozinha:cupomCozinha(p), entrega:cupomEntrega(p)})
   }).then(r=>r.json()).then(d=>{
     if(d.ok)showToast(`🖨️ Pedido ${p.num||'#'+p.id} impresso!`,'tok-ok');
     else showToast(`⚠️ Erro ao imprimir: ${d.erro}`,'tok-err');

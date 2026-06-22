@@ -328,7 +328,7 @@ function cupomCozinha(p){
     <div class="c b" style="font-size:16px">— COZINHA —</div>
     <div class="c" style="font-size:13px">TCHO BURGUER</div>
     <div class="line"></div>
-    <div class="row"><span class="big">${p.num||'#'+p.id}</span><span>${p.horaStr}</span></div>
+    <div class="row"><span class="big">${p.num||'#'+p.id}</span><span>${p.horaStr||''}</span></div>
     <div class="row"><span class="b">${p.tipo==='delivery'?'🛵 DELIVERY':'🏃 RETIRADA'}</span><span>${p.nome}</span></div>
     <div class="line"></div>
     ${p.itens.map(i=>`<div style="margin:3px 0">• ${i}</div>`).join('')}
@@ -368,7 +368,7 @@ function cupomEntrega(p){
     <div class="c"><img src="${logoUrl}" style="max-width:160px;max-height:70px;margin-bottom:4px"></div>
     <div class="c" style="font-size:12px">Qui–Dom 19h–23h | (31) 98309-4152</div>
     <div class="line"></div>
-    <div class="row"><span class="big">${p.num||'#'+p.id}</span><span>${p.horaStr}</span></div>
+    <div class="row"><span class="big">${p.num||'#'+p.id}</span><span>${p.horaStr||''}</span></div>
     <div class="row b"><span>${p.tipo==='delivery'?'🛵 DELIVERY':'🏃 RETIRADA'}</span></div>
     <div class="line"></div>
     <div class="row"><span>Cliente:</span><span>${p.nome}</span></div>

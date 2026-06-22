@@ -513,21 +513,76 @@ function acharPedido(id){
       || null;
 }
 
+let editItens = [];      // [{nome, preco}]
+let editDesconto = 0;
+
 function abrirModalEditar(id){
   const p=acharPedido(id);
   if(!p) return;
   editandoPedidoId=id;
   editandoPag=p.pag||'pix';
+  editDesconto=p.desconto||0;
   document.getElementById('edit-num').textContent=p.num||'#'+p.id;
   document.getElementById('edit-nome').value=p.nome||'';
   document.getElementById('edit-tel').value=p.tel||'';
   document.getElementById('edit-frete').value=p.frete||0;
-  document.getElementById('edit-total').value=p.total||0;
-  document.getElementById('edit-itens').value=(p.itens||[]).join('\n');
   document.getElementById('edit-obs').value=p.obs||'';
+  // Endereço (entrega)
+  document.getElementById('edit-endereco').value=p.endereco||'';
+  document.getElementById('edit-bairro').value=p.bairro||'';
+  document.getElementById('edit-cidade').value=p.cidade||'';
+  document.getElementById('edit-endereco-bloco').style.display = p.tipo==='delivery' ? 'block' : 'none';
+  // Itens (parseados pra permitir soma automática)
+  editItens=(p.itens||[]).map(parseItemTexto);
+  renderItensEdit();
   selEditPag(editandoPag);
   document.getElementById('modal-editar').style.display='flex';
 }
+
+// Extrai {nome, preco} de um texto tipo "X-Bacon (ao ponto) — R$30"
+function parseItemTexto(s){
+  const m=String(s).match(/—\s*R\$\s*([\d.,]+)\s*$/);
+  if(m) return {nome:s.slice(0,m.index).trim(), preco:parseFloat(m[1].replace(',','.'))||0};
+  return {nome:String(s).trim(), preco:0};
+}
+
+// Lista de produtos do cardápio (base + custom) para o seletor
+function listaProdutosEdit(){
+  const base=PRODS.map(p=>({nome:p.n,preco:p.p}));
+  const cust=getProdsCustom().map(p=>({nome:p.n||p.nome,preco:p.p!==undefined?p.p:p.preco}));
+  return [...base,...cust];
+}
+
+function renderItensEdit(){
+  const lista=document.getElementById('edit-itens-lista');
+  lista.innerHTML=editItens.map((it,i)=>`
+    <div style="display:flex;gap:6px;align-items:center">
+      <input class="edit-inp" style="flex:1;font-size:.74rem;padding:7px 9px" value="${(it.nome||'').replace(/"/g,'&quot;')}" onchange="updItemNome(${i},this.value)">
+      <span style="color:var(--muted);font-size:.7rem">R$</span>
+      <input class="edit-inp" type="number" min="0" step="1" style="width:66px;font-size:.74rem;padding:7px 6px" value="${it.preco||0}" oninput="updItemPreco(${i},this.value)">
+      <button type="button" onclick="removerItemEdit(${i})" title="Remover" style="background:#3a1010;color:#e74c3c;border:none;border-radius:6px;width:30px;height:32px;cursor:pointer;flex:0 0 auto">✕</button>
+    </div>`).join('') || '<div style="font-size:.7rem;color:var(--muted)">Nenhum item — adicione abaixo</div>';
+  const sel=document.getElementById('edit-add-prod');
+  if(sel && !sel.options.length){
+    sel.innerHTML='<option value="">+ Adicionar produto...</option>'+
+      listaProdutosEdit().map((p,i)=>`<option value="${i}">${p.nome} — R$${p.preco}</option>`).join('');
+  }
+  recalcEditTotal();
+}
+
+function addItemEdit(){
+  const sel=document.getElementById('edit-add-prod');
+  const idx=parseInt(sel.value);
+  if(isNaN(idx)) return;
+  const prod=listaProdutosEdit()[idx];
+  if(!prod) return;
+  editItens.push({nome:prod.nome, preco:prod.preco});
+  sel.value='';
+  renderItensEdit();
+}
+function removerItemEdit(i){ editItens.splice(i,1); renderItensEdit(); }
+function updItemNome(i,v){ if(editItens[i]) editItens[i].nome=v; }
+function updItemPreco(i,v){ if(editItens[i]){ editItens[i].preco=parseFloat(v)||0; recalcEditTotal(); } }
 
 function selEditPag(pag){
   editandoPag=pag;
@@ -537,16 +592,15 @@ function selEditPag(pag){
 }
 
 function recalcEditTotal(){
-  const p=acharPedido(editandoPedidoId);
-  if(!p) return;
+  const subtotal=editItens.reduce((a,it)=>a+(parseFloat(it.preco)||0),0);
   const frete=parseFloat(document.getElementById('edit-frete').value)||0;
-  const subtotal=(p.total||0)-(p.frete||0);
-  document.getElementById('edit-total').value=subtotal+frete;
+  const total=Math.max(0, subtotal+frete-(editDesconto||0));
+  document.getElementById('edit-total').value=total;
 }
 
 function fecharModalEditar(){
   document.getElementById('modal-editar').style.display='none';
-  editandoPedidoId=null;editandoPag=null;
+  editandoPedidoId=null;editandoPag=null;editItens=[];editDesconto=0;
 }
 
 function salvarEdicaoPedido(){
@@ -555,12 +609,18 @@ function salvarEdicaoPedido(){
   const nome=document.getElementById('edit-nome').value.trim();
   const tel=document.getElementById('edit-tel').value.trim();
   const frete=parseFloat(document.getElementById('edit-frete').value)||0;
-  const total=parseFloat(document.getElementById('edit-total').value)||0;
   const obs=document.getElementById('edit-obs').value.trim();
-  const itens=document.getElementById('edit-itens').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const endereco=document.getElementById('edit-endereco').value.trim();
+  const bairro=document.getElementById('edit-bairro').value.trim();
+  const cidade=document.getElementById('edit-cidade').value.trim();
+  // Itens -> volta pro formato texto "nome — R$preco"
+  const itens=editItens.filter(it=>(it.nome||'').trim())
+      .map(it=>(it.preco>0?`${it.nome.trim()} — R$${it.preco}`:it.nome.trim()));
   if(!nome){showToast('⚠️ Nome obrigatório','tok-err');return;}
   if(!itens.length){showToast('⚠️ Adicione pelo menos um item','tok-err');return;}
-  const update={nome,tel,pag:editandoPag,frete,total,obs,itens};
+  const subtotal=editItens.reduce((a,it)=>a+(parseFloat(it.preco)||0),0);
+  const total=Math.max(0, subtotal+frete-(editDesconto||0));
+  const update={nome,tel,pag:editandoPag,frete,total,obs,itens,endereco,bairro,cidade};
   // Atualiza em todas as listas onde o pedido apareça (ativos, finalizados, log)
   [pedidos,pedidosFinHoje,logPedidos].forEach(arr=>{const it=arr.find(x=>x._id===editandoPedidoId);if(it)Object.assign(it,update);});
   // Persiste no Firestore

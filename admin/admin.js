@@ -101,6 +101,15 @@ function atualizarStatusAutoHorario(){
   if(lojaRow) lojaRow.style.opacity=(auto&&!forcar)?'0.4':'1';
 }
 
+// Toggle "Loja aberta": ao fechar manualmente, desliga "forçar aberta" pra não conflitar
+function onToggleLojaConfig(){
+  if(!document.getElementById('cfg-loja').checked){
+    const f=document.getElementById('cfg-forcar-aberta');
+    if(f) f.checked=false;
+  }
+  salvarConfig();
+}
+
 function salvarConfig(){
   atualizarBadgeLoja();
   atualizarStatusAutoHorario();

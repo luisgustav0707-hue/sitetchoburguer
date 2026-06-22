@@ -60,6 +60,7 @@ let modalId=null,pontoAtual=null,sacheAtual=null,removidosAtual=[],adicionaisAtu
 
 // ── LOJA ABERTA/FECHADA + CONFIG ──────────────────────────────
 let prazoEntrega = { min: 30, max: 45 };
+let lojaAbertaState = true;   // estado atual da loja (usado pra bloquear pedidos)
 
 function atualizarPrazoBadge(){
   const el = document.getElementById('prazo-texto');
@@ -76,13 +77,16 @@ function lojaAbertaAgora(){
 
 function aplicarEstadoLoja(data){
   let aberta;
-  if(data.forcarAberta){
+  if(data.lojaAberta === false){          // fechamento manual tem prioridade máxima
+    aberta = false;
+  } else if(data.forcarAberta){           // forçar aberta (ignora horário)
     aberta = true;
-  } else if(data.autoHorario !== false){
+  } else if(data.autoHorario !== false){  // horário automático
     aberta = lojaAbertaAgora();
   } else {
     aberta = data.lojaAberta !== false;
   }
+  lojaAbertaState = aberta;
   document.getElementById('loja-fechada').classList.toggle('show', !aberta);
 }
 
@@ -564,6 +568,12 @@ function renderResumo(){
 
 // ── FINALIZAR PEDIDO (salva no Firestore) ──────────────────────
 async function finalizarPedido(){
+  // Bloqueio: loja fechada não aceita pedido
+  if(!lojaAbertaState){
+    document.getElementById('loja-fechada').classList.add('show');
+    alert('😔 A loja está fechada no momento. Não é possível finalizar o pedido.');
+    return;
+  }
   let numOrdem;
   try {
     const contRef = db.collection('config').doc('contador');

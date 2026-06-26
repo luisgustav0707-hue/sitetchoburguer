@@ -484,6 +484,11 @@
         <div><label class="edit-lbl">📞 Telefone</label><input id="man-tel" class="edit-inp" type="tel" placeholder="(opcional)"></div>
       </div>
       <div>
+        <label class="edit-lbl">📅 Data do pedido</label>
+        <input id="man-data" class="edit-inp" type="date" onchange="onManualDataChange()">
+        <div id="man-data-aviso" style="font-size:.66rem;color:var(--muted);margin-top:3px"></div>
+      </div>
+      <div>
         <label class="edit-lbl">📦 Tipo</label>
         <div style="display:flex;gap:6px;margin-top:4px">
           <button class="edit-pag-btn" id="man-tipo-del" onclick="selManualTipo('delivery')">🛵 Delivery</button>

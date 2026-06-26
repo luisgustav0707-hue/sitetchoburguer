@@ -246,11 +246,30 @@ function abrirModalManual(){
     sel.innerHTML=(TCHO.bairros||[]).slice().sort((a,b)=>a.nome.localeCompare(b.nome))
       .map(b=>`<option value="${b.nome}">${b.nome} — R$${b.taxa}</option>`).join('');
   }
+  // Data do pedido: começa com hoje
+  const dataEl=document.getElementById('man-data');
+  if(dataEl){ dataEl.value=new Date().toISOString().split('T')[0]; }
+  onManualDataChange();
   selManualPag('pix');
   selManualTipo('delivery');
   document.getElementById('modal-manual').style.display='flex';
 }
 function fecharModalManual(){ document.getElementById('modal-manual').style.display='none'; }
+
+// Avisa quando a data escolhida é de um dia passado (entra como finalizado, no caixa daquele dia)
+function onManualDataChange(){
+  const av=document.getElementById('man-data-aviso');
+  if(!av) return;
+  const v=document.getElementById('man-data').value;
+  const hoje=new Date().toISOString().split('T')[0];
+  if(v && v<hoje){
+    av.innerHTML='⏪ Data passada: será lançado como <b>finalizado</b> no caixa desse dia (não vai pro kanban nem imprime).';
+    av.style.color='#f39c12';
+  } else {
+    av.textContent='Hoje — segue o fluxo normal (vai pro kanban).';
+    av.style.color='var(--muted)';
+  }
+}
 
 function selManualTipo(tipo){
   manualTipo=tipo;
@@ -327,6 +346,24 @@ async function salvarPedidoManual(){
   const total=subtotal+frete;                              // total inclui o frete (igual aos pedidos do cliente)
   const bairro=manualTipo==='delivery'?document.getElementById('man-bairro').value:'';
 
+  // ── Data do pedido ──
+  // Hoje  → status 'novo' com data/hora atual (fluxo normal: kanban + impressão).
+  // Passado → status 'finalizado' na data escolhida (registro histórico: entra no
+  //           caixa daquele dia, sem ir pro kanban nem imprimir).
+  const dataStr=document.getElementById('man-data').value;
+  const hojeStr=new Date().toISOString().split('T')[0];
+  const agora=new Date();
+  let dataPedido, statusPedido;
+  if(dataStr && dataStr<hojeStr){
+    const [y,mo,da]=dataStr.split('-').map(Number);
+    dataPedido=new Date(y,mo-1,da,agora.getHours(),agora.getMinutes());  // data escolhida, hora atual
+    statusPedido='finalizado';
+  } else {
+    dataPedido=agora;
+    statusPedido='novo';
+  }
+  const tsPedido=firebase.firestore.Timestamp.fromDate(dataPedido);
+
   // Número sequencial: usa o mesmo contador dos pedidos do cliente
   let numOrdem;
   try{
@@ -343,24 +380,29 @@ async function salvarPedidoManual(){
     id:numOrdem, num:`#${String(numOrdem).padStart(3,'0')}`,
     tipo:manualTipo, nome, tel, bairro,
     pag:manualPag, frete, total, desconto:0, cupom:'',
-    obs, itens, status:'novo', origem:'manual',
-    hora:firebase.firestore.FieldValue.serverTimestamp(),
-    horaStr:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
-    impresso:false,
-    criadoEm:firebase.firestore.FieldValue.serverTimestamp(),
+    obs, itens, status:statusPedido, origem:'manual',
+    hora:tsPedido,
+    horaStr:dataPedido.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
+    impresso:statusPedido==='finalizado',                  // passado não imprime
+    criadoEm:tsPedido,
   };
 
   fecharModalManual();
+  const msg = statusPedido==='finalizado'
+    ? `✅ Pedido ${pedido.num} lançado em ${dataPedido.toLocaleDateString('pt-BR')} (finalizado)`
+    : `✅ Pedido ${pedido.num} adicionado — ${nome}`;
   try{
-    await db.collection('pedidos').add(pedido);            // o listener cuida de render/notificação/impressão
-    showToast(`✅ Pedido ${pedido.num} adicionado — ${nome}`,'tok-ok');
+    await db.collection('pedidos').add(pedido);            // o listener cuida de render/notificação/impressão (só p/ 'novo')
+    showToast(msg,'tok-ok');
   }catch(e){
-    const p={...pedido,_id:'man-'+numOrdem,hora:new Date()};
-    pedidos.push(p);totalHoje++;
-    atualizarBadgeNovos();
-    if(autoAceitar)setTimeout(()=>moverStatus(p._id,'prep',true),600);
-    else renderAll();
-    showToast(`✅ Pedido ${pedido.num} adicionado — ${nome}`,'tok-ok');
+    const p={...pedido,_id:'man-'+numOrdem,hora:dataPedido};
+    if(statusPedido==='novo'){
+      pedidos.push(p);totalHoje++;
+      atualizarBadgeNovos();
+      if(autoAceitar)setTimeout(()=>moverStatus(p._id,'prep',true),600);
+      else renderAll();
+    }
+    showToast(msg,'tok-ok');
   }
 }
 

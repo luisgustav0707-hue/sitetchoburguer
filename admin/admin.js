@@ -23,11 +23,16 @@ function logout(){
   // Recarrega a página: garante estado 100% limpo e código mais novo (volta pro login)
   location.reload();
 }
-// Auto-login se já estava logado antes
+// Auto-login se já estava logado antes.
+// IMPORTANTE: iniciarApp() é adiado com setTimeout porque este bloco roda no
+// topo do arquivo, antes das variáveis `let pedidos`, `unsubPedidos`, etc.
+// (declaradas mais abaixo) existirem. Chamar direto dava
+// "Cannot access 'pedidos' before initialization", o listener nunca ligava e o
+// painel ficava sem receber pedidos até deslogar/logar de novo manualmente.
 if(localStorage.getItem('tcho_admin_logado')==='true'){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').classList.add('show');
-  iniciarApp();
+  setTimeout(iniciarApp, 0);   // roda só depois do arquivo terminar de carregar
 }
 
 // ── NAVEGAÇÃO ──────────────────────────────────────────────────
@@ -174,6 +179,7 @@ function atualizarBotaoSom(){
 // ── KANBAN & PEDIDOS ───────────────────────────────────────────
 let pedidos=[],pedidosFinHoje=[],totalHoje=0,contPed=100,autoAceitar=false,dragId=null,dragSrc=null;
 let unsubPedidos=null,unsubConfig=null,pollingLocalInterval=null;
+let primeiroSnapshotPedidos=true,reconnectPedidosTimer=null,handlersConexaoRegistrados=false;
 
 function carregarFinalizadosHoje(){
   const ini=new Date();ini.setHours(0,0,0,0);
@@ -1859,6 +1865,86 @@ function lerPedidosLocal(){
 }
 
 // ── INICIALIZAÇÃO ──────────────────────────────────────────────
+// ── Listener de pedidos (reconectável) ─────────────────────────
+// Religa sozinho quando o Firestore cai (aba dormiu, wi-fi oscilou, etc).
+// Sem isso, o painel ficava "surdo" e só voltava recarregando a página.
+function iniciarListenerPedidos(){
+  if(unsubPedidos){ unsubPedidos(); unsubPedidos=null; }
+  unsubPedidos = db.collection('pedidos')
+    .where('status','in',['novo','prep','pronto','entrega'])
+    .onSnapshot(snapshot=>{
+      // conexão OK: cancela reconexão pendente e o polling local de fallback
+      if(reconnectPedidosTimer){ clearTimeout(reconnectPedidosTimer); reconnectPedidosTimer=null; }
+      if(pollingLocalInterval){ clearInterval(pollingLocalInterval); pollingLocalInterval=null; }
+      const ehPrimeiro = primeiroSnapshotPedidos;
+      if(ehPrimeiro){
+        pedidos = [];
+        localStorage.removeItem('tcho_pedidos');
+        primeiroSnapshotPedidos = false;
+        // Carrega finalizados de hoje separadamente (não bloqueia o listener)
+        carregarFinalizadosHoje();
+      }
+      snapshot.docChanges().forEach(change=>{
+        const data=change.doc.data();
+        const p={...data,_id:change.doc.id,hora:data.hora?data.hora.toDate():new Date()};
+        if(change.type==='added'){
+          // Numa reconexão o Firestore reenvia tudo como 'added'; o find evita
+          // notificar/imprimir de novo pedidos que já estavam na tela.
+          if(!pedidos.find(x=>x._id===p._id)){
+            pedidos.push(p);totalHoje++;
+            if(!ehPrimeiro){
+              tocarNotificacao();
+              showToast(`🔔 Novo pedido ${p.num||'#'+p.id} — ${p.nome}`,'tok-info');
+              atualizarBadgeNovos();
+              imprimirPedido(p);
+              if(autoAceitar)setTimeout(()=>moverStatus(p._id,'prep',true),600);
+            } else {
+              atualizarBadgeNovos();
+            }
+          }
+        } else if(change.type==='modified'){
+          const idx=pedidos.findIndex(x=>x._id===p._id);
+          if(idx!==-1) pedidos[idx]={...pedidos[idx],...p};
+        } else if(change.type==='removed'){
+          // Pedido saiu da query (foi finalizado ou cancelado) — move para finalizados
+          const idx=pedidos.findIndex(x=>x._id===p._id);
+          if(idx!==-1){
+            const pfin={...pedidos[idx],...p};
+            pedidos.splice(idx,1);
+            if(!pedidosFinHoje.find(x=>x._id===pfin._id)) pedidosFinHoje.push(pfin);
+          }
+        }
+      });
+      renderAll();renderHistorico();
+    },(err)=>{
+      console.error('Firestore listener erro:', err.code, err.message);
+      showToast('⚠️ Sem conexão com o servidor — religando…', 'tok-err');
+      agendarReconexaoPedidos();
+    });
+}
+function agendarReconexaoPedidos(){
+  if(reconnectPedidosTimer) return;             // já tem uma reconexão a caminho
+  reconnectPedidosTimer = setTimeout(()=>{
+    reconnectPedidosTimer = null;
+    if(localStorage.getItem('tcho_admin_logado')==='true' && typeof db!=='undefined'){
+      iniciarListenerPedidos();
+    }
+  }, 3000);
+}
+// Religa o listener quando a aba volta ao foco ou a internet volta — assim o
+// dono nunca mais precisa recarregar/deslogar pra voltar a receber pedidos.
+function registrarHandlersConexao(){
+  if(handlersConexaoRegistrados) return;
+  handlersConexaoRegistrados = true;
+  const reconectar = ()=>{
+    if(localStorage.getItem('tcho_admin_logado')==='true' && typeof db!=='undefined'){
+      iniciarListenerPedidos();
+    }
+  };
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') reconectar(); });
+  window.addEventListener('online', reconectar);
+}
+
 function iniciarApp(){
   renderAll();
   atualizarBotaoSom();
@@ -1950,54 +2036,9 @@ function iniciarApp(){
   } catch(e){}
 
   // ── Firestore: listener em tempo real (pedidos ativos) ───────
-  let primeiroSnapshot = true;
-  unsubPedidos=db.collection('pedidos')
-    .where('status','in',['novo','prep','pronto','entrega'])
-    .onSnapshot(snapshot=>{
-      if(pollingLocalInterval){ clearInterval(pollingLocalInterval); pollingLocalInterval=null; }
-      const ehPrimeiro = primeiroSnapshot;
-      if(ehPrimeiro){
-        pedidos = [];
-        localStorage.removeItem('tcho_pedidos');
-        primeiroSnapshot = false;
-        // Carrega finalizados de hoje separadamente (não bloqueia o listener)
-        carregarFinalizadosHoje();
-      }
-      snapshot.docChanges().forEach(change=>{
-        const data=change.doc.data();
-        const p={...data,_id:change.doc.id,hora:data.hora?data.hora.toDate():new Date()};
-        if(change.type==='added'){
-          if(!pedidos.find(x=>x._id===p._id)){
-            pedidos.push(p);totalHoje++;
-            if(!ehPrimeiro){
-              tocarNotificacao();
-              showToast(`🔔 Novo pedido ${p.num||'#'+p.id} — ${p.nome}`,'tok-info');
-              atualizarBadgeNovos();
-              imprimirPedido(p);
-              if(autoAceitar)setTimeout(()=>moverStatus(p._id,'prep',true),600);
-            } else {
-              atualizarBadgeNovos();
-            }
-          }
-        } else if(change.type==='modified'){
-          const idx=pedidos.findIndex(x=>x._id===p._id);
-          if(idx!==-1) pedidos[idx]={...pedidos[idx],...p};
-        } else if(change.type==='removed'){
-          // Pedido saiu da query (foi finalizado ou cancelado) — move para finalizados
-          const idx=pedidos.findIndex(x=>x._id===p._id);
-          if(idx!==-1){
-            const pfin={...pedidos[idx],...p};
-            pedidos.splice(idx,1);
-            if(!pedidosFinHoje.find(x=>x._id===pfin._id)) pedidosFinHoje.push(pfin);
-          }
-        }
-      });
-      renderAll();renderHistorico();
-    },(err)=>{
-      console.error('Firestore listener erro:', err.code, err.message);
-      showToast('⚠️ Firestore offline: ' + (err.code || err.message), 'tok-err');
-      /* polling local já está rodando como fallback */
-    });
+  primeiroSnapshotPedidos = true;
+  iniciarListenerPedidos();
+  registrarHandlersConexao();
 
   // Listener cupons (Firestore)
   db.collection('cupons').onSnapshot(snapshot=>{

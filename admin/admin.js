@@ -1631,6 +1631,58 @@ let finPeriodo = 'hoje';
 let finPedidosList = [];
 let despesas = [];            // contas a pagar do período carregado
 let finTab = 'receber';       // sub-aba ativa: receber | pagar | fluxo
+let despesaFoto = null;       // foto da nota (data URL comprimido) aguardando salvar
+
+// Lê a foto/nota, redimensiona e comprime no próprio aparelho (evita doc gigante no Firestore)
+function onFotoSelecionada(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  if(!file.type.startsWith('image/')){ showToast('⚠️ Selecione uma imagem','tok-err'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 1000;                                   // largura máx: legível e leve
+      const escala = Math.min(1, maxW/img.width);
+      const w = Math.round(img.width*escala), h = Math.round(img.height*escala);
+      const cv = document.createElement('canvas'); cv.width=w; cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      despesaFoto = cv.toDataURL('image/jpeg', 0.55);       // ~80-200KB, cabe no doc (<1MB)
+      mostrarPreviewFoto();
+    };
+    img.onerror = () => showToast('⚠️ Não consegui ler a imagem','tok-err');
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function mostrarPreviewFoto(){
+  const el = document.getElementById('desp-foto-preview');
+  if(!el) return;
+  el.innerHTML = despesaFoto ? `
+    <div style="position:relative;display:inline-block;margin-top:8px">
+      <img src="${despesaFoto}" style="max-width:130px;max-height:130px;border-radius:8px;border:1px solid #3a3530;display:block">
+      <button type="button" onclick="removerFotoDespesa()" title="Remover foto" style="position:absolute;top:-8px;right:-8px;background:#e74c3c;color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:.8rem;line-height:1">✕</button>
+    </div>` : '';
+}
+function removerFotoDespesa(){
+  despesaFoto = null;
+  const inp = document.getElementById('desp-foto'); if(inp) inp.value='';
+  mostrarPreviewFoto();
+}
+// Abre a foto da nota em tela cheia (clica pra fechar)
+function abrirFotoNota(id){
+  const d = despesas.find(x=>x._id===id);
+  if(!d || !d.foto) return;
+  let ov = document.getElementById('modal-foto-nota');
+  if(!ov){
+    ov = document.createElement('div'); ov.id='modal-foto-nota';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:600;display:flex;align-items:center;justify-content:center;padding:16px;cursor:zoom-out';
+    ov.onclick=()=>{ ov.style.display='none'; };
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML = `<img src="${d.foto}" style="max-width:96vw;max-height:92vh;border-radius:10px">`;
+  ov.style.display='flex';
+}
 
 // Alterna entre Contas a Receber / Contas a Pagar / Fluxo de Caixa
 function setFinTab(tab){
@@ -1735,7 +1787,8 @@ async function carregarDespesas(range){
       despesas = snap.docs.map(d=>{
         const x=d.data();
         return {_id:d.id, descricao:x.descricao||'', valor:Number(x.valor)||0,
-                data:x.data?.toDate?.()?.toISOString() || x.data || new Date().toISOString()};
+                data:x.data?.toDate?.()?.toISOString() || x.data || new Date().toISOString(),
+                foto:x.foto||''};
       });
     }
   }catch(e){ /* mantém localStorage */ }
@@ -1749,16 +1802,18 @@ async function salvarDespesa(){
   if(!valor || valor<=0){ showToast('⚠️ Informe um valor maior que zero','tok-err'); return; }
   const dataDate=new Date(dataStr+'T12:00:00');     // meio-dia evita virar o dia por fuso
 
-  const reg={ descricao:desc, valor:valor, data:dataDate.toISOString() };
+  const reg={ descricao:desc, valor:valor, data:dataDate.toISOString(), foto:despesaFoto||'' };
   // grava no localStorage (sempre)
   const todas=JSON.parse(localStorage.getItem('tcho_despesas')||'[]');
 
   try{
-    const ref=await db.collection('despesas').add({
+    const doc={
       descricao:desc, valor:valor,
       data:firebase.firestore.Timestamp.fromDate(dataDate),
       criadoEm:firebase.firestore.FieldValue.serverTimestamp(),
-    });
+    };
+    if(despesaFoto) doc.foto=despesaFoto;                   // foto da nota (opcional)
+    const ref=await db.collection('despesas').add(doc);
     reg._id=ref.id;
   }catch(e){ reg._id='desp-'+Date.now(); }
   todas.push(reg);
@@ -1767,6 +1822,7 @@ async function salvarDespesa(){
   // limpa o form (mantém a data escolhida para lançar várias seguidas)
   document.getElementById('desp-desc').value='';
   document.getElementById('desp-valor').value='';
+  removerFotoDespesa();                                     // limpa foto + preview
   document.getElementById('desp-desc').focus();
   showToast(`✅ Despesa lançada — ${desc}`,'tok-ok');
   carregarFinanceiro();   // recarrega período e re-renderiza tudo
@@ -1798,7 +1854,7 @@ function renderContasPagar(){
       <tbody>
         ${sorted.map(d=>`<tr>
           <td style="font-size:.72rem;color:var(--muted)">${fmtD(d.data)}</td>
-          <td>${(d.descricao||'').replace(/</g,'&lt;')}</td>
+          <td>${(d.descricao||'').replace(/</g,'&lt;')}${d.foto?` <button onclick="abrirFotoNota('${d._id}')" title="Ver nota" style="background:none;border:none;cursor:pointer;font-size:.95rem;padding:0 2px;vertical-align:middle">📷</button>`:''}</td>
           <td class="fin-val" style="color:#e74c3c">${r(d.valor)}</td>
           <td style="width:34px;text-align:center"><button onclick="removerDespesa('${d._id}')" title="Excluir" style="background:#3a1010;color:#e74c3c;border:none;border-radius:6px;width:28px;height:28px;cursor:pointer">✕</button></td>
         </tr>`).join('')}

@@ -14,6 +14,15 @@ function fazerLogin(){
     document.getElementById('login-pass').value='';
   }
 }
+// Mostra/oculta a senha digitada (botão 👁️ na tela de login)
+function toggleSenha(){
+  const inp=document.getElementById('login-pass');
+  const btn=document.getElementById('btn-ver-senha');
+  const mostrar = inp.type==='password';
+  inp.type = mostrar ? 'text' : 'password';
+  if(btn){ btn.textContent = mostrar ? '🙈' : '👁️'; btn.title = mostrar ? 'Ocultar senha' : 'Mostrar senha'; }
+  inp.focus();
+}
 function logout(){
   // Remove o flag de login e cancela listeners antes de recarregar
   localStorage.removeItem('tcho_admin_logado');
@@ -1620,6 +1629,24 @@ function renderInativos(){
 // ── FINANCEIRO ─────────────────────────────────────────────────
 let finPeriodo = 'hoje';
 let finPedidosList = [];
+let despesas = [];            // contas a pagar do período carregado
+let finTab = 'receber';       // sub-aba ativa: receber | pagar | fluxo
+
+// Alterna entre Contas a Receber / Contas a Pagar / Fluxo de Caixa
+function setFinTab(tab){
+  finTab = tab;
+  ['receber','pagar','fluxo'].forEach(t=>{
+    const btn=document.getElementById('fintab-'+t);
+    const sub=document.getElementById('finsub-'+t);
+    if(btn) btn.classList.toggle('active', t===tab);
+    if(sub) sub.style.display = t===tab ? 'block' : 'none';
+  });
+  // garante o input de data preenchido ao abrir "pagar" pela 1ª vez
+  if(tab==='pagar'){
+    const d=document.getElementById('desp-data');
+    if(d && !d.value) d.value=new Date().toISOString().split('T')[0];
+  }
+}
 
 function filtrarPeriodo(tipo){
   finPeriodo = tipo;
@@ -1684,7 +1711,123 @@ async function carregarFinanceiro(){
     // Erro no Firestore → mantém dados do localStorage
   }
 
+  await carregarDespesas(range);
   renderFinanceiro();
+  renderContasPagar();
+  renderFluxoCaixa();
+}
+
+// ── CONTAS A PAGAR (despesas) ──────────────────────────────────
+async function carregarDespesas(range){
+  // 1. localStorage primeiro (funciona offline / sem Firebase)
+  const todas = JSON.parse(localStorage.getItem('tcho_despesas')||'[]');
+  despesas = todas.filter(d=>{
+    const h=new Date(d.data);
+    return !isNaN(h.getTime()) && h>=range.ini && h<range.fim;
+  });
+  // 2. Firestore (fonte oficial, sincroniza entre dispositivos)
+  try{
+    const snap=await db.collection('despesas')
+      .where('data','>=', firebase.firestore.Timestamp.fromDate(range.ini))
+      .where('data','<',  firebase.firestore.Timestamp.fromDate(range.fim))
+      .get();
+    if(snap && snap.docs){
+      despesas = snap.docs.map(d=>{
+        const x=d.data();
+        return {_id:d.id, descricao:x.descricao||'', valor:Number(x.valor)||0,
+                data:x.data?.toDate?.()?.toISOString() || x.data || new Date().toISOString()};
+      });
+    }
+  }catch(e){ /* mantém localStorage */ }
+}
+
+async function salvarDespesa(){
+  const desc=document.getElementById('desp-desc').value.trim();
+  const valor=parseFloat(document.getElementById('desp-valor').value);
+  const dataStr=document.getElementById('desp-data').value || new Date().toISOString().split('T')[0];
+  if(!desc){ showToast('⚠️ Informe a descrição da despesa','tok-err'); return; }
+  if(!valor || valor<=0){ showToast('⚠️ Informe um valor maior que zero','tok-err'); return; }
+  const dataDate=new Date(dataStr+'T12:00:00');     // meio-dia evita virar o dia por fuso
+
+  const reg={ descricao:desc, valor:valor, data:dataDate.toISOString() };
+  // grava no localStorage (sempre)
+  const todas=JSON.parse(localStorage.getItem('tcho_despesas')||'[]');
+
+  try{
+    const ref=await db.collection('despesas').add({
+      descricao:desc, valor:valor,
+      data:firebase.firestore.Timestamp.fromDate(dataDate),
+      criadoEm:firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    reg._id=ref.id;
+  }catch(e){ reg._id='desp-'+Date.now(); }
+  todas.push(reg);
+  localStorage.setItem('tcho_despesas', JSON.stringify(todas));
+
+  // limpa o form (mantém a data escolhida para lançar várias seguidas)
+  document.getElementById('desp-desc').value='';
+  document.getElementById('desp-valor').value='';
+  document.getElementById('desp-desc').focus();
+  showToast(`✅ Despesa lançada — ${desc}`,'tok-ok');
+  carregarFinanceiro();   // recarrega período e re-renderiza tudo
+}
+
+async function removerDespesa(id){
+  if(!confirm('Excluir esta despesa?')) return;
+  try{ if(id && !/^desp-\d+$/.test(id)) await db.collection('despesas').doc(id).delete(); }catch(e){}
+  const todas=JSON.parse(localStorage.getItem('tcho_despesas')||'[]').filter(d=>d._id!==id);
+  localStorage.setItem('tcho_despesas', JSON.stringify(todas));
+  showToast('🗑️ Despesa excluída','tok-info');
+  carregarFinanceiro();
+}
+
+function renderContasPagar(){
+  const r = n => 'R$'+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const el=document.getElementById('desp-lista');
+  if(!el) return;
+  if(!despesas.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon">🧾</div><div>Nenhuma despesa neste período</div></div>';
+    return;
+  }
+  const total=despesas.reduce((a,d)=>a+(Number(d.valor)||0),0);
+  const sorted=[...despesas].sort((a,b)=>new Date(b.data)-new Date(a.data));
+  const fmtD=s=>{const d=new Date(s);return isNaN(d)?'-':d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});};
+  el.innerHTML=`
+    <table class="fin-table">
+      <thead><tr><th>Data</th><th>Descrição</th><th class="fin-val">Valor</th><th></th></tr></thead>
+      <tbody>
+        ${sorted.map(d=>`<tr>
+          <td style="font-size:.72rem;color:var(--muted)">${fmtD(d.data)}</td>
+          <td>${(d.descricao||'').replace(/</g,'&lt;')}</td>
+          <td class="fin-val" style="color:#e74c3c">${r(d.valor)}</td>
+          <td style="width:34px;text-align:center"><button onclick="removerDespesa('${d._id}')" title="Excluir" style="background:#3a1010;color:#e74c3c;border:none;border-radius:6px;width:28px;height:28px;cursor:pointer">✕</button></td>
+        </tr>`).join('')}
+        <tr class="fin-total-row">
+          <td colspan="2"><strong>TOTAL (${despesas.length} despesa${despesas.length!==1?'s':''})</strong></td>
+          <td class="fin-val"><strong style="color:#e74c3c">${r(total)}</strong></td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>`;
+}
+
+function renderFluxoCaixa(){
+  const r = n => 'R$'+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const el=document.getElementById('fluxo-stats');
+  if(!el) return;
+  const recebido = finPedidosList.reduce((a,p)=>a+(p.total||0),0);
+  const pago     = despesas.reduce((a,d)=>a+(Number(d.valor)||0),0);
+  const saldo    = recebido - pago;
+  const corSaldo = saldo>=0 ? '#27ae60' : '#e74c3c';
+  el.innerHTML=`
+    <div class="fin-cards">
+      <div class="fin-card"><div class="fin-card-n" style="color:#27ae60">${r(recebido)}</div><div class="fin-card-l">🟢 A Receber (${finPedidosList.length})</div></div>
+      <div class="fin-card"><div class="fin-card-n" style="color:#e74c3c">${r(pago)}</div><div class="fin-card-l">🔴 A Pagar (${despesas.length})</div></div>
+    </div>
+    <div class="fin-conf-total" style="margin-top:14px;border-color:${corSaldo}">
+      <span>${saldo>=0?'💰 SALDO (lucro)':'⚠️ SALDO (prejuízo)'}</span>
+      <span style="color:${corSaldo}">${r(saldo)}</span>
+    </div>`;
 }
 
 function renderFinanceiro(){
@@ -1871,6 +2014,46 @@ function imprimirMotoboy(){
         <tr class="tot">
           <td colspan="3">TOTAL (${entregas.length} entrega${entregas.length!==1?'s':''})</td>
           <td class="r">${r(totalFrete)}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="line"></div>
+    <div class="c" style="font-size:9px;margin-top:4px">Impresso em ${new Date().toLocaleString('pt-BR')}</div>
+    <script>window.onload=function(){window.print();setTimeout(()=>window.close(),1500)};<\/script>
+  </body></html>`;
+  abrirJanelaImpressao(html, 400);
+}
+
+function imprimirDespesas(){
+  if(!despesas.length){showToast('Nenhuma despesa para imprimir','tok-err');return;}
+  const r = n => 'R$'+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const total = despesas.reduce((a,d)=>a+(Number(d.valor)||0),0);
+  const periodoLabel = document.getElementById('fin-periodo-label').textContent;
+  const logoUrl = new URL('../logo/logo.png', window.location.href).href;
+  const fmtD=s=>{const d=new Date(s);return isNaN(d)?'-':d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});};
+  const sorted=[...despesas].sort((a,b)=>new Date(a.data)-new Date(b.data));
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${CSS_CUPOM}
+    table{width:100%;border-collapse:collapse;margin:4px 0}td,th{font-size:11px;padding:3px 4px}
+    th{border-bottom:1px solid #000;font-weight:bold}.r{text-align:right}
+    .tot td{border-top:1px solid #000;font-weight:bold;padding-top:5px}
+  </style></head><body>
+    <div class="c"><img src="${logoUrl}" style="max-width:150px;max-height:65px"></div>
+    <div class="c b" style="font-size:14px;margin-top:4px">CONTAS A PAGAR</div>
+    <div class="c b" style="font-size:11px">— DESPESAS —</div>
+    <div class="c" style="font-size:10px">${periodoLabel.replace('Período: ','')}</div>
+    <div class="line"></div>
+    <table>
+      <thead><tr><th>Data</th><th>Descrição</th><th class="r">Valor</th></tr></thead>
+      <tbody>
+        ${sorted.map(d=>`<tr>
+          <td>${fmtD(d.data)}</td>
+          <td>${(d.descricao||'').replace(/</g,'&lt;')}</td>
+          <td class="r">${r(d.valor)}</td>
+        </tr>`).join('')}
+        <tr class="tot">
+          <td colspan="2">TOTAL (${despesas.length} despesa${despesas.length!==1?'s':''})</td>
+          <td class="r">${r(total)}</td>
         </tr>
       </tbody>
     </table>

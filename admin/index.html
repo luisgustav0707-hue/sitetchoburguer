@@ -24,10 +24,12 @@
     <div class="login-title">TCHO BURGUER</div>
     <div class="login-sub">Painel Administrativo</div>
     <input class="login-input" type="text" id="login-user" placeholder="Usuário" autocomplete="username">
-    <input class="login-input" type="password" id="login-pass" placeholder="Senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')fazerLogin()">
+    <div style="position:relative;margin-bottom:10px">
+      <input class="login-input" type="password" id="login-pass" placeholder="Senha" autocomplete="current-password" style="margin-bottom:0;padding-right:46px" onkeydown="if(event.key==='Enter')fazerLogin()">
+      <button type="button" id="btn-ver-senha" onclick="toggleSenha()" title="Mostrar senha" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.05rem;line-height:1;padding:6px">👁️</button>
+    </div>
     <button class="login-btn" onclick="fazerLogin()">ENTRAR</button>
     <div class="login-err" id="login-err"></div>
-    <div style="margin-top:16px;font-size:.68rem;color:var(--muted)">Demo: admin / tcho2025</div>
   </div>
 </div>
 
@@ -345,22 +347,67 @@
       <div id="fin-periodo-label" style="font-size:.72rem;color:var(--muted);margin-top:6px"></div>
     </div>
 
-    <!-- Resumo de Vendas -->
-    <div class="section">
-      <div class="sec-title">💰 Resumo de vendas <button class="btn-print-fin" onclick="imprimirVendas()">🖨️ Imprimir</button></div>
-      <div id="fin-stats"><div class="empty"><div class="empty-icon">📊</div><div>Selecione um período</div></div></div>
+    <!-- Sub-abas: Receber / Pagar / Fluxo -->
+    <div class="section" style="padding:10px 12px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="fin-btn active" id="fintab-receber" onclick="setFinTab('receber')">🟢 Contas a Receber</button>
+        <button class="fin-btn"        id="fintab-pagar"   onclick="setFinTab('pagar')">🔴 Contas a Pagar</button>
+        <button class="fin-btn"        id="fintab-fluxo"   onclick="setFinTab('fluxo')">📊 Fluxo de Caixa</button>
+      </div>
     </div>
 
-    <!-- Taxas de Entrega / Motoboy -->
-    <div class="section">
-      <div class="sec-title">🛵 Taxas de entrega — Motoboy <button class="btn-print-fin" onclick="imprimirMotoboy()">🖨️ Imprimir</button></div>
-      <div id="fin-fretes"></div>
+    <!-- ══════ CONTAS A RECEBER (vendas / pedidos) ══════ -->
+    <div id="finsub-receber">
+      <!-- Resumo de Vendas -->
+      <div class="section">
+        <div class="sec-title">💰 Resumo de vendas <button class="btn-print-fin" onclick="imprimirVendas()">🖨️ Imprimir</button></div>
+        <div id="fin-stats"><div class="empty"><div class="empty-icon">📊</div><div>Selecione um período</div></div></div>
+      </div>
+
+      <!-- Taxas de Entrega / Motoboy -->
+      <div class="section">
+        <div class="sec-title">🛵 Taxas de entrega — Motoboy <button class="btn-print-fin" onclick="imprimirMotoboy()">🖨️ Imprimir</button></div>
+        <div id="fin-fretes"></div>
+      </div>
+
+      <!-- Lista de Pedidos do Período -->
+      <div class="section">
+        <div class="sec-title">📋 Pedidos do período</div>
+        <div id="fin-lista"></div>
+      </div>
     </div>
 
-    <!-- Lista de Pedidos do Período -->
-    <div class="section">
-      <div class="sec-title">📋 Pedidos do período</div>
-      <div id="fin-lista"></div>
+    <!-- ══════ CONTAS A PAGAR (despesas) ══════ -->
+    <div id="finsub-pagar" style="display:none">
+      <!-- Lançar despesa -->
+      <div class="section">
+        <div class="sec-title">➕ Lançar despesa</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div>
+            <label class="edit-lbl">📝 Descrição</label>
+            <input id="desp-desc" class="edit-inp" type="text" placeholder="Ex: Pão, Carne, Gás, Energia, Funcionário..." onkeydown="if(event.key==='Enter')salvarDespesa()">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div><label class="edit-lbl">💲 Valor (R$)</label><input id="desp-valor" class="edit-inp" type="number" min="0" step="0.01" placeholder="0,00" onkeydown="if(event.key==='Enter')salvarDespesa()"></div>
+            <div><label class="edit-lbl">📅 Data</label><input id="desp-data" class="edit-inp" type="date"></div>
+          </div>
+          <button onclick="salvarDespesa()" style="padding:11px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:.95rem;font-weight:700;cursor:pointer">✓ ADICIONAR DESPESA</button>
+        </div>
+      </div>
+
+      <!-- Lista de despesas do período -->
+      <div class="section">
+        <div class="sec-title">🔴 Despesas do período <button class="btn-print-fin" onclick="imprimirDespesas()">🖨️ Imprimir</button></div>
+        <div id="desp-lista"></div>
+      </div>
+    </div>
+
+    <!-- ══════ FLUXO DE CAIXA (consolidado) ══════ -->
+    <div id="finsub-fluxo" style="display:none">
+      <div class="section">
+        <div class="sec-title">📊 Fluxo de caixa do período</div>
+        <div id="fluxo-stats"></div>
+      </div>
     </div>
 
   </div>

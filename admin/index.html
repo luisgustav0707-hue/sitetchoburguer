@@ -449,17 +449,25 @@
           <button class="edit-pag-btn" id="mpag-cartao"   onclick="selManualPag('cartao')">💳 Cartão</button>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div><label class="edit-lbl">🍔 Valor dos itens (R$)</label><input id="man-subtotal" class="edit-inp" type="number" min="0" step="1" placeholder="0" oninput="recalcManualTotal()"></div>
-        <div id="man-frete-wrap"><label class="edit-lbl">🛵 Frete (R$)</label><input id="man-frete" class="edit-inp" type="number" min="0" step="1" placeholder="0" oninput="recalcManualTotal()"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid #3a3530;border-radius:8px;padding:9px 12px">
-        <span style="font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Total</span>
-        <span id="man-total-disp" style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--orange)">R$0</span>
-      </div>
+      <!-- ITENS: escolhe no seletor e soma sozinho -->
       <div>
-        <label class="edit-lbl">🛒 Itens <span style="font-size:.65rem;color:var(--muted)">(um por linha)</span></label>
-        <textarea id="man-itens" class="edit-inp" rows="5" style="resize:vertical;font-size:.74rem;line-height:1.5" placeholder="Ex: X-Bacon (ao ponto)&#10;Refrigerante Lata"></textarea>
+        <label class="edit-lbl">🛒 Itens do pedido</label>
+        <div id="man-itens-lista" style="display:flex;flex-direction:column;gap:6px;margin:6px 0"></div>
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <select id="man-add-prod" class="edit-inp" style="flex:1;font-size:.74rem"></select>
+          <button type="button" onclick="addItemManual()" style="flex:0 0 auto;padding:0 14px;background:var(--card);color:var(--orange);border:1px solid var(--orange);border-radius:8px;font-weight:700;cursor:pointer">+ Add</button>
+        </div>
+      </div>
+      <div id="man-frete-wrap"><label class="edit-lbl">🛵 Frete (R$)</label><input id="man-frete" class="edit-inp" type="number" min="0" step="1" placeholder="0" oninput="recalcManualTotal()"></div>
+      <div style="background:var(--card);border:1px solid #3a3530;border-radius:8px;padding:9px 12px;display:flex;flex-direction:column;gap:5px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Subtotal dos itens</span>
+          <span id="man-subtotal-disp" style="font-size:.9rem;color:var(--text)">R$0</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid #3a3530;padding-top:6px">
+          <span style="font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Total <span style="font-weight:400;text-transform:none;letter-spacing:0">(itens + frete)</span></span>
+          <span id="man-total-disp" style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--orange)">R$0</span>
+        </div>
       </div>
       <div><label class="edit-lbl">📝 Observações</label><textarea id="man-obs" class="edit-inp" rows="2" style="resize:vertical" placeholder="(opcional)"></textarea></div>
     </div>

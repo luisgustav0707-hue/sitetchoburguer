@@ -222,12 +222,15 @@ function atualizarBotaoAuto(){
 
 // ── PEDIDO MANUAL (lançado pelo balcão/telefone) ──────────────
 let manualPag='pix', manualTipo='delivery';
+let manualItens=[];       // [{nome, preco}] — lista que soma sozinha
 
 function abrirModalManual(){
   manualPag='pix'; manualTipo='delivery';
-  ['man-nome','man-tel','man-subtotal','man-frete','man-itens','man-obs'].forEach(id=>{
+  manualItens=[];
+  ['man-nome','man-tel','man-frete','man-obs'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
+  renderItensManual();
   // Popula o select de bairros (uma vez) a partir dos bairros atendidos
   const sel=document.getElementById('man-bairro');
   if(sel && !sel.options.length){
@@ -260,21 +263,57 @@ function onManualBairro(){
   if(b) document.getElementById('man-frete').value=b.taxa;
   recalcManualTotal();
 }
+function subtotalManual(){ return manualItens.reduce((a,it)=>a+(parseFloat(it.preco)||0),0); }
 function recalcManualTotal(){
-  const subtotal=parseFloat(document.getElementById('man-subtotal').value)||0;
+  const subtotal=subtotalManual();
   const frete=manualTipo==='delivery'?(parseFloat(document.getElementById('man-frete').value)||0):0;
+  document.getElementById('man-subtotal-disp').textContent='R$'+subtotal;
   document.getElementById('man-total-disp').textContent='R$'+(subtotal+frete);
 }
+
+// ── Itens do pedido manual: lista com soma automática (reaproveita listaProdutosEdit) ──
+function renderItensManual(){
+  const lista=document.getElementById('man-itens-lista');
+  lista.innerHTML=manualItens.map((it,i)=>`
+    <div style="display:flex;gap:6px;align-items:center">
+      <input class="edit-inp" style="flex:1;font-size:.74rem;padding:7px 9px" value="${(it.nome||'').replace(/"/g,'&quot;')}" onchange="updManualNome(${i},this.value)">
+      <span style="color:var(--muted);font-size:.7rem">R$</span>
+      <input class="edit-inp" type="number" min="0" step="1" style="width:66px;font-size:.74rem;padding:7px 6px" value="${it.preco||0}" oninput="updManualPreco(${i},this.value)">
+      <button type="button" onclick="removerItemManual(${i})" title="Remover" style="background:#3a1010;color:#e74c3c;border:none;border-radius:6px;width:30px;height:32px;cursor:pointer;flex:0 0 auto">✕</button>
+    </div>`).join('') || '<div style="font-size:.7rem;color:var(--muted)">Nenhum item — escolha um produto abaixo</div>';
+  const sel=document.getElementById('man-add-prod');
+  if(sel && !sel.options.length){
+    sel.innerHTML='<option value="">+ Adicionar produto...</option>'+
+      listaProdutosEdit().map((p,i)=>`<option value="${i}">${p.nome} — R$${p.preco}</option>`).join('');
+  }
+  recalcManualTotal();
+}
+function addItemManual(){
+  const sel=document.getElementById('man-add-prod');
+  const idx=parseInt(sel.value);
+  if(isNaN(idx)) return;
+  const prod=listaProdutosEdit()[idx];
+  if(!prod) return;
+  manualItens.push({nome:prod.nome, preco:prod.preco});
+  sel.value='';
+  renderItensManual();
+}
+function removerItemManual(i){ manualItens.splice(i,1); renderItensManual(); }
+function updManualNome(i,v){ if(manualItens[i]) manualItens[i].nome=v; }
+function updManualPreco(i,v){ if(manualItens[i]){ manualItens[i].preco=parseFloat(v)||0; recalcManualTotal(); } }
 
 async function salvarPedidoManual(){
   const nome=document.getElementById('man-nome').value.trim();
   if(!nome){ showToast('⚠️ Informe o nome do cliente','tok-err'); return; }
-  const itens=document.getElementById('man-itens').value.split('\n').map(s=>s.trim()).filter(Boolean);
-  if(!itens.length){ showToast('⚠️ Adicione pelo menos um item','tok-err'); return; }
+  if(!manualItens.length){ showToast('⚠️ Adicione pelo menos um item','tok-err'); return; }
+  // Converte a lista em texto (igual aos pedidos do cliente): "Nome — R$preco" ou só o nome se for grátis
+  const itens=manualItens
+    .filter(it=>(it.nome||'').trim())
+    .map(it=>(parseFloat(it.preco)||0)>0 ? `${it.nome.trim()} — R$${parseFloat(it.preco)}` : it.nome.trim());
 
   const tel=document.getElementById('man-tel').value.trim();
   const obs=document.getElementById('man-obs').value.trim();
-  const subtotal=parseFloat(document.getElementById('man-subtotal').value)||0;
+  const subtotal=subtotalManual();
   const frete=manualTipo==='delivery'?(parseFloat(document.getElementById('man-frete').value)||0):0;
   const total=subtotal+frete;                              // total inclui o frete (igual aos pedidos do cliente)
   const bairro=manualTipo==='delivery'?document.getElementById('man-bairro').value:'';

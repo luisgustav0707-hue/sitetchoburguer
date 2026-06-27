@@ -46,16 +46,16 @@ if(localStorage.getItem('tcho_admin_logado')==='true'){
 
 // ── NAVEGAÇÃO ──────────────────────────────────────────────────
 function showPage(p){
-  document.querySelectorAll('.nav-tab').forEach((el,i)=>el.classList.toggle('active',['cozinha','pedidos','config','cardapio','marketing','financeiro'][i]===p));
+  document.querySelectorAll('.nav-tab').forEach((el,i)=>el.classList.toggle('active',['cozinha','pedidos','config','cardapio','financeiro'][i]===p));
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
   if(p==='cardapio')  renderCardapio();
   if(p==='pedidos')   carregarLog();
-  if(p==='marketing') renderCupons();
+  if(p==='config')    renderCupons();   // Marketing agora vive dentro de Config
   if(p==='financeiro') carregarFinanceiro();
 }
 function showInner(t){
-  document.querySelectorAll('.inner-tab').forEach((el,i)=>el.classList.toggle('active',['cupons','fidelidade'][i]===t));
+  document.querySelectorAll('.inner-tab').forEach((el,i)=>el.classList.toggle('active',['cupons','fidelidade','recuperacao'][i]===t));
   document.querySelectorAll('.inner-page').forEach(el=>el.classList.remove('active'));
   document.getElementById('inner-'+t).classList.add('active');
 }

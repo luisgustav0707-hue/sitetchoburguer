@@ -56,7 +56,6 @@
     <div class="nav-tab" onclick="showPage('pedidos')">📋 Pedidos</div>
     <div class="nav-tab" onclick="showPage('config')">⚙️ Config</div>
     <div class="nav-tab" onclick="showPage('cardapio')">🍔 Cardápio</div>
-    <div class="nav-tab" onclick="showPage('marketing')">📣 Marketing</div>
     <div class="nav-tab" onclick="showPage('financeiro')">💰 Financeiro</div>
   </div>
 
@@ -205,36 +204,9 @@
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- ── CARDÁPIO ── -->
-  <div class="page" id="page-cardapio">
-    <div class="section">
-      <div class="sec-title" id="sec-title-burguers">🍔 Hamburguers</div>
-      <div id="lista-burguers"></div>
-    </div>
-    <div class="section">
-      <div class="sec-title" id="sec-title-extras">🍟 Extras & Bebidas</div>
-      <div id="lista-extras"></div>
-    </div>
-    <div class="section">
-      <div class="sec-title" id="sec-title-combo">🍟🥤 Combo</div>
-      <div id="lista-combo"></div>
-    </div>
-    <div class="section">
-      <div class="sec-title">➕ Acréscimos</div>
-      <div id="lista-adicionais"></div>
-    </div>
-    <div class="section">
-      <div class="sec-title">🛵 Bairros e taxas de entrega</div>
-      <div id="lista-bairros"></div>
-    </div>
-    <div id="custom-cats-container"></div>
-    <div id="nova-cat-area"></div>
-  </div>
-
-  <!-- ── MARKETING ── -->
-  <div class="page" id="page-marketing">
+    <!-- ══════ MARKETING (movido para dentro de Config) ══════ -->
+    <div class="section" style="margin-top:6px"><div class="sec-title">📣 Marketing</div></div>
     <div class="inner-tabs">
       <div class="inner-tab active" onclick="showInner('cupons')">🎟️ Cupons</div>
       <div class="inner-tab" onclick="showInner('fidelidade')">🎁 Fidelidade</div>
@@ -331,6 +303,33 @@
     </div>
   </div>
 
+  <!-- ── CARDÁPIO ── -->
+  <div class="page" id="page-cardapio">
+    <div class="section">
+      <div class="sec-title" id="sec-title-burguers">🍔 Hamburguers</div>
+      <div id="lista-burguers"></div>
+    </div>
+    <div class="section">
+      <div class="sec-title" id="sec-title-extras">🍟 Extras & Bebidas</div>
+      <div id="lista-extras"></div>
+    </div>
+    <div class="section">
+      <div class="sec-title" id="sec-title-combo">🍟🥤 Combo</div>
+      <div id="lista-combo"></div>
+    </div>
+    <div class="section">
+      <div class="sec-title">➕ Acréscimos</div>
+      <div id="lista-adicionais"></div>
+    </div>
+    <div class="section">
+      <div class="sec-title">🛵 Bairros e taxas de entrega</div>
+      <div id="lista-bairros"></div>
+    </div>
+    <div id="custom-cats-container"></div>
+    <div id="nova-cat-area"></div>
+  </div>
+
+  <!-- ── MARKETING ── -->
   <!-- ── FINANCEIRO ── -->
   <div class="page" id="page-financeiro">
 

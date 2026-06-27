@@ -240,10 +240,10 @@ function abrirModalManual(){
     const el=document.getElementById(id); if(el) el.value='';
   });
   renderItensManual();
-  // Popula o select de bairros (uma vez) a partir dos bairros atendidos
+  // Popula o select de bairros (sempre, pra refletir edições) a partir da lista atual
   const sel=document.getElementById('man-bairro');
-  if(sel && !sel.options.length){
-    sel.innerHTML=(TCHO.bairros||[]).slice().sort((a,b)=>a.nome.localeCompare(b.nome))
+  if(sel){
+    sel.innerHTML=getBairrosAdmin().slice().sort((a,b)=>a.nome.localeCompare(b.nome))
       .map(b=>`<option value="${b.nome}">${b.nome} — R$${b.taxa}</option>`).join('');
   }
   // Data do pedido: começa com hoje
@@ -287,7 +287,7 @@ function selManualPag(pag){
 }
 function onManualBairro(){
   const nome=document.getElementById('man-bairro').value;
-  const b=(TCHO.bairros||[]).find(x=>x.nome===nome);
+  const b=getBairrosAdmin().find(x=>x.nome===nome);
   if(b) document.getElementById('man-frete').value=b.taxa;
   recalcManualTotal();
 }
@@ -1507,7 +1507,86 @@ function salvarNovoAdic(){
   addAdicAberto=false;renderAdicionais();showToast(`✅ "${nome}" adicionado!`,'tok-ok');
 }
 
-function renderCardapio(){renderLista('b','lista-burguers');renderLista('e','lista-extras');renderLista('c','lista-combo');renderCatTitles();renderCustomCats();renderNovaCatArea();renderAdicionais();}
+// ── BAIRROS E TAXAS DE ENTREGA (gerenciado igual aos acréscimos) ──
+function getBairrosAdmin(){
+  const saved=localStorage.getItem('tcho_bairros');
+  return saved?JSON.parse(saved):[...TCHO.bairros];
+}
+function saveBairrosAdmin(arr){
+  arr.sort((a,b)=>a.nome.localeCompare(b.nome));            // mantém em ordem alfabética
+  localStorage.setItem('tcho_bairros',JSON.stringify(arr));
+  salvarCardapioFS('bairros',{lista:arr});                  // reflete no site do cliente
+}
+let editBairroIdx=null, addBairroAberto=false;
+
+function renderBairros(){
+  const el=document.getElementById('lista-bairros'); if(!el) return;
+  const arr=getBairrosAdmin();
+  const inp='background:var(--card);border:1px solid var(--orange);border-radius:6px;color:var(--cream);font-size:.78rem;padding:5px 7px;outline:none';
+  el.innerHTML=`<div style="font-size:.7rem;color:var(--muted);margin-bottom:6px">${arr.length} bairro${arr.length!==1?'s':''} atendido${arr.length!==1?'s':''}</div>`
+  + arr.map((b,i)=>{
+    if(editBairroIdx===i){
+      return `<div class="prod-item"><div style="display:flex;gap:8px;align-items:center;padding:8px 0;flex-wrap:wrap">
+        <input style="${inp};flex:1;min-width:120px" id="be-nome-${i}" value="${(b.nome||'').replace(/"/g,'&quot;')}">
+        <span style="font-size:.72rem;color:var(--muted);flex-shrink:0">R$</span>
+        <input style="${inp};width:70px;flex-shrink:0" id="be-taxa-${i}" type="number" min="0" step="0.5" value="${b.taxa}">
+        <button class="opc-btn" onclick="salvarEditBairro(${i})">✓ Salvar</button>
+        <button class="opc-btn" style="background:#2a2520;color:var(--muted)" onclick="cancelarEditBairro()">Cancelar</button>
+      </div></div>`;
+    }
+    return `<div class="prod-item"><div style="display:flex;align-items:center;gap:8px;padding:8px 0">
+      <div style="flex:1;min-width:0"><div class="prod-nome">${b.nome}</div></div>
+      <div class="prod-preco" style="flex-shrink:0">R$${b.taxa}</div>
+      <button class="btn-edit-prod" onclick="iniciarEditBairro(${i})" title="Editar">✏️</button>
+      <button class="btn-del-prod" onclick="removerBairro(${i})" title="Remover">🗑️</button>
+    </div></div>`;
+  }).join('')
+  + (addBairroAberto
+    ? `<div class="new-prod-form" style="margin-top:6px">
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
+          <input style="${inp};flex:1;min-width:140px" id="bn-nome" placeholder="Nome do bairro" onkeydown="if(event.key==='Enter')salvarNovoBairro()">
+          <span style="font-size:.72rem;color:var(--muted);flex-shrink:0">R$</span>
+          <input style="${inp};width:70px;flex-shrink:0" id="bn-taxa" type="number" min="0" step="0.5" placeholder="Taxa">
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="opc-btn" onclick="salvarNovoBairro()">✓ Adicionar</button>
+          <button class="opc-btn" style="background:#2a2520;color:var(--muted)" onclick="fecharAddBairro()">Cancelar</button>
+        </div>
+      </div>`
+    : `<button class="btn-add-prod" onclick="abrirAddBairro()">+ Novo bairro</button>`
+  );
+}
+function iniciarEditBairro(i){editBairroIdx=i;addBairroAberto=false;renderBairros();setTimeout(()=>document.getElementById('be-nome-'+i)?.focus(),40);}
+function cancelarEditBairro(){editBairroIdx=null;renderBairros();}
+function salvarEditBairro(i){
+  const nome=document.getElementById('be-nome-'+i)?.value.trim();
+  const taxa=parseFloat(document.getElementById('be-taxa-'+i)?.value);
+  if(!nome){showToast('⚠️ Digite o nome do bairro','tok-err');return;}
+  if(isNaN(taxa)||taxa<0){showToast('⚠️ Taxa inválida','tok-err');return;}
+  const arr=getBairrosAdmin();
+  if(arr[i]){arr[i].nome=nome;arr[i].taxa=taxa;saveBairrosAdmin(arr);}
+  editBairroIdx=null;renderBairros();showToast(`✅ "${nome}" atualizado!`,'tok-ok');
+}
+function removerBairro(i){
+  const arr=getBairrosAdmin(),b=arr[i];
+  if(!b||!confirm(`Remover o bairro "${b.nome}"? Ele deixará de ser atendido no site.`))return;
+  arr.splice(i,1);saveBairrosAdmin(arr);
+  renderBairros();showToast(`🗑️ "${b.nome}" removido`,'tok-info');
+}
+function abrirAddBairro(){addBairroAberto=true;editBairroIdx=null;renderBairros();setTimeout(()=>document.getElementById('bn-nome')?.focus(),40);}
+function fecharAddBairro(){addBairroAberto=false;renderBairros();}
+function salvarNovoBairro(){
+  const nome=document.getElementById('bn-nome')?.value.trim();
+  const taxa=parseFloat(document.getElementById('bn-taxa')?.value);
+  if(!nome){showToast('⚠️ Digite o nome do bairro','tok-err');return;}
+  if(isNaN(taxa)||taxa<0){showToast('⚠️ Taxa inválida','tok-err');return;}
+  const arr=getBairrosAdmin();
+  if(arr.some(x=>(x.nome||'').toLowerCase()===nome.toLowerCase())){showToast('⚠️ Esse bairro já existe','tok-err');return;}
+  arr.push({nome,taxa});saveBairrosAdmin(arr);
+  addBairroAberto=false;renderBairros();showToast(`✅ "${nome}" adicionado!`,'tok-ok');
+}
+
+function renderCardapio(){renderLista('b','lista-burguers');renderLista('e','lista-extras');renderLista('c','lista-combo');renderCatTitles();renderCustomCats();renderNovaCatArea();renderAdicionais();renderBairros();}
 function toggleAtivo(id,val){
   est[id].ativo=val;
   if(id.startsWith('cp_')){const arr=getProdsCustom(),idx=arr.findIndex(x=>x.id===id);if(idx!==-1){arr[idx].ativo=val;saveProdsCustom(arr);}}
@@ -2340,6 +2419,7 @@ function iniciarApp(){
       if(doc.id==='ing_edits'    && d.data ) localStorage.setItem('tcho_ing_edits',   JSON.stringify(d.data));
       if(doc.id==='adicionais'   && d.lista) localStorage.setItem('tcho_adicionais',  JSON.stringify(d.lista));
       if(doc.id==='estoque'      && d.data ) localStorage.setItem('tcho_estoque',     JSON.stringify(d.data));
+      if(doc.id==='bairros'      && d.lista) localStorage.setItem('tcho_bairros',     JSON.stringify(d.lista));
     });
     // Re-aplica edições aos produtos base em memória
     const edits=JSON.parse(localStorage.getItem('tcho_prods_edits')||'{}');

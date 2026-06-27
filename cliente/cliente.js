@@ -43,7 +43,9 @@ const COMBO       = TCHO.extras.filter(e => e.id === 'cmb');
 const ADICIONAIS  = TCHO.adicionais;
 const PONTOS      = TCHO.pontos;
 const SACHES      = TCHO.saches;
-const BAIRROS_TAXA = TCHO.bairros;
+// Bairros/taxas: mutável porque o admin pode editar (sincroniza via Firestore)
+let BAIRROS_TAXA = TCHO.bairros;
+(function(){ const s=localStorage.getItem('tcho_bairros'); if(s){ try{ BAIRROS_TAXA=JSON.parse(s); }catch(e){} } })();
 
 // Cupons locais de fallback — em produção carregados do Firestore via admin
 const CUPONS_ATIVOS = [
@@ -972,8 +974,12 @@ db.collection('cardapio').get().then(snapshot=>{
     if(doc.id==='ing_edits'    && d.data ) chk('tcho_ing_edits',   JSON.stringify(d.data));
     if(doc.id==='adicionais'   && d.lista) chk('tcho_adicionais',  JSON.stringify(d.lista));
     if(doc.id==='estoque'      && d.data ) chk('tcho_estoque',     JSON.stringify(d.data));
+    if(doc.id==='bairros'      && d.lista) chk('tcho_bairros',     JSON.stringify(d.lista));
   });
   if(!mudou) return;
+  // Atualiza bairros/taxas em memória
+  const bSaved=localStorage.getItem('tcho_bairros');
+  if(bSaved){ try{ BAIRROS_TAXA=JSON.parse(bSaved); }catch(e){} }
   // Re-aplica edições nos objetos TCHO em memória
   const edits=JSON.parse(localStorage.getItem('tcho_prods_edits')||'{}');
   [...TCHO.burguers,...TCHO.extras].forEach(item=>{
@@ -1009,6 +1015,17 @@ db.collection('cardapio').doc('estoque').onSnapshot(doc=>{
   if(novo!==localStorage.getItem('tcho_estoque')){
     localStorage.setItem('tcho_estoque',novo);
     renderBurguers();renderExtras();renderCustomCategorias();updateFloat();
+  }
+},()=>{});
+
+// Bairros/taxas ao vivo: reflete edições feitas no admin sem recarregar a página
+db.collection('cardapio').doc('bairros').onSnapshot(doc=>{
+  if(!doc.exists) return;
+  const novo=JSON.stringify(doc.data().lista||[]);
+  if(novo!==localStorage.getItem('tcho_bairros')){
+    localStorage.setItem('tcho_bairros',novo);
+    try{ BAIRROS_TAXA=JSON.parse(novo); }catch(e){}
+    if(document.getElementById('bairros-lista')?.classList.contains('show')) renderListaBairros();
   }
 },()=>{});
 

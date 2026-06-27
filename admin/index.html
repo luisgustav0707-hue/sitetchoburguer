@@ -464,9 +464,10 @@
       <div style="font-size:.64rem;color:var(--muted);margin-top:-6px">Total = soma dos itens + frete (calculado automático)</div>
       <div><label class="edit-lbl">📝 Observações</label><textarea id="edit-obs" class="edit-inp" rows="2" style="resize:vertical"></textarea></div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:16px">
-      <button onclick="fecharModalEditar()" style="flex:1;padding:11px;background:var(--card);color:var(--muted);border:1px solid #3a3530;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:.95rem;cursor:pointer">CANCELAR</button>
-      <button onclick="salvarEdicaoPedido()" style="flex:2;padding:11px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:.95rem;font-weight:700;cursor:pointer">✓ SALVAR ALTERAÇÕES</button>
+    <div style="display:flex;gap:6px;margin-top:16px">
+      <button onclick="fecharModalEditar()" style="flex:1;padding:11px;background:var(--card);color:var(--muted);border:1px solid #3a3530;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:.85rem;cursor:pointer">CANCELAR</button>
+      <button onclick="salvarEdicaoPedido()" style="flex:1.4;padding:11px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:.85rem;font-weight:700;cursor:pointer">✓ SALVAR</button>
+      <button onclick="salvarEdicaoPedido(true)" title="Salvar e imprimir o cupom" style="flex:1.7;padding:11px;background:linear-gradient(135deg,#27ae60,#1e8449);color:#fff;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:.85rem;font-weight:700;cursor:pointer">✓ SALVAR + 🖨️</button>
     </div>
   </div>
 </div>

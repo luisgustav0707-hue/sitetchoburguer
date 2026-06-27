@@ -734,8 +734,9 @@ function fecharModalEditar(){
   editandoPedidoId=null;editandoPag=null;editItens=[];editDesconto=0;
 }
 
-function salvarEdicaoPedido(){
-  const p=acharPedido(editandoPedidoId);
+function salvarEdicaoPedido(imprimir=false){
+  const idPedido=editandoPedidoId;
+  const p=acharPedido(idPedido);
   if(!p) return;
   const nome=document.getElementById('edit-nome').value.trim();
   const tel=document.getElementById('edit-tel').value.trim();
@@ -759,6 +760,8 @@ function salvarEdicaoPedido(){
   fecharModalEditar();
   renderAll();renderHistorico();
   showToast(`✅ Pedido ${p.num||'#'+p.id} atualizado!`,'tok-ok');
+  // Imprime o cupom já com as alterações (botão "Salvar + Imprimir")
+  if(imprimir) setTimeout(()=>reimprimirPedido(idPedido), 150);
 }
 
 function renderAll(){

@@ -503,6 +503,24 @@ function imprimirPedido(p){
   renderAll();
 }
 
+// Reimpressão manual do cupom (botão em qualquer etapa). Sempre imprime —
+// ignora o "auto-imprimir" — porque é uma ação explícita do operador.
+function reimprimirPedido(id){
+  const p=acharPedido(id);
+  if(!p){ showToast('Pedido não encontrado','tok-err'); return; }
+  fetch('http://localhost:3333/imprimir',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({cozinha:cupomCozinha(p), entrega:cupomEntrega(p)})
+  }).then(r=>r.json()).then(d=>{
+    if(d.ok)showToast(`🖨️ Pedido ${p.num||'#'+p.id} impresso!`,'tok-ok');
+    else showToast(`⚠️ Erro ao imprimir: ${d.erro}`,'tok-err');
+  }).catch(()=>{
+    showToast('🖨️ Abrindo cupons...','tok-info');
+    abrirJanelaImpressao(cupomCozinha(p), 380);
+    setTimeout(()=>abrirJanelaImpressao(cupomEntrega(p), 420), 600);
+  });
+}
+
 // ── MOVER STATUS / CANCELAR ────────────────────────────────────
 function moverStatus(id,novoStatus,auto=false){
   const p=pedidos.find(x=>x._id===id);if(!p)return;
@@ -609,7 +627,7 @@ function renderCard(p){
     <div class="card-itens">${p.itens.join(' · ')}</div>
     ${p.obs?`<div class="card-obs">⚠ ${p.obs}</div>`:''}
     <div class="card-ftr"><div class="card-total">R$${p.total}</div><div class="timer ${cls}">⏱ ${tt(m)}</div></div>
-    <div class="card-btns">${btns}<button class="btn-editar-card" onclick="abrirModalEditar('${fid}')">✏️ Editar</button></div>
+    <div class="card-btns">${btns}<button class="btn-editar-card" onclick="reimprimirPedido('${fid}')">🖨️ Cupom</button><button class="btn-editar-card" onclick="abrirModalEditar('${fid}')">✏️ Editar</button></div>
     ${dragHint}
   </div>`;
 }
@@ -779,7 +797,10 @@ function renderFinalizadosHoje(lista){
       <div style="font-size:.67rem;color:var(--muted);margin:3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(p.itens||[]).join(' · ')}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
         <div style="font-weight:700;color:${cor};font-size:.82rem">R$${p.total||0}</div>
-        <button class="btn-editar-card" onclick="abrirModalEditar('${p._id}')">✏️ Editar</button>
+        <div style="display:flex;gap:4px">
+          <button class="btn-editar-card" onclick="reimprimirPedido('${p._id}')">🖨️ Cupom</button>
+          <button class="btn-editar-card" onclick="abrirModalEditar('${p._id}')">✏️ Editar</button>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -858,7 +879,8 @@ function renderLog(){
         <div class="log-pag">${p.pag||'-'}${(p.frete||0)>0?` · Frete: ${r(p.frete)}`:''}</div>
         <div class="log-total">${r(p.total||0)}</div>
       </div>
-      <div style="display:flex;justify-content:flex-end;margin-top:8px">
+      <div style="display:flex;justify-content:flex-end;gap:4px;margin-top:8px">
+        <button class="btn-editar-card" onclick="reimprimirPedido('${p._id}')">🖨️ Cupom</button>
         <button class="btn-editar-card" onclick="abrirModalEditar('${p._id}')">✏️ Editar</button>
       </div>
     </div>`).join('');

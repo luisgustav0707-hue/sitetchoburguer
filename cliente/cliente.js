@@ -419,6 +419,31 @@ function selectPag(p){
   document.getElementById('troco-box').style.display=p==='dinheiro'?'block':'none';
   document.getElementById('err-pag').style.display='none';
 }
+// Copia a chave PIX para o cliente colar no app do banco
+function copiarChavePix(){
+  const chave=(document.getElementById('pix-key-val')?.textContent||'').trim();
+  const btn=document.getElementById('btn-copiar-pix');
+  const feedback=()=>{
+    if(!btn) return;
+    btn.textContent='✓ Chave copiada!';
+    btn.style.background='#27ae60'; btn.style.color='#fff';
+    setTimeout(()=>{ btn.textContent='📋 Copiar chave PIX'; btn.style.background='var(--orange)'; btn.style.color='#000'; },1800);
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(chave).then(feedback).catch(()=>copiarFallback(chave,feedback));
+  } else {
+    copiarFallback(chave,feedback);
+  }
+}
+function copiarFallback(txt,cb){
+  try{
+    const ta=document.createElement('textarea');
+    ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    cb&&cb();
+  }catch(e){ alert('Copie a chave PIX: '+txt); }
+}
 
 // ── CEP ────────────────────────────────────────────────────────
 function mascaraCep(inp){let v=inp.value.replace(/\D/g,'');if(v.length>5)v=v.slice(0,5)+'-'+v.slice(5,8);inp.value=v;if(v.replace('-','').length===8)buscarCep();}

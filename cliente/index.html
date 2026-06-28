@@ -169,9 +169,17 @@
   </div>
   <div id="err-pag" class="err-inline">⚠ Selecione a forma de pagamento</div>
   <div class="pix-box" id="pix-info">
-    <p style="font-size:.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Chave PIX</p>
-    <div class="pix-key">63.633.508/0001-47</div>
-    <p style="font-size:.7rem;color:var(--muted)">Envie o comprovante pelo WhatsApp após o pedido</p>
+    <p style="font-size:.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Chave PIX (CNPJ)</p>
+    <div class="pix-key" id="pix-key-val">63.633.508/0001-47</div>
+    <button type="button" id="btn-copiar-pix" onclick="copiarChavePix()" style="width:100%;margin:8px 0 10px;padding:11px;background:var(--orange);color:#000;border:none;border-radius:8px;font-family:'Barlow',sans-serif;font-weight:700;font-size:.85rem;cursor:pointer">📋 Copiar chave PIX</button>
+    <div style="text-align:left;font-size:.72rem;color:var(--cream);line-height:1.7;background:#1a1208;border-radius:8px;padding:10px 12px">
+      <strong style="color:var(--orange)">Como pagar com PIX:</strong><br>
+      1️⃣ Toque em <b>"Copiar chave PIX"</b><br>
+      2️⃣ Abra o app do seu banco<br>
+      3️⃣ Em PIX, escolha <b>Pagar com chave</b> (tipo CNPJ) e cole a chave<br>
+      4️⃣ Pague o <b>valor total</b> do pedido<br>
+      5️⃣ Envie o <b>comprovante no WhatsApp</b> após finalizar
+    </div>
   </div>
   <div class="troco-box" id="troco-box"><div class="form-group"><label>Troco para quanto?</label><input type="number" id="f-troco" placeholder="Ex: 100"></div></div>
 

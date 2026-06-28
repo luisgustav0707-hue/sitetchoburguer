@@ -47,8 +47,9 @@ const SACHES      = TCHO.saches;
 let BAIRROS_TAXA = TCHO.bairros;
 (function(){ const s=localStorage.getItem('tcho_bairros'); if(s){ try{ BAIRROS_TAXA=JSON.parse(s); }catch(e){} } })();
 
-// Cupons locais de fallback — em produção carregados do Firestore via admin
-const CUPONS_ATIVOS = [
+// Cupons: carregados do Firestore (gerenciados no admin). A lista abaixo é só
+// fallback caso o Firestore não responda (offline).
+let CUPONS_ATIVOS = [
   {codigo:'TCHO10',     tipo:'pct',  valor:10, minimo:30, descricao:'10% de desconto acima de R$30!'},
   {codigo:'FRETEGRATIS',tipo:'frete',valor:0,  minimo:50, descricao:'Frete grátis acima de R$50'},
   {codigo:'BEMVINDO',   tipo:'fixo', valor:5,  minimo:0,  descricao:'R$5 de desconto no primeiro pedido!'},
@@ -1048,6 +1049,21 @@ db.collection('cardapio').doc('estoque').onSnapshot(doc=>{
     renderBurguers();renderExtras();renderCustomCategorias();updateFloat();
   }
 },()=>{});
+
+// Cupons ao vivo: usa os cupons reais do admin (Firestore). Respeita ativo,
+// validade e limite de usos. Substitui a lista fixa quando o Firestore responde.
+db.collection('cupons').onSnapshot(snap=>{
+  const agora=new Date();
+  const lista=[];
+  snap.forEach(d=>{
+    const c=d.data();
+    if(c.ativo===false) return;                                  // desativado no admin
+    if(c.validade){ const fim=new Date(c.validade+'T23:59:59'); if(!isNaN(fim)&&fim<agora) return; } // expirado
+    if(c.usosMax>0 && (c.usosFeitos||0)>=c.usosMax) return;       // esgotado
+    lista.push({codigo:c.codigo, tipo:c.tipo, valor:Number(c.valor)||0, minimo:Number(c.minimo)||0, descricao:c.descricao||'', item:c.item||''});
+  });
+  CUPONS_ATIVOS = lista;   // admin é a fonte de verdade (mesmo que fique vazio)
+},()=>{ /* offline: mantém o fallback */ });
 
 // Bairros/taxas ao vivo: reflete edições feitas no admin sem recarregar a página
 db.collection('cardapio').doc('bairros').onSnapshot(doc=>{

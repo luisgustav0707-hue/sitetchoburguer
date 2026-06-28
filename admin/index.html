@@ -390,6 +390,10 @@
             <label class="edit-lbl">📝 Descrição</label>
             <input id="desp-desc" class="edit-inp" type="text" placeholder="Ex: Pão, Carne, Gás, Energia, Funcionário..." onkeydown="if(event.key==='Enter')salvarDespesa()">
           </div>
+          <div>
+            <label class="edit-lbl">🗂️ Categoria <span style="font-size:.65rem;color:var(--muted)">(plano de contas)</span></label>
+            <select id="desp-cat" class="edit-inp"></select>
+          </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
             <div><label class="edit-lbl">💲 Valor (R$)</label><input id="desp-valor" class="edit-inp" type="number" min="0" step="0.01" placeholder="0,00" onkeydown="if(event.key==='Enter')salvarDespesa()"></div>
             <div><label class="edit-lbl">📅 Data</label><input id="desp-data" class="edit-inp" type="date"></div>

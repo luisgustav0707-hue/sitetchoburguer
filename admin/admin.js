@@ -1779,6 +1779,27 @@ let despesas = [];            // contas a pagar do período carregado
 let finTab = 'receber';       // sub-aba ativa: receber | pagar | fluxo
 let despesaFoto = null;       // foto da nota (data URL comprimido) aguardando salvar
 
+// Plano de contas: categorias para classificar as despesas
+const CATEGORIAS_DESPESA = [
+  'Insumos / Mercadoria',
+  'Bebidas',
+  'Embalagens / Descartáveis',
+  'Gás',
+  'Água / Luz / Internet',
+  'Aluguel',
+  'Salários / Funcionários',
+  'Marketing / Divulgação',
+  'Manutenção / Equipamentos',
+  'Taxas / Impostos',
+  'Entrega / Motoboy',
+  'Outros',
+];
+function popularCategoriasDespesa(){
+  const sel=document.getElementById('desp-cat');
+  if(!sel || sel.options.length) return;   // popula uma vez
+  sel.innerHTML=CATEGORIAS_DESPESA.map(c=>`<option value="${c}">${c}</option>`).join('');
+}
+
 // Lê a foto/nota, redimensiona e comprime no próprio aparelho (evita doc gigante no Firestore)
 // ── CÂMERA AO VIVO PARA A FOTO DA NOTA ─────────────────────────
 // Abre a câmera traseira dentro do app (getUserMedia) e captura a nota na hora.
@@ -1892,6 +1913,7 @@ function setFinTab(tab){
   if(tab==='pagar'){
     const d=document.getElementById('desp-data');
     if(d && !d.value) d.value=new Date().toISOString().split('T')[0];
+    popularCategoriasDespesa();
   }
 }
 
@@ -1982,6 +2004,7 @@ async function carregarDespesas(range){
       despesas = snap.docs.map(d=>{
         const x=d.data();
         return {_id:d.id, descricao:x.descricao||'', valor:Number(x.valor)||0,
+                categoria:x.categoria||'Outros',
                 data:x.data?.toDate?.()?.toISOString() || x.data || new Date().toISOString(),
                 foto:x.foto||''};
       });
@@ -1992,18 +2015,19 @@ async function carregarDespesas(range){
 async function salvarDespesa(){
   const desc=document.getElementById('desp-desc').value.trim();
   const valor=parseFloat(document.getElementById('desp-valor').value);
+  const categoria=document.getElementById('desp-cat')?.value || 'Outros';
   const dataStr=document.getElementById('desp-data').value || new Date().toISOString().split('T')[0];
   if(!desc){ showToast('⚠️ Informe a descrição da despesa','tok-err'); return; }
   if(!valor || valor<=0){ showToast('⚠️ Informe um valor maior que zero','tok-err'); return; }
   const dataDate=new Date(dataStr+'T12:00:00');     // meio-dia evita virar o dia por fuso
 
-  const reg={ descricao:desc, valor:valor, data:dataDate.toISOString(), foto:despesaFoto||'' };
+  const reg={ descricao:desc, valor:valor, categoria:categoria, data:dataDate.toISOString(), foto:despesaFoto||'' };
   // grava no localStorage (sempre)
   const todas=JSON.parse(localStorage.getItem('tcho_despesas')||'[]');
 
   try{
     const doc={
-      descricao:desc, valor:valor,
+      descricao:desc, valor:valor, categoria:categoria,
       data:firebase.firestore.Timestamp.fromDate(dataDate),
       criadoEm:firebase.firestore.FieldValue.serverTimestamp(),
     };
@@ -2043,13 +2067,30 @@ function renderContasPagar(){
   const total=despesas.reduce((a,d)=>a+(Number(d.valor)||0),0);
   const sorted=[...despesas].sort((a,b)=>new Date(b.data)-new Date(a.data));
   const fmtD=s=>{const d=new Date(s);return isNaN(d)?'-':d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});};
-  el.innerHTML=`
+
+  // ── Resumo por categoria (plano de contas) ──
+  const porCat={};
+  despesas.forEach(d=>{const c=d.categoria||'Outros'; porCat[c]=(porCat[c]||0)+(Number(d.valor)||0);});
+  const resumoCat=Object.entries(porCat).sort((a,b)=>b[1]-a[1]).map(([c,v])=>{
+    const pct=total>0?Math.round(v/total*100):0;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:.74rem;padding:5px 0;border-bottom:1px solid #2a2520">
+      <span style="color:var(--cream)">🗂️ ${c} <span style="color:var(--muted);font-size:.66rem">${pct}%</span></span>
+      <span style="color:#e74c3c;font-weight:700">${r(v)}</span></div>`;
+  }).join('');
+  const blocoResumo=`
+    <div style="background:var(--card);border:1px solid #3a3530;border-radius:8px;padding:10px 12px;margin-bottom:12px">
+      <div style="font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:6px">Por categoria</div>
+      ${resumoCat}
+    </div>`;
+
+  el.innerHTML=blocoResumo+`
     <table class="fin-table">
       <thead><tr><th>Data</th><th>Descrição</th><th class="fin-val">Valor</th><th></th></tr></thead>
       <tbody>
         ${sorted.map(d=>`<tr>
           <td style="font-size:.72rem;color:var(--muted)">${fmtD(d.data)}</td>
-          <td>${(d.descricao||'').replace(/</g,'&lt;')}${d.foto?` <button onclick="abrirFotoNota('${d._id}')" title="Ver nota" style="background:none;border:none;cursor:pointer;font-size:.95rem;padding:0 2px;vertical-align:middle">📷</button>`:''}</td>
+          <td>${(d.descricao||'').replace(/</g,'&lt;')}${d.foto?` <button onclick="abrirFotoNota('${d._id}')" title="Ver nota" style="background:none;border:none;cursor:pointer;font-size:.95rem;padding:0 2px;vertical-align:middle">📷</button>`:''}
+            <div style="font-size:.62rem;color:var(--muted)">🗂️ ${d.categoria||'Outros'}</div></td>
           <td class="fin-val" style="color:#e74c3c">${r(d.valor)}</td>
           <td style="width:34px;text-align:center"><button onclick="removerDespesa('${d._id}')" title="Excluir" style="background:#3a1010;color:#e74c3c;border:none;border-radius:6px;width:28px;height:28px;cursor:pointer">✕</button></td>
         </tr>`).join('')}
@@ -2299,7 +2340,7 @@ function imprimirDespesas(){
       <tbody>
         ${sorted.map(d=>`<tr>
           <td>${fmtD(d.data)}</td>
-          <td>${(d.descricao||'').replace(/</g,'&lt;')}</td>
+          <td>${(d.descricao||'').replace(/</g,'&lt;')}<br><span style="font-size:9px;color:#555">${d.categoria||'Outros'}</span></td>
           <td class="r">${r(d.valor)}</td>
         </tr>`).join('')}
         <tr class="tot">
@@ -2308,6 +2349,9 @@ function imprimirDespesas(){
         </tr>
       </tbody>
     </table>
+    <div class="line"></div>
+    <div class="b" style="font-size:11px;margin-bottom:3px">POR CATEGORIA</div>
+    ${Object.entries(despesas.reduce((m,d)=>{const c=d.categoria||'Outros';m[c]=(m[c]||0)+(Number(d.valor)||0);return m;},{})).sort((a,b)=>b[1]-a[1]).map(([c,v])=>`<div class="row"><span>${c}</span><span>${r(v)}</span></div>`).join('')}
     <div class="line"></div>
     <div class="c" style="font-size:9px;margin-top:4px">Impresso em ${new Date().toLocaleString('pt-BR')}</div>
     <script>window.onload=function(){window.print();setTimeout(()=>window.close(),1500)};<\/script>

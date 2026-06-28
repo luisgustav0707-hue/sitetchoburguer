@@ -397,7 +397,8 @@
           <div>
             <label class="edit-lbl">📷 Foto da nota <span style="font-size:.65rem;color:var(--muted)">(opcional)</span></label>
             <input id="desp-foto" type="file" accept="image/*" capture="environment" style="display:none" onchange="onFotoSelecionada(this)">
-            <button type="button" onclick="document.getElementById('desp-foto').click()" style="width:100%;padding:10px;background:var(--card);color:var(--orange);border:1px dashed var(--orange);border-radius:8px;cursor:pointer;font-weight:600;font-size:.82rem">📷 Tirar foto / escolher imagem</button>
+            <button type="button" onclick="abrirCameraNota()" style="width:100%;padding:11px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:.85rem">📷 Tirar foto da nota</button>
+            <div style="text-align:center;margin-top:4px"><span onclick="document.getElementById('desp-foto').click()" style="font-size:.66rem;color:var(--muted);cursor:pointer;text-decoration:underline">ou escolher do dispositivo</span></div>
             <div id="desp-foto-preview"></div>
           </div>
           <button onclick="salvarDespesa()" style="padding:11px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:.95rem;font-weight:700;cursor:pointer">✓ ADICIONAR DESPESA</button>

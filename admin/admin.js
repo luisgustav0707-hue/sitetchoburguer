@@ -1780,6 +1780,55 @@ let finTab = 'receber';       // sub-aba ativa: receber | pagar | fluxo
 let despesaFoto = null;       // foto da nota (data URL comprimido) aguardando salvar
 
 // Lê a foto/nota, redimensiona e comprime no próprio aparelho (evita doc gigante no Firestore)
+// ── CÂMERA AO VIVO PARA A FOTO DA NOTA ─────────────────────────
+// Abre a câmera traseira dentro do app (getUserMedia) e captura a nota na hora.
+let camStreamNota = null;
+async function abrirCameraNota(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    showToast('Câmera indisponível — escolha o arquivo','tok-info');
+    document.getElementById('desp-foto').click(); return;
+  }
+  let ov = document.getElementById('modal-camera-nota');
+  if(!ov){
+    ov = document.createElement('div'); ov.id='modal-camera-nota';
+    ov.style.cssText='position:fixed;inset:0;background:#000;z-index:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px';
+    ov.innerHTML=`
+      <video id="cam-video" autoplay playsinline muted style="max-width:100%;max-height:74vh;background:#000"></video>
+      <div style="color:#fff;font-size:.8rem;opacity:.8">Aponte para a nota e toque em capturar</div>
+      <div style="display:flex;gap:16px;align-items:center;justify-content:center;padding-bottom:14px">
+        <button onclick="fecharCameraNota()" style="padding:12px 18px;background:#2a2520;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">✕ Cancelar</button>
+        <button onclick="capturarFotoNota()" style="padding:14px 26px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:10px;font-weight:800;font-size:1rem;cursor:pointer">📸 Capturar</button>
+      </div>`;
+    document.body.appendChild(ov);
+  }
+  ov.style.display='flex';
+  try{
+    camStreamNota = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+    document.getElementById('cam-video').srcObject = camStreamNota;
+  }catch(e){
+    fecharCameraNota();
+    showToast('Não consegui abrir a câmera — escolha o arquivo','tok-info');
+    document.getElementById('desp-foto').click();
+  }
+}
+function capturarFotoNota(){
+  const v=document.getElementById('cam-video');
+  if(!v || !v.videoWidth){ showToast('Aguarde a câmera carregar…','tok-err'); return; }
+  const maxW=1000;
+  const escala=Math.min(1, maxW/v.videoWidth);
+  const w=Math.round(v.videoWidth*escala), h=Math.round(v.videoHeight*escala);
+  const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+  cv.getContext('2d').drawImage(v,0,0,w,h);
+  despesaFoto=cv.toDataURL('image/jpeg',0.6);               // ~80-200KB, cabe no doc (<1MB)
+  fecharCameraNota();
+  mostrarPreviewFoto();
+  showToast('📷 Foto da nota capturada','tok-ok');
+}
+function fecharCameraNota(){
+  if(camStreamNota){ camStreamNota.getTracks().forEach(t=>t.stop()); camStreamNota=null; }
+  const ov=document.getElementById('modal-camera-nota'); if(ov) ov.style.display='none';
+}
+
 function onFotoSelecionada(input){
   const file = input.files && input.files[0];
   if(!file) return;

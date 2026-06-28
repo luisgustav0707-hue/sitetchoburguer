@@ -985,6 +985,12 @@ verificarLoja();
 renderBurguers();renderExtras();renderCustomCategorias();
 mostrarBannerRepetir();
 mostrarBotaoAcompanhar();   // mostra "Acompanhar meu pedido" se houver pedido ativo
+// Pedido ativo? Retoma o acompanhamento automaticamente, mesmo se o cliente
+// fechou a página e voltou depois (a tela de rastreamento "fica fixa").
+(function(){
+  const sv=JSON.parse(localStorage.getItem('tcho_pedido_atual')||'null');
+  if(sv && sv.docId) acompanharPedido();
+})();
 db.collection('cardapio').get().then(snapshot=>{
   if(snapshot.empty) return;
   let mudou=false;

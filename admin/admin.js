@@ -1779,7 +1779,7 @@ let despesas = [];            // contas a pagar do período carregado
 let finTab = 'receber';       // sub-aba ativa: receber | pagar | fluxo
 let despesaFoto = null;       // foto da nota (data URL comprimido) aguardando salvar
 
-// Plano de contas: categorias para classificar as despesas
+// Plano de contas: categorias padrão (editáveis pelo dono, igual aos bairros)
 const CATEGORIAS_DESPESA = [
   'Insumos / Mercadoria',
   'Bebidas',
@@ -1794,10 +1794,91 @@ const CATEGORIAS_DESPESA = [
   'Entrega / Motoboy',
   'Outros',
 ];
-function popularCategoriasDespesa(){
+function getCategoriasAdmin(){
+  const s=localStorage.getItem('tcho_cat_despesa');
+  return s?JSON.parse(s):[...CATEGORIAS_DESPESA];
+}
+function saveCategoriasAdmin(arr){
+  localStorage.setItem('tcho_cat_despesa',JSON.stringify(arr));
+  salvarCardapioFS('cat_despesa',{lista:arr});   // sincroniza entre dispositivos
+  popularCategoriasDespesa(true);                // atualiza o select de lançamento
+}
+function popularCategoriasDespesa(force){
   const sel=document.getElementById('desp-cat');
-  if(!sel || sel.options.length) return;   // popula uma vez
-  sel.innerHTML=CATEGORIAS_DESPESA.map(c=>`<option value="${c}">${c}</option>`).join('');
+  if(!sel) return;
+  if(sel.options.length && !force) return;       // popula uma vez (ou força ao editar)
+  const atual=sel.value;
+  sel.innerHTML=getCategoriasAdmin().map(c=>`<option value="${c}">${c}</option>`).join('');
+  if(atual) sel.value=atual;
+}
+
+// ── Gerenciar categorias do plano de contas (add/editar/excluir) ──
+let editCatIdx=null, addCatAberto=false;
+function toggleGerenciarCat(){
+  const box=document.getElementById('cat-gerenciar');
+  const ch=document.getElementById('cat-chevron');
+  if(!box) return;
+  const abrir = box.style.display==='none';
+  box.style.display = abrir ? 'block' : 'none';
+  if(ch) ch.textContent = abrir ? '▲' : '▼';
+  if(abrir) renderCategorias();
+}
+function renderCategorias(){
+  const el=document.getElementById('lista-categorias'); if(!el) return;
+  const arr=getCategoriasAdmin();
+  const inp='background:var(--card);border:1px solid var(--orange);border-radius:6px;color:var(--cream);font-size:.78rem;padding:5px 7px;outline:none';
+  el.innerHTML=arr.map((c,i)=>{
+    if(editCatIdx===i){
+      return `<div class="prod-item"><div style="display:flex;gap:8px;align-items:center;padding:8px 0;flex-wrap:wrap">
+        <input style="${inp};flex:1;min-width:140px" id="ce-nome-${i}" value="${(c||'').replace(/"/g,'&quot;')}">
+        <button class="opc-btn" onclick="salvarEditCat(${i})">✓ Salvar</button>
+        <button class="opc-btn" style="background:#2a2520;color:var(--muted)" onclick="cancelarEditCat()">Cancelar</button>
+      </div></div>`;
+    }
+    return `<div class="prod-item"><div style="display:flex;align-items:center;gap:8px;padding:8px 0">
+      <div style="flex:1;min-width:0"><div class="prod-nome">🗂️ ${c}</div></div>
+      <button class="btn-edit-prod" onclick="iniciarEditCat(${i})" title="Editar">✏️</button>
+      <button class="btn-del-prod" onclick="removerCat(${i})" title="Remover">🗑️</button>
+    </div></div>`;
+  }).join('')
+  + (addCatAberto
+    ? `<div class="new-prod-form" style="margin-top:6px">
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
+          <input style="${inp};flex:1;min-width:160px" id="cn-nome" placeholder="Nome da categoria" onkeydown="if(event.key==='Enter')salvarNovaCat()">
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="opc-btn" onclick="salvarNovaCat()">✓ Adicionar</button>
+          <button class="opc-btn" style="background:#2a2520;color:var(--muted)" onclick="fecharAddCat()">Cancelar</button>
+        </div>
+      </div>`
+    : `<button class="btn-add-prod" onclick="abrirAddCat()">+ Nova categoria</button>`
+  );
+}
+function iniciarEditCat(i){editCatIdx=i;addCatAberto=false;renderCategorias();setTimeout(()=>document.getElementById('ce-nome-'+i)?.focus(),40);}
+function cancelarEditCat(){editCatIdx=null;renderCategorias();}
+function salvarEditCat(i){
+  const nome=document.getElementById('ce-nome-'+i)?.value.trim();
+  if(!nome){showToast('⚠️ Digite o nome da categoria','tok-err');return;}
+  const arr=getCategoriasAdmin();
+  if(arr.some((c,j)=>j!==i && c.toLowerCase()===nome.toLowerCase())){showToast('⚠️ Categoria já existe','tok-err');return;}
+  if(arr[i]!==undefined){arr[i]=nome;saveCategoriasAdmin(arr);}
+  editCatIdx=null;renderCategorias();showToast(`✅ Categoria atualizada`,'tok-ok');
+}
+function removerCat(i){
+  const arr=getCategoriasAdmin(),c=arr[i];
+  if(c===undefined||!confirm(`Remover a categoria "${c}"?`))return;
+  arr.splice(i,1);saveCategoriasAdmin(arr);
+  renderCategorias();showToast(`🗑️ "${c}" removida`,'tok-info');
+}
+function abrirAddCat(){addCatAberto=true;editCatIdx=null;renderCategorias();setTimeout(()=>document.getElementById('cn-nome')?.focus(),40);}
+function fecharAddCat(){addCatAberto=false;renderCategorias();}
+function salvarNovaCat(){
+  const nome=document.getElementById('cn-nome')?.value.trim();
+  if(!nome){showToast('⚠️ Digite o nome da categoria','tok-err');return;}
+  const arr=getCategoriasAdmin();
+  if(arr.some(c=>c.toLowerCase()===nome.toLowerCase())){showToast('⚠️ Categoria já existe','tok-err');return;}
+  arr.push(nome);saveCategoriasAdmin(arr);
+  addCatAberto=false;renderCategorias();showToast(`✅ "${nome}" adicionada`,'tok-ok');
 }
 
 // Lê a foto/nota, redimensiona e comprime no próprio aparelho (evita doc gigante no Firestore)
@@ -2513,6 +2594,7 @@ function iniciarApp(){
       if(doc.id==='adicionais'   && d.lista) localStorage.setItem('tcho_adicionais',  JSON.stringify(d.lista));
       if(doc.id==='estoque'      && d.data ) localStorage.setItem('tcho_estoque',     JSON.stringify(d.data));
       if(doc.id==='bairros'      && d.lista) localStorage.setItem('tcho_bairros',     JSON.stringify(d.lista));
+      if(doc.id==='cat_despesa'  && d.lista) localStorage.setItem('tcho_cat_despesa', JSON.stringify(d.lista));
     });
     // Re-aplica edições aos produtos base em memória
     const edits=JSON.parse(localStorage.getItem('tcho_prods_edits')||'{}');

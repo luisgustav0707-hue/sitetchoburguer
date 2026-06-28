@@ -414,6 +414,12 @@
         <div class="sec-title">🔴 Despesas do período <button class="btn-print-fin" onclick="imprimirDespesas()">🖨️ Imprimir</button></div>
         <div id="desp-lista"></div>
       </div>
+
+      <!-- Gerenciar categorias (plano de contas) -->
+      <div class="section">
+        <div class="sec-title" style="cursor:pointer" onclick="toggleGerenciarCat()">🗂️ Categorias (plano de contas) <span id="cat-chevron" style="font-size:.8rem">▼</span></div>
+        <div id="cat-gerenciar" style="display:none"><div id="lista-categorias"></div></div>
+      </div>
     </div>
 
     <!-- ══════ FLUXO DE CAIXA (consolidado) ══════ -->

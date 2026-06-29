@@ -51,8 +51,43 @@ function showPage(p){
   document.getElementById('page-'+p).classList.add('active');
   if(p==='cardapio')  renderCardapio();
   if(p==='pedidos')   carregarLog();
-  if(p==='config')    renderCupons();   // Marketing agora vive dentro de Config
+  if(p==='config'){ renderCupons(); carregarAcessos(); iniciarPresencaAdmin(); }  // Marketing + acessos vivem no Config
   if(p==='financeiro') carregarFinanceiro();
+}
+
+// ── ACESSOS DO SITE (analytics simples no Firestore) ───────────
+let unsubPresenca=null;
+function carregarAcessos(){
+  db.collection('stats').doc('visitas').get().then(doc=>{
+    const d=doc.exists?doc.data():{};
+    const dias=d.dias||{};
+    const hojeK=new Date().toISOString().split('T')[0];
+    const mesK=hojeK.slice(0,7);
+    const ini7=new Date(); ini7.setHours(0,0,0,0); ini7.setDate(ini7.getDate()-6);
+    let hoje=0,semana=0,mes=0;
+    Object.entries(dias).forEach(([k,v])=>{
+      v=Number(v)||0;
+      if(k===hojeK) hoje+=v;
+      const dt=new Date(k+'T12:00:00');
+      if(!isNaN(dt)&&dt>=ini7) semana+=v;
+      if(k.startsWith(mesK)) mes+=v;
+    });
+    const set=(id,val)=>{const el=document.getElementById(id); if(el) el.textContent=val;};
+    set('ac-hoje',hoje); set('ac-semana',semana); set('ac-mes',mes); set('ac-total',d.total||0);
+  }).catch(()=>{});
+}
+function iniciarPresencaAdmin(){
+  if(unsubPresenca) return;
+  unsubPresenca=db.collection('presenca').onSnapshot(snap=>{
+    const agora=Date.now(); let online=0;
+    snap.forEach(doc=>{
+      const ls=doc.data().lastSeen&&doc.data().lastSeen.toDate?doc.data().lastSeen.toDate():null;
+      const idade=ls?(agora-ls.getTime()):9e9;
+      if(idade<75000) online++;                              // ativo nos últimos ~75s
+      else if(idade>600000) doc.ref.delete().catch(()=>{});  // limpa presença abandonada (>10min)
+    });
+    const el=document.getElementById('ac-online'); if(el) el.textContent=online;
+  },()=>{});
 }
 function showInner(t){
   document.querySelectorAll('.inner-tab').forEach((el,i)=>el.classList.toggle('active',['cupons','fidelidade','recuperacao'][i]===t));

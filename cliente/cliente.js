@@ -1076,3 +1076,28 @@ db.collection('cardapio').doc('bairros').onSnapshot(doc=>{
   }
 },()=>{});
 
+// ── CONTADOR DE ACESSOS (analytics simples, visível no admin) ──────
+(function(){
+  try{
+    // 1) Conta a visita uma vez por sessão (aba), sem contar recarregamentos
+    if(!sessionStorage.getItem('tcho_visit_contada')){
+      sessionStorage.setItem('tcho_visit_contada','1');
+      const hojeK=new Date().toISOString().split('T')[0];
+      db.collection('stats').doc('visitas').set({
+        dias:{[hojeK]: firebase.firestore.FieldValue.increment(1)},
+        total: firebase.firestore.FieldValue.increment(1)
+      },{merge:true}).catch(()=>{});
+    }
+    // 2) Presença "online agora": heartbeat enquanto a aba estiver aberta
+    let sid=sessionStorage.getItem('tcho_sid');
+    if(!sid){ sid='s_'+Date.now()+'_'+Math.random().toString(36).slice(2,8); sessionStorage.setItem('tcho_sid',sid); }
+    const presRef=db.collection('presenca').doc(sid);
+    const bater=()=>presRef.set({lastSeen:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});
+    bater();
+    const hb=setInterval(bater, 30000);
+    const sair=()=>{ clearInterval(hb); presRef.delete().catch(()=>{}); };
+    window.addEventListener('pagehide', sair);
+    window.addEventListener('beforeunload', sair);
+  }catch(e){}
+})();
+

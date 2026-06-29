@@ -2087,6 +2087,7 @@ async function carregarFinanceiro(){
   // 1. Sempre carrega localStorage primeiro — fonte confiável sem Firebase
   const todos = JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
   finPedidosList = todos.filter(p=>{
+    if(p.status==='cancelado') return false;          // cancelados não contam no financeiro/frete
     const h = new Date(p.hora);
     return !isNaN(h.getTime()) && h >= range.ini && h < range.fim;
   }).map(p=>({...p, hora: new Date(p.hora)}));
@@ -2101,7 +2102,7 @@ async function carregarFinanceiro(){
       finPedidosList = snap.docs.map(d=>{
         const data=d.data();
         return {...data, _id:d.id, hora:data.hora?.toDate?.() || new Date(data.hora||0)};
-      });
+      }).filter(p=>p.status!=='cancelado');   // cancelados não contam no financeiro/frete
     }
     // Se snap vazio → mantém dados do localStorage
   } catch(e){

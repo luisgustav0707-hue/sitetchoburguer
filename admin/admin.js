@@ -609,6 +609,18 @@ function getMin(h){return Math.floor((new Date()-h)/60000);}
 function tc(m,s){if(s==='novo')return m<3?'tok':m<6?'twarn':'tlate';if(s==='prep')return m<15?'tok':m<25?'twarn':'tlate';if(s==='entrega')return m<30?'tok':m<50?'twarn':'tlate';return'tok';}
 function tt(m){if(m<1)return'agora';if(m>=60)return Math.floor(m/60)+'h'+(m%60?String(m%60).padStart(2,'0')+'min':'');return m+'min';}
 
+// Horário em que o cliente FEZ o pedido (usa criadoEm, que não muda ao trocar
+// de status — ao contrário de hora/horaStr, que são atualizados a cada etapa).
+function horaPedido(p){
+  let d=null;
+  if(p.criadoEm){
+    if(typeof p.criadoEm.toDate==='function') d=p.criadoEm.toDate();
+    else { const x=new Date(p.criadoEm); if(!isNaN(x)) d=x; }
+  }
+  if(!d && p.hora) d=(p.hora instanceof Date)?p.hora:new Date(p.hora);
+  return (d && !isNaN(d)) ? d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : (p.horaStr||'--:--');
+}
+
 function renderCard(p){
   const m=getMin(p.hora),cls=tc(m,p.status);
   const tipoEl=p.tipo==='delivery'?`<span class="card-tipo td">🛵 DEL</span>`:`<span class="card-tipo tr">🏃 RET</span>`;
@@ -626,8 +638,8 @@ function renderCard(p){
     <div class="card-cli">${p.nome}${p.bairro?` · ${p.bairro}`:''}</div>
     <div class="card-itens">${p.itens.join(' · ')}</div>
     ${p.obs?`<div class="card-obs">⚠ ${p.obs}</div>`:''}
-    <div class="card-ftr"><div class="card-total">R$${p.total}</div><div class="timer ${cls}">⏱ ${tt(m)}</div></div>
-    <div class="card-btns">${btns}<button class="btn-editar-card" onclick="reimprimirPedido('${fid}')">🖨️ Cupom</button><button class="btn-editar-card" onclick="abrirModalEditar('${fid}')">✏️ Editar</button></div>
+    <div class="card-ftr"><div class="card-total">R$${p.total}</div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:.68rem;color:var(--muted)" title="Horário do pedido">🕐 ${horaPedido(p)}</span><div class="timer ${cls}">⏱ ${tt(m)}</div></div></div>
+    <div class="card-btns">${btns}<button class="btn-editar-card" onclick="reimprimirPedido('${fid}')" title="Imprimir cupom">🖨️</button><button class="btn-editar-card" onclick="abrirModalEditar('${fid}')" title="Editar pedido">✏️</button></div>
     ${dragHint}
   </div>`;
 }

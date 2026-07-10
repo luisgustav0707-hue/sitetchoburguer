@@ -631,6 +631,18 @@ function cancelar(id){
   totalHoje=Math.max(0,totalHoje-1);
   renderAll();renderHistorico();
 }
+function excluirPedido(id){
+  const p=acharPedido(id);
+  const ref=p?(p.num||('#'+p.id)):'';
+  if(!confirm(`Excluir permanentemente o pedido ${ref}?\n\nEssa ação apaga o pedido de vez e não pode ser desfeita.`))return;
+  db.collection('pedidos').doc(id).delete().then(()=>showToast('🗑️ Pedido excluído','tok-info')).catch(console.error);
+  const eraDeHoje=pedidos.some(x=>x._id===id)||pedidosFinHoje.some(x=>x._id===id);
+  if(eraDeHoje) totalHoje=Math.max(0,totalHoje-1);
+  pedidos=pedidos.filter(x=>x._id!==id);
+  pedidosFinHoje=pedidosFinHoje.filter(x=>x._id!==id);
+  logPedidos=logPedidos.filter(x=>x._id!==id);
+  renderAll();renderHistorico();
+}
 
 // ── DRAG & DROP ────────────────────────────────────────────────
 function onDragStart(event,id,status){dragId=id;dragSrc=status;event.dataTransfer.effectAllowed='move';setTimeout(()=>{const el=document.getElementById(`card-${id}`);if(el)el.classList.add('dragging');},0);}
@@ -674,7 +686,7 @@ function renderCard(p){
     <div class="card-itens">${p.itens.join(' · ')}</div>
     ${p.obs?`<div class="card-obs">⚠ ${p.obs}</div>`:''}
     <div class="card-ftr"><div class="card-total">R$${p.total}</div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:.68rem;color:var(--muted)" title="Horário do pedido">🕐 ${horaPedido(p)}</span><div class="timer ${cls}">⏱ ${tt(m)}</div></div></div>
-    <div class="card-btns">${btns}<button class="btn-editar-card" onclick="reimprimirPedido('${fid}')" title="Imprimir cupom">🖨️</button><button class="btn-editar-card" onclick="abrirModalEditar('${fid}')" title="Editar pedido">✏️</button></div>
+    <div class="card-btns">${btns}<button class="btn-editar-card" onclick="reimprimirPedido('${fid}')" title="Imprimir cupom">🖨️</button><button class="btn-editar-card" onclick="abrirModalEditar('${fid}')" title="Editar pedido">✏️</button><button class="btn-editar-card" onclick="excluirPedido('${fid}')" title="Excluir pedido" style="color:#e74c3c">🗑️</button></div>
     ${dragHint}
   </div>`;
 }
@@ -850,6 +862,7 @@ function renderFinalizadosHoje(lista){
         <div style="display:flex;gap:4px">
           <button class="btn-editar-card" onclick="reimprimirPedido('${p._id}')">🖨️ Cupom</button>
           <button class="btn-editar-card" onclick="abrirModalEditar('${p._id}')">✏️ Editar</button>
+          <button class="btn-editar-card" onclick="excluirPedido('${p._id}')" style="color:#e74c3c">🗑️ Excluir</button>
         </div>
       </div>
     </div>`;
@@ -932,6 +945,7 @@ function renderLog(){
       <div style="display:flex;justify-content:flex-end;gap:4px;margin-top:8px">
         <button class="btn-editar-card" onclick="reimprimirPedido('${p._id}')">🖨️ Cupom</button>
         <button class="btn-editar-card" onclick="abrirModalEditar('${p._id}')">✏️ Editar</button>
+        <button class="btn-editar-card" onclick="excluirPedido('${p._id}')" style="color:#e74c3c">🗑️ Excluir</button>
       </div>
     </div>`).join('');
 }

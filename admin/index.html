@@ -571,11 +571,12 @@
           <input id="edit-cidade" class="edit-inp" type="text" placeholder="Cidade">
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
         <div><label class="edit-lbl">🛵 Frete (R$)</label><input id="edit-frete" class="edit-inp" type="number" min="0" step="1" oninput="recalcEditTotal()"></div>
+        <div><label class="edit-lbl">🏷️ Desconto (R$)</label><input id="edit-desconto" class="edit-inp" type="number" min="0" step="1" oninput="onEditDescontoChange()"></div>
         <div><label class="edit-lbl">💰 Total (R$)</label><input id="edit-total" class="edit-inp" type="number" readonly style="background:#0d0a07;opacity:.9;font-weight:700"></div>
       </div>
-      <div style="font-size:.64rem;color:var(--muted);margin-top:-6px">Total = soma dos itens + frete (calculado automático)</div>
+      <div style="font-size:.64rem;color:var(--muted);margin-top:-6px">Total = soma dos itens + frete − desconto (calculado automático)</div>
       <div><label class="edit-lbl">📝 Observações</label><textarea id="edit-obs" class="edit-inp" rows="2" style="resize:vertical"></textarea></div>
     </div>
     <div style="display:flex;gap:6px;margin-top:16px">

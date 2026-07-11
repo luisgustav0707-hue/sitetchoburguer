@@ -843,6 +843,7 @@ function abrirModalEditar(id){
   document.getElementById('edit-nome').value=p.nome||'';
   document.getElementById('edit-tel').value=p.tel||'';
   document.getElementById('edit-frete').value=p.frete||0;
+  document.getElementById('edit-desconto').value=editDesconto||0;
   document.getElementById('edit-obs').value=p.obs||'';
   // Endereço (entrega)
   document.getElementById('edit-endereco').value=p.endereco||'';
@@ -908,6 +909,11 @@ function selEditPag(pag){
   });
 }
 
+function onEditDescontoChange(){
+  editDesconto=parseFloat(document.getElementById('edit-desconto').value)||0;
+  recalcEditTotal();
+}
+
 function recalcEditTotal(){
   const subtotal=editItens.reduce((a,it)=>a+(parseFloat(it.preco)||0),0);
   const frete=parseFloat(document.getElementById('edit-frete').value)||0;
@@ -936,9 +942,10 @@ function salvarEdicaoPedido(imprimir=false){
       .map(it=>(it.preco>0?`${it.nome.trim()} — R$${it.preco}`:it.nome.trim()));
   if(!nome){showToast('⚠️ Nome obrigatório','tok-err');return;}
   if(!itens.length){showToast('⚠️ Adicione pelo menos um item','tok-err');return;}
+  const desconto=parseFloat(document.getElementById('edit-desconto').value)||0;
   const subtotal=editItens.reduce((a,it)=>a+(parseFloat(it.preco)||0),0);
-  const total=Math.max(0, subtotal+frete-(editDesconto||0));
-  const update={nome,tel,pag:editandoPag,frete,total,obs,itens,endereco,bairro,cidade};
+  const total=Math.max(0, subtotal+frete-desconto);
+  const update={nome,tel,pag:editandoPag,frete,desconto,total,obs,itens,endereco,bairro,cidade};
   // Atualiza em todas as listas onde o pedido apareça (ativos, finalizados, log)
   [pedidos,pedidosFinHoje,logPedidos].forEach(arr=>{const it=arr.find(x=>x._id===editandoPedidoId);if(it)Object.assign(it,update);});
   // Persiste no Firestore

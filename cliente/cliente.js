@@ -45,7 +45,18 @@ const PONTOS      = TCHO.pontos;
 const SACHES      = TCHO.saches;
 // Bairros/taxas: mutável porque o admin pode editar (sincroniza via Firestore)
 let BAIRROS_TAXA = TCHO.bairros;
-(function(){ const s=localStorage.getItem('tcho_bairros'); if(s){ try{ BAIRROS_TAXA=JSON.parse(s); }catch(e){} } })();
+(function(){ const s=localStorage.getItem('tcho_bairros'); if(s){ try{ const l=JSON.parse(s); if(Array.isArray(l)&&l.length) BAIRROS_TAXA=l; }catch(e){} } })();
+
+// Normaliza texto pra comparar bairro (sem acento, minúsculo, sem espaços extras).
+function normBairro(s){return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();}
+// Acha o bairro atendido correspondente a um nome (tolerante a acento/caixa/prefixos).
+function matchBairro(bv){
+  const n=normBairro(bv);
+  if(!n) return null;
+  return BAIRROS_TAXA.find(b=>{const nb=normBairro(b.nome);return nb===n||n.includes(nb)||nb.includes(n);})||null;
+}
+// Guarda o último endereço do ViaCEP pra usar no fallback de seleção manual.
+let ultimoCep={};
 
 // Cupons: carregados do Firestore (gerenciados no admin). A lista abaixo é só
 // fallback caso o Firestore não responda (offline).
@@ -464,13 +475,18 @@ async function buscarCep(){
     const d=await r.json();
     if(d.erro){msg.className='cep-msg err';msg.textContent='❌ CEP não encontrado.';document.getElementById('f-cep').className='';return;}
     const bv=d.bairro||'';
-    const enc=BAIRROS_TAXA.find(b=>b.nome.toLowerCase().trim()===bv.toLowerCase().trim()||bv.toLowerCase().includes(b.nome.toLowerCase())||b.nome.toLowerCase().includes(bv.toLowerCase()));
+    ultimoCep={rua:d.logradouro||'',cidade:d.localidade?`${d.localidade} / ${d.uf}`:''};
+    const enc=matchBairro(bv);
     if(!enc){
-      msg.className='cep-msg err';msg.textContent=`❌ Bairro "${bv}" não atendido para delivery.`;
+      // ViaCEP não devolveu bairro (comum em BH) ou o bairro não está na lista:
+      // não trava — mostra a lista pra cliente escolher o bairro na mão.
+      msg.className='cep-msg err';
+      msg.textContent=bv?`❌ Bairro "${bv}" não atendido — escolha na lista abaixo.`:'ℹ️ CEP sem bairro. Escolha seu bairro na lista abaixo.';
       document.getElementById('f-cep').className='';
-      document.getElementById('bairro-nao-atendido').textContent=bv||'encontrado';
+      document.getElementById('bairro-nao-atendido').textContent=bv||'não identificado pelo CEP';
       document.getElementById('aviso-bairro').classList.add('show');
       bairroAtendido=false;freteAtual=0;
+      document.getElementById('bairros-lista').classList.add('show');
       renderListaBairros();
     }else{
       msg.className='cep-msg ok';msg.textContent=`✅ Entregamos em ${enc.nome}!`;
@@ -489,7 +505,26 @@ async function buscarCep(){
   }catch(e){msg.className='cep-msg err';msg.textContent='❌ Erro ao buscar CEP.';document.getElementById('f-cep').className='';}
 }
 
-function renderListaBairros(){const s=[...BAIRROS_TAXA].sort((a,b)=>a.nome.localeCompare(b.nome));document.getElementById('bairros-grid').innerHTML=s.map(b=>`<div class="bairro-chip"><span>${b.nome}</span><span class="bairro-taxa">R$${b.taxa}</span></div>`).join('');}
+function renderListaBairros(){const s=[...BAIRROS_TAXA].sort((a,b)=>a.nome.localeCompare(b.nome));document.getElementById('bairros-grid').innerHTML=s.map(b=>`<div class="bairro-chip" style="cursor:pointer" onclick="selecionarBairroManual('${b.nome.replace(/'/g,"\\'")}')" title="Escolher ${b.nome}"><span>${b.nome}</span><span class="bairro-taxa">R$${b.taxa}</span></div>`).join('');}
+
+// Cliente escolhe o bairro na mão (fallback quando o CEP não identifica o bairro).
+function selecionarBairroManual(nome){
+  const enc=BAIRROS_TAXA.find(b=>b.nome===nome)||matchBairro(nome);
+  if(!enc) return;
+  const msg=document.getElementById('cep-msg');
+  msg.className='cep-msg ok';msg.textContent=`✅ Entregamos em ${enc.nome}!`;
+  document.getElementById('f-cep').className='ok';
+  document.getElementById('aviso-bairro').classList.remove('show');
+  document.getElementById('bairros-lista').classList.remove('show');
+  if(ultimoCep.rua && !document.getElementById('f-rua').value) document.getElementById('f-rua').value=ultimoCep.rua;
+  if(ultimoCep.cidade && !document.getElementById('f-cidade').value) document.getElementById('f-cidade').value=ultimoCep.cidade;
+  document.getElementById('f-bairro').value=enc.nome;
+  document.getElementById('campos-endereco').style.display='block';
+  document.getElementById('bairro-nome-ok').textContent=enc.nome;
+  document.getElementById('frete-val').textContent=`R$${enc.taxa}`;
+  freteAtual=enc.taxa;bairroAtendido=true;
+  document.getElementById('f-num').focus();
+}
 function toggleListaBairros(){const el=document.getElementById('bairros-lista');if(!el.classList.contains('show')){renderListaBairros();el.classList.add('show');}else el.classList.remove('show');}
 
 function toggleBuscarCepRua(){
@@ -544,7 +579,7 @@ function irResumo(){
   if(document.getElementById('f-tel').value.replace(/\D/g,'').length<10){alert('Digite seu telefone!');return;}
   if(!tipoPedido){document.getElementById('err-tipo').style.display='block';window.scrollTo(0,200);return;}
   if(tipoPedido==='delivery'){
-    if(!bairroAtendido){document.getElementById('aviso-bairro').classList.add('show');alert('Não entregamos nesse bairro. Escolha retirada ou informe um CEP atendido.');return;}
+    if(!bairroAtendido){document.getElementById('aviso-bairro').classList.add('show');document.getElementById('bairros-lista').classList.add('show');renderListaBairros();alert('Selecione seu bairro na lista de bairros atendidos, ou escolha retirada.');return;}
     if(!document.getElementById('f-num').value.trim()){alert('Digite o número do endereço!');return;}
   }
   if(!pagamento){document.getElementById('err-pag').style.display='block';return;}
@@ -592,6 +627,27 @@ function renderResumo(){
   const obs=document.getElementById('f-obs').value;
   if(obs)html+=`<div class="resumo-linha" style="flex-direction:column;gap:2px"><span style="color:var(--muted);font-size:.7rem">📝 OBS</span><span style="font-size:.78rem">${obs}</span></div>`;
   document.getElementById('resumo-content').innerHTML=html+`<div class="resumo-total"><span>TOTAL</span><span>R$${Math.max(0,total)}</span></div>`;
+}
+
+// Monta o link do WhatsApp com o pedido completo (fallback quando o servidor
+// está fora — o pedido chega direto no WhatsApp da loja).
+function linkWhatsAppPedido(pedido){
+  const L=[];
+  L.push(`*NOVO PEDIDO ${pedido.num}* 🍔`);
+  L.push(pedido.tipo==='delivery'?'🛵 Delivery':'🏃 Retirada');
+  L.push(`👤 ${pedido.nome}`);
+  if(pedido.tel) L.push(`📞 ${pedido.tel}`);
+  if(pedido.tipo==='delivery') L.push(`📍 ${[pedido.endereco,pedido.bairro,pedido.cidade].filter(Boolean).join(' — ')}`);
+  L.push('');
+  L.push('*Itens:*');
+  (pedido.itens||[]).forEach(i=>L.push(`• ${i}`));
+  if(pedido.obs) L.push(`\n📝 Obs: ${pedido.obs}`);
+  L.push('');
+  if(pedido.tipo==='delivery' && pedido.frete) L.push(`Frete: R$${pedido.frete}`);
+  if(pedido.desconto) L.push(`Desconto: -R$${pedido.desconto}${pedido.cupom?' ('+pedido.cupom+')':''}`);
+  L.push(`💰 *TOTAL: R$${pedido.total}*`);
+  L.push(`💳 Pagamento: ${pedido.pag||'-'}`);
+  return `https://wa.me/${TCHO.loja.whatsapp}?text=${encodeURIComponent(L.join('\n'))}`;
 }
 
 // ── FINALIZAR PEDIDO (salva no Firestore) ──────────────────────
@@ -642,6 +698,10 @@ async function finalizarPedido(){
     impresso:false,
     criadoEm:firebase.firestore.FieldValue.serverTimestamp(),
   };
+
+  // Preenche o botão de WhatsApp com o pedido (garante recebimento se o servidor cair)
+  const waBtn=document.getElementById('btn-wa-pedido');
+  if(waBtn){ waBtn.href=linkWhatsAppPedido(pedido); waBtn.style.display='inline-flex'; }
 
   // Salva sempre no localStorage (permite admin local sem Firebase)
   const pedidoLocal = {...pedido, hora: new Date().toISOString()};
@@ -1093,9 +1153,14 @@ db.collection('cardapio').doc('bairros').onSnapshot(doc=>{
     if(!sid){ sid='s_'+Date.now()+'_'+Math.random().toString(36).slice(2,8); sessionStorage.setItem('tcho_sid',sid); }
     const presRef=db.collection('presenca').doc(sid);
     const bater=()=>presRef.set({lastSeen:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});
-    bater();
-    const hb=setInterval(bater, 30000);
-    const sair=()=>{ clearInterval(hb); presRef.delete().catch(()=>{}); };
+    let hb=null;
+    const ligarHb=()=>{ if(hb) return; bater(); hb=setInterval(bater, 90000); };  // heartbeat a cada 90s (menos escritas)
+    const desligarHb=()=>{ if(hb){ clearInterval(hb); hb=null; } };
+    // Só bate presença com a aba em primeiro plano — aba em segundo plano não
+    // conta como "online" e não gasta escrita.
+    document.addEventListener('visibilitychange', ()=>{ document.visibilityState==='visible' ? ligarHb() : desligarHb(); });
+    if(document.visibilityState==='visible') ligarHb();
+    const sair=()=>{ desligarHb(); presRef.delete().catch(()=>{}); };
     window.addEventListener('pagehide', sair);
     window.addEventListener('beforeunload', sair);
   }catch(e){}

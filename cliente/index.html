@@ -143,8 +143,8 @@
     </div>
     <div class="aviso-bairro" id="aviso-bairro">
       <div class="aviso-titulo">😕 Não entregamos nessa região</div>
-      <div class="aviso-texto">O bairro <strong id="bairro-nao-atendido"></strong> não está na nossa área de entrega.<br>Você pode <strong>retirar no local</strong> ou ver os bairros atendidos abaixo.</div>
-      <div class="aviso-link" onclick="toggleListaBairros()">📍 Ver bairros atendidos</div>
+      <div class="aviso-texto">Não conseguimos identificar o bairro <strong id="bairro-nao-atendido"></strong> pelo CEP.<br><strong>Clique no seu bairro</strong> na lista abaixo, ou escolha <strong>retirar no local</strong>.</div>
+      <div class="aviso-link" onclick="toggleListaBairros()">📍 Ver / escolher bairro atendido</div>
     </div>
     <div class="bairros-lista" id="bairros-lista"><div style="font-size:.76rem;font-weight:700;color:var(--orange);letter-spacing:1px;text-transform:uppercase">Bairros atendidos</div><div class="bairros-grid" id="bairros-grid"></div></div>
     <div id="campos-endereco" style="display:none">
@@ -203,6 +203,12 @@
     <div class="success-title">PEDIDO RECEBIDO!</div>
     <div class="order-num" id="order-num">#001</div>
     <p class="success-sub" id="success-msg"></p>
+
+    <!-- ENVIO DO PEDIDO PELO WHATSAPP (garante recebimento mesmo se o servidor cair) -->
+    <a id="btn-wa-pedido" href="#" target="_blank" rel="noopener"
+       style="display:inline-flex;align-items:center;justify-content:center;gap:8px;margin:6px auto 4px;background:#25d366;color:#000;font-weight:800;font-size:1rem;padding:14px 22px;border-radius:30px;text-decoration:none;letter-spacing:.5px;max-width:340px;width:100%;box-shadow:0 4px 14px rgba(37,211,102,.35)">
+       📲 ENVIAR MEU PEDIDO NO WHATSAPP</a>
+    <p style="color:var(--muted);font-size:.72rem;margin:2px 0 6px">Toque no botão acima e envie a mensagem para confirmar seu pedido.</p>
 
     <!-- RASTREAMENTO EM TEMPO REAL -->
     <div class="tracking-box" id="tracking-box">

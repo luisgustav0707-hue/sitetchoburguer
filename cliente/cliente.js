@@ -715,6 +715,12 @@ async function finalizarPedido(){
   }
   // Notifica admin instantaneamente via BroadcastChannel (quando em HTTP)
   try { new BroadcastChannel('tcho_pedidos').postMessage(pedidoLocal); } catch(e){}
+  // Contabiliza o uso do cupom (incrementa usosFeitos no cupom do admin)
+  if(cupomAtual && cupomAtual._id){
+    db.collection('cupons').doc(cupomAtual._id)
+      .update({usosFeitos: firebase.firestore.FieldValue.increment(1)})
+      .catch(e=>console.error('Erro ao contar uso do cupom:', e));
+  }
   // Envia ao Firestore e inicia rastreamento
   const tipoAtual=tipoPedido;
   db.collection('pedidos').add(pedido)
@@ -1123,7 +1129,7 @@ db.collection('cupons').onSnapshot(snap=>{
     if(c.ativo===false) return;                                  // desativado no admin
     if(c.validade){ const fim=new Date(c.validade+'T23:59:59'); if(!isNaN(fim)&&fim<agora) return; } // expirado
     if(c.usosMax>0 && (c.usosFeitos||0)>=c.usosMax) return;       // esgotado
-    lista.push({codigo:c.codigo, tipo:c.tipo, valor:Number(c.valor)||0, minimo:Number(c.minimo)||0, descricao:c.descricao||'', item:c.item||''});
+    lista.push({_id:d.id, codigo:c.codigo, tipo:c.tipo, valor:Number(c.valor)||0, minimo:Number(c.minimo)||0, descricao:c.descricao||'', item:c.item||''});
   });
   CUPONS_ATIVOS = lista;   // admin é a fonte de verdade (mesmo que fique vazio)
 },()=>{ /* offline: mantém o fallback */ });

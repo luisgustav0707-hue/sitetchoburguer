@@ -658,24 +658,15 @@ async function finalizarPedido(){
     alert('😔 A loja está fechada no momento. Não é possível finalizar o pedido.');
     return;
   }
-  let numOrdem;
-  try {
-    const contRef = db.collection('config').doc('contador');
-    numOrdem = await db.runTransaction(async t => {
-      const d = await t.get(contRef);
-      const next = (d.exists ? d.data().ultimo : 0) + 1;
-      t.set(contRef, {ultimo: next}, {merge: true});
-      return next;
-    });
-  } catch(e) {
-    numOrdem = Math.floor(Math.random()*900)+100;
-  }
+  // Número gerado localmente (sem await/Firestore antes de abrir o WhatsApp —
+  // qualquer await aqui faz o navegador bloquear a abertura do WhatsApp).
+  let numOrdem = (parseInt(localStorage.getItem('tcho_ultimo_num')||'0',10)||0)+1;
+  if(numOrdem<1 || numOrdem>9999) numOrdem = Math.floor(Math.random()*900)+100;
+  localStorage.setItem('tcho_ultimo_num', String(numOrdem));
 
   const num=String(numOrdem).padStart(3,'0');
   document.getElementById('order-num').textContent=`#${num}`;
-  document.getElementById('success-msg').textContent=tipoPedido==='delivery'
-    ?'Pedido recebido! Em breve nosso entregador sairá. 🛵'
-    :'Pedido em preparo! Venha retirar em breve. 🍔';
+  document.getElementById('success-msg').textContent='Confirme enviando a mensagem no WhatsApp 📲';
 
   const pedido={
     id:numOrdem, num:`#${num}`,
@@ -699,9 +690,12 @@ async function finalizarPedido(){
     criadoEm:firebase.firestore.FieldValue.serverTimestamp(),
   };
 
-  // Preenche o botão de WhatsApp com o pedido (garante recebimento se o servidor cair)
+  // Abre o WhatsApp da loja JÁ com o pedido preenchido, direto no clique.
+  // O botão fica visível como backup caso o navegador bloqueie o popup.
+  const waLink=linkWhatsAppPedido(pedido);
   const waBtn=document.getElementById('btn-wa-pedido');
-  if(waBtn){ waBtn.href=linkWhatsAppPedido(pedido); waBtn.style.display='inline-flex'; }
+  if(waBtn){ waBtn.href=waLink; waBtn.style.display='inline-flex'; }
+  window.open(waLink,'_blank');
 
   // Salva sempre no localStorage (permite admin local sem Firebase)
   const pedidoLocal = {...pedido, hora: new Date().toISOString()};

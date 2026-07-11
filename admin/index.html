@@ -546,6 +546,8 @@
           <select id="man-add-prod" class="edit-inp" style="flex:1;font-size:.74rem"></select>
           <button type="button" onclick="addItemManual()" style="flex:0 0 auto;padding:0 14px;background:var(--card);color:var(--orange);border:1px solid var(--orange);border-radius:8px;font-weight:700;cursor:pointer">+ Add</button>
         </div>
+        <!-- Personalização do item (ponto, sachê, tirar ingrediente, adicionais, sabor) — igual ao cliente -->
+        <div id="man-cust" style="display:none;background:var(--card);border:1px solid var(--orange);border-radius:8px;padding:10px;margin-top:8px"></div>
       </div>
       <div id="man-frete-wrap"><label class="edit-lbl">🛵 Frete (R$)</label><input id="man-frete" class="edit-inp" type="number" min="0" step="1" placeholder="0" oninput="recalcManualTotal()"></div>
       <div style="background:var(--card);border:1px solid #3a3530;border-radius:8px;padding:9px 12px;display:flex;flex-direction:column;gap:5px">

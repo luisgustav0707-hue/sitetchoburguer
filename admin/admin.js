@@ -282,10 +282,12 @@ function atualizarBotaoAuto(){
 // ── PEDIDO MANUAL (lançado pelo balcão/telefone) ──────────────
 let manualPag='pix', manualTipo='delivery';
 let manualItens=[];       // [{nome, preco}] — lista que soma sozinha
+let manualCustProd=null;  // produto sendo personalizado no painel
 
 function abrirModalManual(){
   manualPag='pix'; manualTipo='delivery';
   manualItens=[];
+  cancelarCustManual();
   ['man-nome','man-tel','man-frete','man-obs'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
@@ -362,19 +364,98 @@ function renderItensManual(){
   const sel=document.getElementById('man-add-prod');
   if(sel && !sel.options.length){
     sel.innerHTML='<option value="">+ Adicionar produto...</option>'+
-      listaProdutosEdit().map((p,i)=>`<option value="${i}">${p.nome} — R$${p.preco}</option>`).join('');
+      listaProdutosManual().map((p,i)=>`<option value="${i}">${p.nome} — R$${p.preco}</option>`).join('');
   }
   recalcManualTotal();
 }
+
+// Lista rica de produtos p/ o pedido manual (mantém cat/id/opcoes, ao contrário
+// de listaProdutosEdit que só tem nome/preço) — necessária p/ saber se abre a
+// personalização (hambúrguer) ou o seletor de sabor (bebida/combo).
+function listaProdutosManual(){
+  const base=PRODS.map(p=>({nome:p.n,preco:p.p,cat:p.cat,id:p.id,opcoes:p.opcoes||null}));
+  const cust=getProdsCustom().map(p=>({nome:p.n||p.nome,preco:(p.p!==undefined?p.p:p.preco),cat:'x',id:null,opcoes:null}));
+  return [...base,...cust];
+}
+
 function addItemManual(){
   const sel=document.getElementById('man-add-prod');
   const idx=parseInt(sel.value);
   if(isNaN(idx)) return;
-  const prod=listaProdutosEdit()[idx];
+  const prod=listaProdutosManual()[idx];
   if(!prod) return;
-  manualItens.push({nome:prod.nome, preco:prod.preco});
   sel.value='';
+  // Hambúrguer ou item com sabor → abre personalização (igual ao cliente).
+  // Demais (batata, água) → adiciona direto.
+  if(prod.cat==='b' || (prod.opcoes && prod.opcoes.length)){
+    const ing = prod.cat==='b' ? (TCHO.burguers.find(b=>b.id===prod.id)?.ing || []) : [];
+    abrirCustManual(prod, ing);
+  } else {
+    manualItens.push({nome:prod.nome, preco:prod.preco});
+    renderItensManual();
+  }
+}
+
+// Painel de personalização do item (ponto, sachê, tirar ingrediente, adicionais, sabor)
+function abrirCustManual(prod, ing){
+  manualCustProd={...prod, ing:ing||[]};
+  const el=document.getElementById('man-cust'); if(!el) return;
+  const isB = prod.cat==='b';
+  const esc=s=>String(s).replace(/"/g,'&quot;');
+  let h=`<div style="font-weight:700;color:var(--orange);font-size:.8rem;margin-bottom:8px">${prod.nome} — R$${prod.preco}</div>`;
+  if(prod.opcoes && prod.opcoes.length){
+    h+=`<label class="edit-lbl">🥤 Sabor</label><select id="mc-opcao" class="edit-inp" style="font-size:.74rem;margin:4px 0 8px">${prod.opcoes.map(o=>`<option>${o}</option>`).join('')}</select>`;
+  }
+  if(isB){
+    h+=`<label class="edit-lbl">🔥 Ponto</label><select id="mc-ponto" class="edit-inp" style="font-size:.74rem;margin:4px 0 8px">${TCHO.pontos.map(p=>`<option>${p.nome}</option>`).join('')}</select>`;
+    h+=`<label class="edit-lbl">🥫 Sachê</label><select id="mc-sache" class="edit-inp" style="font-size:.74rem;margin:4px 0 8px">${TCHO.saches.map(s=>`<option>${s.nome}</option>`).join('')}</select>`;
+    if((ing||[]).length){
+      h+=`<label class="edit-lbl">➖ Tirar ingrediente</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px">${ing.map(i=>`<label style="font-size:.72rem;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" class="mc-rem" value="${esc(i)}"> ${i}</label>`).join('')}</div>`;
+    }
+    const adic=getAdicionaisAdmin();
+    if(adic.length){
+      h+=`<label class="edit-lbl">➕ Adicionais</label><div style="display:flex;flex-direction:column;gap:4px;margin:4px 0 8px">${adic.map(a=>`<label style="font-size:.72rem;display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" class="mc-adic" value="${esc(a.nome)}" data-preco="${a.preco}" onchange="recalcCustManual()"> ${a.nome} <span style="color:var(--muted)">+R$${a.preco}</span></label>`).join('')}</div>`;
+    }
+  }
+  h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+      <span style="font-size:.72rem;color:var(--muted)">Item: <b id="mc-preco" style="color:var(--text)">R$${prod.preco}</b></span>
+      <div style="display:flex;gap:6px">
+        <button type="button" onclick="cancelarCustManual()" style="padding:6px 10px;background:var(--surface);color:var(--muted);border:1px solid #3a3530;border-radius:6px;font-size:.72rem;cursor:pointer">Cancelar</button>
+        <button type="button" onclick="confirmarCustManual()" style="padding:6px 12px;background:var(--orange);color:#000;border:none;border-radius:6px;font-weight:700;font-size:.72rem;cursor:pointer">✓ Adicionar item</button>
+      </div>
+    </div>`;
+  el.innerHTML=h; el.style.display='block';
+}
+
+function recalcCustManual(){
+  if(!manualCustProd) return;
+  let preco=manualCustProd.preco;
+  document.querySelectorAll('#man-cust .mc-adic:checked').forEach(c=>preco+=parseFloat(c.dataset.preco)||0);
+  const el=document.getElementById('mc-preco'); if(el) el.textContent='R$'+preco;
+}
+
+function confirmarCustManual(){
+  if(!manualCustProd) return;
+  const p=manualCustProd;
+  let preco=p.preco;
+  const det=[];
+  const opc=document.getElementById('mc-opcao'); if(opc && opc.value) det.push(opc.value);
+  const pt=document.getElementById('mc-ponto'); if(pt && pt.value) det.push(pt.value);
+  const sc=document.getElementById('mc-sache'); if(sc && sc.value && sc.value!=='Não quero') det.push('sachê '+sc.value);
+  const rem=[...document.querySelectorAll('#man-cust .mc-rem:checked')].map(c=>c.value);
+  if(rem.length) det.push('sem '+rem.join(', '));
+  const adic=[...document.querySelectorAll('#man-cust .mc-adic:checked')];
+  adic.forEach(c=>preco+=parseFloat(c.dataset.preco)||0);
+  if(adic.length) det.push(adic.map(c=>'+'+c.value).join(', '));
+  const nome=det.length ? `${p.nome} (${det.join(' • ')})` : p.nome;
+  manualItens.push({nome, preco});
+  cancelarCustManual();
   renderItensManual();
+}
+
+function cancelarCustManual(){
+  manualCustProd=null;
+  const el=document.getElementById('man-cust'); if(el){ el.style.display='none'; el.innerHTML=''; }
 }
 function removerItemManual(i){ manualItens.splice(i,1); renderItensManual(); }
 function updManualNome(i,v){ if(manualItens[i]) manualItens[i].nome=v; }

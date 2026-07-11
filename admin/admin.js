@@ -56,7 +56,7 @@ function showPage(p){
 }
 
 // ── ACESSOS DO SITE (analytics simples no Firestore) ───────────
-let unsubPresenca=null;
+let presencaTimer=null;
 function carregarAcessos(){
   db.collection('stats').doc('visitas').get().then(doc=>{
     const d=doc.exists?doc.data():{};
@@ -77,17 +77,25 @@ function carregarAcessos(){
   }).catch(()=>{});
 }
 function iniciarPresencaAdmin(){
-  if(unsubPresenca) return;
-  unsubPresenca=db.collection('presenca').onSnapshot(snap=>{
-    const agora=Date.now(); let online=0;
-    snap.forEach(doc=>{
-      const ls=doc.data().lastSeen&&doc.data().lastSeen.toDate?doc.data().lastSeen.toDate():null;
-      const idade=ls?(agora-ls.getTime()):9e9;
-      if(idade<75000) online++;                              // ativo nos últimos ~75s
-      else if(idade>600000) doc.ref.delete().catch(()=>{});  // limpa presença abandonada (>10min)
-    });
-    const el=document.getElementById('ac-online'); if(el) el.textContent=online;
-  },()=>{});
+  if(presencaTimer) return;
+  // Leitura periódica em vez de onSnapshot: o onSnapshot relia a coleção
+  // inteira a cada heartbeat de cada visitante, o que estourava a cota do
+  // Firestore. Aqui lemos uma vez por minuto e só com a aba em primeiro plano.
+  const ler=()=>{
+    if(document.hidden) return;
+    db.collection('presenca').get().then(snap=>{
+      const agora=Date.now(); let online=0;
+      snap.forEach(doc=>{
+        const ls=doc.data().lastSeen&&doc.data().lastSeen.toDate?doc.data().lastSeen.toDate():null;
+        const idade=ls?(agora-ls.getTime()):9e9;
+        if(idade<120000) online++;                             // ativo nos últimos ~2min (heartbeat de 90s)
+        else if(idade>600000) doc.ref.delete().catch(()=>{});  // limpa presença abandonada (>10min)
+      });
+      const el=document.getElementById('ac-online'); if(el) el.textContent=online;
+    }).catch(()=>{});
+  };
+  ler();
+  presencaTimer=setInterval(ler, 60000);
 }
 function showInner(t){
   document.querySelectorAll('.inner-tab').forEach((el,i)=>el.classList.toggle('active',['cupons','fidelidade','recuperacao'][i]===t));
@@ -2578,7 +2586,13 @@ function iniciarListenerPedidos(){
       renderAll();renderHistorico();
     },(err)=>{
       console.error('Firestore listener erro:', err.code, err.message);
-      showToast('⚠️ Sem conexão com o servidor — religando…', 'tok-err');
+      const dica={
+        'resource-exhausted':'cota do Firestore estourou (plano grátis)',
+        'permission-denied':'regras do Firestore bloqueando (test mode expirou?)',
+        'unavailable':'sem internet / Firestore fora do ar',
+        'failed-precondition':'falta índice no Firestore'
+      }[err.code]||'';
+      showToast(`⚠️ Erro Firestore: ${err.code||'?'}${dica?' — '+dica:''} — religando…`, 'tok-err');
       agendarReconexaoPedidos();
     });
 }

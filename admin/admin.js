@@ -57,11 +57,18 @@ function showPage(p){
 
 // ── ACESSOS DO SITE (analytics simples no Firestore) ───────────
 let presencaTimer=null;
+// Data local de hoje em YYYY-MM-DD. NÃO usar toISOString(): ele dá a data em
+// UTC, que à noite no Brasil (UTC-3) já virou o dia seguinte — isso fazia o
+// pedido manual cair como "data passada" (ia pro caixa em vez do kanban) e
+// bagunçava os filtros de data.
+function dataLocalHoje(d=new Date()){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 function carregarAcessos(){
   db.collection('stats').doc('visitas').get().then(doc=>{
     const d=doc.exists?doc.data():{};
     const dias=d.dias||{};
-    const hojeK=new Date().toISOString().split('T')[0];
+    const hojeK=dataLocalHoje();
     const mesK=hojeK.slice(0,7);
     const ini7=new Date(); ini7.setHours(0,0,0,0); ini7.setDate(ini7.getDate()-6);
     let hoje=0,semana=0,mes=0;
@@ -291,7 +298,7 @@ function abrirModalManual(){
   }
   // Data do pedido: começa com hoje
   const dataEl=document.getElementById('man-data');
-  if(dataEl){ dataEl.value=new Date().toISOString().split('T')[0]; }
+  if(dataEl){ dataEl.value=dataLocalHoje(); }
   onManualDataChange();
   selManualPag('pix');
   selManualTipo('delivery');
@@ -304,7 +311,7 @@ function onManualDataChange(){
   const av=document.getElementById('man-data-aviso');
   if(!av) return;
   const v=document.getElementById('man-data').value;
-  const hoje=new Date().toISOString().split('T')[0];
+  const hoje=dataLocalHoje();
   if(v && v<hoje){
     av.innerHTML='⏪ Data passada: será lançado como <b>finalizado</b> no caixa desse dia (não vai pro kanban nem imprime).';
     av.style.color='#f39c12';
@@ -394,7 +401,7 @@ async function salvarPedidoManual(){
   // Passado → status 'finalizado' na data escolhida (registro histórico: entra no
   //           caixa daquele dia, sem ir pro kanban nem imprimir).
   const dataStr=document.getElementById('man-data').value;
-  const hojeStr=new Date().toISOString().split('T')[0];
+  const hojeStr=dataLocalHoje();
   const agora=new Date();
   let dataPedido, statusPedido;
   if(dataStr && dataStr<hojeStr){
@@ -889,7 +896,7 @@ function atualizarBadgeNovos(){
 let logPedidos=[];
 
 async function carregarLog(){
-  const hoje=new Date().toISOString().split('T')[0];
+  const hoje=dataLocalHoje();
   const iniEl=document.getElementById('log-ini');
   const fimEl=document.getElementById('log-fim');
   if(!iniEl.value)iniEl.value=hoje;
@@ -2062,7 +2069,7 @@ function setFinTab(tab){
   // garante o input de data preenchido ao abrir "pagar" pela 1ª vez
   if(tab==='pagar'){
     const d=document.getElementById('desp-data');
-    if(d && !d.value) d.value=new Date().toISOString().split('T')[0];
+    if(d && !d.value) d.value=dataLocalHoje();
     popularCategoriasDespesa();
   }
 }
@@ -2167,7 +2174,7 @@ async function salvarDespesa(){
   const desc=document.getElementById('desp-desc').value.trim();
   const valor=parseFloat(document.getElementById('desp-valor').value);
   const categoria=document.getElementById('desp-cat')?.value || 'Outros';
-  const dataStr=document.getElementById('desp-data').value || new Date().toISOString().split('T')[0];
+  const dataStr=document.getElementById('desp-data').value || dataLocalHoje();
   if(!desc){ showToast('⚠️ Informe a descrição da despesa','tok-err'); return; }
   if(!valor || valor<=0){ showToast('⚠️ Informe um valor maior que zero','tok-err'); return; }
   const dataDate=new Date(dataStr+'T12:00:00');     // meio-dia evita virar o dia por fuso
@@ -2623,7 +2630,7 @@ function iniciarApp(){
   renderAll();
   atualizarBotaoSom();
   // Preenche datas padrão com hoje
-  const hoje = new Date().toISOString().split('T')[0];
+  const hoje = dataLocalHoje();
   const iniEl = document.getElementById('fin-ini');
   const fimEl = document.getElementById('fin-fim');
   if(iniEl) iniEl.value = hoje;

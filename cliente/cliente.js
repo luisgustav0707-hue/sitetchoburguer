@@ -58,6 +58,12 @@ function matchBairro(bv){
 // Guarda o último endereço do ViaCEP pra usar no fallback de seleção manual.
 let ultimoCep={};
 
+// Data local de hoje em YYYY-MM-DD (não usar toISOString, que dá UTC e à noite
+// no Brasil vira o dia seguinte — precisa bater com a leitura do admin).
+function dataLocalHoje(d=new Date()){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
 // Cupons: carregados do Firestore (gerenciados no admin). A lista abaixo é só
 // fallback caso o Firestore não responda (offline).
 let CUPONS_ATIVOS = [
@@ -1136,7 +1142,7 @@ db.collection('cardapio').doc('bairros').onSnapshot(doc=>{
     // 1) Conta a visita uma vez por sessão (aba), sem contar recarregamentos
     if(!sessionStorage.getItem('tcho_visit_contada')){
       sessionStorage.setItem('tcho_visit_contada','1');
-      const hojeK=new Date().toISOString().split('T')[0];
+      const hojeK=dataLocalHoje();
       db.collection('stats').doc('visitas').set({
         dias:{[hojeK]: firebase.firestore.FieldValue.increment(1)},
         total: firebase.firestore.FieldValue.increment(1)

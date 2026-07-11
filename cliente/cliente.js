@@ -575,6 +575,9 @@ function goStep(n){
   [1,2,3,4].forEach(i=>document.getElementById('sc'+i).classList.toggle('active',i===n));
   ['s1','s2','s3'].forEach((id,i)=>{document.getElementById(id).classList.toggle('active',i+1===n);document.getElementById(id).classList.toggle('done',i+1<n);});
   document.getElementById('cartFloat').classList.toggle('visible',n===1&&getCount()>0);
+  // Botão flutuante de WhatsApp só no cardápio (passo 1). Nas telas de dados/
+  // resumo ele cobria o botão "FAZER PEDIDO" no celular e travava a finalização.
+  const wf=document.querySelector('.wpp-float'); if(wf) wf.style.display = n===1 ? 'flex' : 'none';
   window.scrollTo(0,0);
   if(n===1) mostrarBotaoAcompanhar();
   if(n===2 && !document.getElementById('f-nome').value) preencherDadosSalvos();

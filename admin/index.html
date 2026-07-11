@@ -221,6 +221,90 @@
       </div>
     </div>
 
+    <!-- ══════ NFC-e (Nota Fiscal) ══════ -->
+    <div class="section">
+      <div class="sec-title">🧾 NFC-e (Nota Fiscal)</div>
+      <div style="font-size:.72rem;color:#f39c12;background:#1a1510;border:1px solid #4a3410;border-radius:8px;padding:9px 11px;margin-bottom:12px">
+        ⚠️ Emissão ainda <b>não está ativa</b> — depende de credenciamento na SEFAZ, certificado digital e integração (ver <b>PLANO-NFCE.md</b>). Preencha aqui os dados que o contador fornecer; ficam salvos para quando ligarmos a emissão.
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-info"><div class="toggle-label">Ativar emissão de NFC-e</div><div class="toggle-desc">Só ligar depois da integração pronta e testada</div></div>
+        <label class="toggle-wrap"><input type="checkbox" id="fisc-ativo" onchange="salvarConfigFiscal()"><span class="slider"></span></label>
+      </div>
+
+      <div style="margin-top:10px">
+        <label class="edit-lbl">Ambiente</label>
+        <select id="fisc-ambiente" class="edit-inp" onchange="salvarConfigFiscal()">
+          <option value="homologacao">Homologação (testes)</option>
+          <option value="producao">Produção (valendo)</option>
+        </select>
+      </div>
+
+      <div style="font-size:.7rem;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin:14px 0 6px">Emitente</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label class="edit-lbl">Razão Social</label><input id="fisc-razao" class="edit-inp" type="text" placeholder="Razão social"></div>
+        <div><label class="edit-lbl">Nome Fantasia</label><input id="fisc-fantasia" class="edit-inp" type="text" placeholder="Tcho Burguer"></div>
+        <div><label class="edit-lbl">CNPJ</label><input id="fisc-cnpj" class="edit-inp" type="text" placeholder="00.000.000/0001-00"></div>
+        <div><label class="edit-lbl">Inscrição Estadual</label><input id="fisc-ie" class="edit-inp" type="text" placeholder="IE"></div>
+        <div>
+          <label class="edit-lbl">Regime tributário</label>
+          <select id="fisc-regime" class="edit-inp">
+            <option value="simples">Simples Nacional</option>
+            <option value="simples-excesso">Simples Nacional — excesso</option>
+            <option value="normal">Regime Normal</option>
+          </select>
+        </div>
+        <div><label class="edit-lbl">CNAE</label><input id="fisc-cnae" class="edit-inp" type="text" placeholder="(opcional)"></div>
+      </div>
+
+      <div style="font-size:.7rem;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin:14px 0 6px">Endereço fiscal</div>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+        <div><label class="edit-lbl">Logradouro</label><input id="fisc-logr" class="edit-inp" type="text" placeholder="Rua/Av."></div>
+        <div><label class="edit-lbl">Número</label><input id="fisc-num" class="edit-inp" type="text" placeholder="Nº"></div>
+        <div><label class="edit-lbl">Bairro</label><input id="fisc-bairro" class="edit-inp" type="text"></div>
+        <div><label class="edit-lbl">CEP</label><input id="fisc-cep" class="edit-inp" type="text" placeholder="00000-000"></div>
+        <div><label class="edit-lbl">Município</label><input id="fisc-municipio" class="edit-inp" type="text" placeholder="Belo Horizonte"></div>
+        <div><label class="edit-lbl">UF</label><input id="fisc-uf" class="edit-inp" type="text" placeholder="MG" maxlength="2"></div>
+      </div>
+
+      <div style="font-size:.7rem;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin:14px 0 6px">SEFAZ (QR Code) &amp; numeração</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="grid-column:1 / -1"><label class="edit-lbl">CSC (Código de Segurança do Contribuinte)</label><input id="fisc-csc" class="edit-inp" type="text" placeholder="Fornecido pela SEFAZ"></div>
+        <div><label class="edit-lbl">CSC ID / Token</label><input id="fisc-csc-id" class="edit-inp" type="text" placeholder="Ex.: 000001"></div>
+        <div></div>
+        <div><label class="edit-lbl">Série da NFC-e</label><input id="fisc-serie" class="edit-inp" type="number" min="1" placeholder="1"></div>
+        <div><label class="edit-lbl">Próximo número</label><input id="fisc-proximo" class="edit-inp" type="number" min="1" placeholder="1"></div>
+      </div>
+
+      <div style="font-size:.7rem;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin:14px 0 6px">Gateway fiscal (intermediador)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div>
+          <label class="edit-lbl">Fornecedor</label>
+          <select id="fisc-gateway" class="edit-inp">
+            <option value="">— escolher —</option>
+            <option value="plugnotas">PlugNotas</option>
+            <option value="focusnfe">Focus NFe</option>
+            <option value="nfeio">NFe.io</option>
+            <option value="webmania">WebmaniaBR</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <div><label class="edit-lbl">Token / API Key</label><input id="fisc-gw-token" class="edit-inp" type="text" placeholder="chave da API do gateway"></div>
+      </div>
+
+      <div style="font-size:.7rem;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin:14px 0 6px">Fiscal padrão dos produtos</div>
+      <div style="font-size:.66rem;color:var(--muted);margin-bottom:6px">Valores padrão aplicados a todos os itens (dá pra refinar por produto depois).</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label class="edit-lbl">NCM padrão</label><input id="fisc-ncm" class="edit-inp" type="text" placeholder="Ex.: 2106.90.90"></div>
+        <div><label class="edit-lbl">CFOP</label><input id="fisc-cfop" class="edit-inp" type="text" placeholder="Ex.: 5102"></div>
+        <div><label class="edit-lbl">CSOSN / CST</label><input id="fisc-csosn" class="edit-inp" type="text" placeholder="Ex.: 102"></div>
+        <div><label class="edit-lbl">Origem</label><input id="fisc-origem" class="edit-inp" type="text" placeholder="0 = nacional"></div>
+      </div>
+
+      <button onclick="salvarConfigFiscal()" style="width:100%;margin-top:14px;padding:11px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;cursor:pointer">💾 SALVAR DADOS FISCAIS</button>
+    </div>
+
     <!-- ══════ MARKETING (movido para dentro de Config) ══════ -->
     <div class="section" style="margin-top:6px"><div class="sec-title">📣 Marketing</div></div>
     <div class="inner-tabs">

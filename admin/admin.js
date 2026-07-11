@@ -51,7 +51,7 @@ function showPage(p){
   document.getElementById('page-'+p).classList.add('active');
   if(p==='cardapio')  renderCardapio();
   if(p==='pedidos')   carregarLog();
-  if(p==='config'){ renderCupons(); carregarAcessos(); iniciarPresencaAdmin(); }  // Marketing + acessos vivem no Config
+  if(p==='config'){ renderCupons(); carregarAcessos(); iniciarPresencaAdmin(); carregarConfigFiscal(); }  // Marketing + acessos vivem no Config
   if(p==='financeiro') carregarFinanceiro();
 }
 
@@ -190,6 +190,37 @@ function salvarConfig(){
   };
   db.collection('config').doc('operacao').set(cfg,{merge:true}).catch(console.error);
   showToast('✅ Configuração salva!','tok-ok');
+}
+
+// ── CONFIG FISCAL (NFC-e) ──────────────────────────────────────
+// Guarda os dados que o contador fornecer. A emissão em si vem depois
+// (backend + gateway fiscal) — ver PLANO-NFCE.md.
+const FISC_CAMPOS=['ativo','ambiente','razao','fantasia','cnpj','ie','regime','cnae','logr','num','bairro','cep','municipio','uf','csc','csc-id','serie','proximo','gateway','gw-token','ncm','cfop','csosn','origem'];
+function salvarConfigFiscal(){
+  const fisc={};
+  FISC_CAMPOS.forEach(c=>{
+    const el=document.getElementById('fisc-'+c);
+    if(!el) return;
+    fisc[c] = el.type==='checkbox' ? el.checked : el.value;
+  });
+  localStorage.setItem('tcho_fiscal', JSON.stringify(fisc));
+  db.collection('config').doc('fiscal').set(fisc,{merge:true}).catch(console.error);
+  showToast('✅ Dados fiscais salvos!','tok-ok');
+}
+function preencherConfigFiscal(fisc){
+  if(!fisc) return;
+  FISC_CAMPOS.forEach(c=>{
+    const el=document.getElementById('fisc-'+c);
+    if(!el || fisc[c]===undefined) return;
+    if(el.type==='checkbox') el.checked=!!fisc[c]; else el.value=fisc[c];
+  });
+}
+function carregarConfigFiscal(){
+  // localStorage primeiro (instantâneo), depois Firestore (fonte de verdade)
+  try{ preencherConfigFiscal(JSON.parse(localStorage.getItem('tcho_fiscal')||'null')); }catch(e){}
+  db.collection('config').doc('fiscal').get().then(doc=>{
+    if(doc.exists){ const d=doc.data(); localStorage.setItem('tcho_fiscal',JSON.stringify(d)); preencherConfigFiscal(d); }
+  }).catch(()=>{});
 }
 function syncAutoConfig(){
   autoAceitar=document.getElementById('cfg-auto').checked;

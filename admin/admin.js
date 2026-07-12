@@ -46,12 +46,13 @@ if(localStorage.getItem('tcho_admin_logado')==='true'){
 
 // ── NAVEGAÇÃO ──────────────────────────────────────────────────
 function showPage(p){
-  document.querySelectorAll('.nav-tab').forEach((el,i)=>el.classList.toggle('active',['cozinha','pedidos','config','cardapio','financeiro'][i]===p));
+  document.querySelectorAll('.nav-tab').forEach((el,i)=>el.classList.toggle('active',['cozinha','pedidos','config','marketing','cardapio','financeiro'][i]===p));
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
   if(p==='cardapio')  renderCardapio();
   if(p==='pedidos')   carregarLog();
-  if(p==='config'){ renderCupons(); carregarAcessos(); iniciarPresencaAdmin(); carregarConfigFiscal(); }  // Marketing + acessos vivem no Config
+  if(p==='config'){ carregarAcessos(); iniciarPresencaAdmin(); carregarConfigFiscal(); }
+  if(p==='marketing') renderCupons();  // Cupons/Fidelidade/Recuperação agora em aba própria
   if(p==='financeiro') carregarFinanceiro();
 }
 

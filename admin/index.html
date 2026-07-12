@@ -55,6 +55,7 @@
     <div class="nav-tab active" onclick="showPage('cozinha')">🍳 Cozinha <span class="nav-badge" id="badge-novos" style="display:none">0</span></div>
     <div class="nav-tab" onclick="showPage('pedidos')">📋 Pedidos</div>
     <div class="nav-tab" onclick="showPage('config')">⚙️ Config</div>
+    <div class="nav-tab" onclick="showPage('marketing')">📣 Marketing</div>
     <div class="nav-tab" onclick="showPage('cardapio')">🍔 Cardápio</div>
     <div class="nav-tab" onclick="showPage('financeiro')">💰 Financeiro</div>
   </div>
@@ -305,7 +306,10 @@
       <button onclick="salvarConfigFiscal()" style="width:100%;margin-top:14px;padding:11px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;cursor:pointer">💾 SALVAR DADOS FISCAIS</button>
     </div>
 
-    <!-- ══════ MARKETING (movido para dentro de Config) ══════ -->
+  </div>
+
+  <!-- ══════ MARKETING (aba própria) ══════ -->
+  <div class="page" id="page-marketing">
     <div class="section" style="margin-top:6px"><div class="sec-title">📣 Marketing</div></div>
     <div class="inner-tabs">
       <div class="inner-tab active" onclick="showInner('cupons')">🎟️ Cupons</div>

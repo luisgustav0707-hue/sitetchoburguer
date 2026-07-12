@@ -66,7 +66,7 @@ const TCHO = {
     { id:'sn', emoji:'🚫',   nome:'Não quero'      },
     { id:'sk', emoji:'🍅',   nome:'Ketchup'         },
     { id:'sm', emoji:'🤍',   nome:'Maionese'        },
-    { id:'sa', emoji:'🍅🤍', nome:'Ketchup + Maio'  },
+    { id:'sa', emoji:'🍅🤍', nome:'Ketchup + Maionese'  },
   ],
 
   // ── BAIRROS ATENDIDOS E TAXAS DE ENTREGA ─────────────

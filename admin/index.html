@@ -179,7 +179,7 @@
       <div class="toggle-row">
         <div class="toggle-info">
           <div class="toggle-label">Abrir/fechar automaticamente</div>
-          <div class="toggle-desc">Qui–Dom • 19h às 23h — loja abre e fecha sozinha</div>
+          <div class="toggle-desc">A loja abre e fecha sozinha conforme os dias e horários abaixo</div>
         </div>
         <label class="toggle-wrap"><input type="checkbox" id="cfg-auto-horario" checked onchange="salvarConfig()"><span class="slider"></span></label>
       </div>
@@ -191,6 +191,28 @@
         <label class="toggle-wrap"><input type="checkbox" id="cfg-forcar-aberta" onchange="salvarConfig()"><span class="slider"></span></label>
       </div>
       <div id="auto-horario-status" style="font-size:.75rem;padding:8px 10px;background:#1a1510;border-radius:8px;margin-top:8px"></div>
+
+      <div style="border-top:1px solid #2a2520;margin-top:14px;padding-top:12px">
+        <div style="font-size:.8rem;font-weight:700;color:var(--orange);margin-bottom:6px">📅 Dias e horários de funcionamento</div>
+        <div style="font-size:.66rem;color:var(--muted);margin-bottom:10px">Marque os dias que a loja abre e defina os horários. O modo automático usa isso pra abrir/fechar sozinha.</div>
+        <div id="hor-dias" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <span style="font-size:.72rem;color:var(--muted);width:64px;flex-shrink:0">Período 1</span>
+          <input id="hor-p1-abre" type="time" class="edit-inp" style="width:auto">
+          <span style="font-size:.72rem;color:var(--muted)">às</span>
+          <input id="hor-p1-fecha" type="time" class="edit-inp" style="width:auto">
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:.76rem;cursor:pointer;margin-bottom:10px">
+          <input type="checkbox" id="hor-dois" onchange="toggleDoisPeriodos()"> Abro em 2 horários (ex.: almoço e janta)
+        </label>
+        <div id="hor-p2-wrap" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <span style="font-size:.72rem;color:var(--muted);width:64px;flex-shrink:0">Período 2</span>
+          <input id="hor-p2-abre" type="time" class="edit-inp" style="width:auto">
+          <span style="font-size:.72rem;color:var(--muted)">às</span>
+          <input id="hor-p2-fecha" type="time" class="edit-inp" style="width:auto">
+        </div>
+        <button onclick="salvarHorarios()" style="width:100%;padding:9px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;font-weight:700;cursor:pointer">💾 Salvar dias e horários</button>
+      </div>
     </div>
     <div class="section cfg-panel active" id="cfg-operacao">
       <div class="sec-title">🛵 Operação</div>

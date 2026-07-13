@@ -66,6 +66,7 @@ function showConfig(k){
   const CFG_MERGED={ operacao:['cfg-operacao','cfg-horario'], entrega:['cfg-prazo','cfg-bairros'] };
   if(CFG_MERGED[k]){
     CFG_MERGED[k].forEach(id=>{const el=document.getElementById(id); if(el) el.classList.add('active');});
+    if(k==='operacao') carregarHorarios();
     if(k==='entrega'){ renderBairros(); carregarConfigEntrega(); }
   } else {
     const pg=document.getElementById('cfg-'+k)||document.getElementById('inner-'+k);
@@ -148,25 +149,74 @@ function atualizarBadgeLoja(){
 }
 
 // ── CONFIGS ────────────────────────────────────────────────────
-function lojaAbertaAgora(){
-  const agora=new Date(),dia=agora.getDay(),hora=agora.getHours();
-  return [0,4,5,6].includes(dia)&&hora>=19&&hora<23;
+// Agendamento de funcionamento (dias + horários), configurável no Config.
+let cfgHorarios=null;
+function getHorarios(){
+  if(cfgHorarios) return cfgHorarios;
+  try{ const s=JSON.parse(localStorage.getItem('tcho_horarios')||'null'); if(s) return s; }catch(e){}
+  return horarioPadrao();   // definido em shared/crm.js
 }
+function lojaAbertaAgora(){ return estaAbertaAgora(getHorarios()); }
 
 function proximoEvento(){
-  const dias=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-  const agora=new Date(),dia=agora.getDay(),hora=agora.getHours();
-  const diasAtivos=[4,5,6,0]; // Qui Sex Sab Dom
-  if(lojaAbertaAgora()) return `🟢 Aberta agora — fecha às 23h`;
-  // Próximo dia ativo
-  for(let i=1;i<=7;i++){
-    const proximo=(dia+i)%7;
-    if(diasAtivos.includes(proximo)){
-      const label=i===1?'amanhã':dias[proximo];
-      return `🔴 Fechada — abre ${label} às 19h`;
-    }
+  const nomes=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const h=getHorarios();
+  if(lojaAbertaAgora()) return '🟢 Aberta agora';
+  if(!h.dias||!h.dias.length) return '🔴 Fechada';
+  const agora=new Date(),dia=agora.getDay(),min=agora.getHours()*60+agora.getMinutes();
+  let abreMin=null;
+  if(h.p1&&h.p1.abre){ const [a,b]=h.p1.abre.split(':').map(Number); abreMin=a*60+(b||0); }
+  for(let i=0;i<=7;i++){
+    const prox=(dia+i)%7;
+    if(!h.dias.includes(prox)) continue;
+    if(i===0 && abreMin!=null && min>=abreMin) continue;   // hoje já passou do horário de abrir
+    const label = i===0?'hoje' : i===1?'amanhã' : nomes[prox];
+    return `🔴 Fechada — abre ${label} às ${(h.p1&&h.p1.abre)||'--'}`;
   }
   return '🔴 Fechada';
+}
+
+// ── UI de dias e horários ──
+const DIAS_SEMANA=[{d:0,l:'Dom'},{d:1,l:'Seg'},{d:2,l:'Ter'},{d:3,l:'Qua'},{d:4,l:'Qui'},{d:5,l:'Sex'},{d:6,l:'Sáb'}];
+let horDiasSel=[];
+function renderDiasHorario(){
+  const el=document.getElementById('hor-dias'); if(!el) return;
+  el.innerHTML=DIAS_SEMANA.map(x=>{
+    const on=horDiasSel.includes(x.d);
+    return `<button type="button" onclick="toggleDiaHorario(${x.d})" style="padding:6px 11px;border-radius:20px;border:1px solid ${on?'var(--orange)':'#3a3530'};background:${on?'var(--orange)':'var(--card)'};color:${on?'#000':'var(--cream)'};font-size:.72rem;font-weight:700;cursor:pointer">${x.l}</button>`;
+  }).join('');
+}
+function toggleDiaHorario(d){
+  horDiasSel = horDiasSel.includes(d) ? horDiasSel.filter(x=>x!==d) : [...horDiasSel,d];
+  renderDiasHorario();
+}
+function toggleDoisPeriodos(){
+  const on=document.getElementById('hor-dois')?.checked;
+  const w=document.getElementById('hor-p2-wrap'); if(w) w.style.display=on?'flex':'none';
+}
+function carregarHorarios(){
+  const h=getHorarios();
+  horDiasSel=Array.isArray(h.dias)?[...h.dias]:[];
+  renderDiasHorario();
+  const set=(id,v)=>{const e=document.getElementById(id); if(e) e.value=v||'';};
+  set('hor-p1-abre',h.p1&&h.p1.abre); set('hor-p1-fecha',h.p1&&h.p1.fecha);
+  const dois=document.getElementById('hor-dois'); if(dois) dois.checked=!!h.doisPeriodos;
+  set('hor-p2-abre',h.p2&&h.p2.abre); set('hor-p2-fecha',h.p2&&h.p2.fecha);
+  toggleDoisPeriodos();
+}
+function salvarHorarios(){
+  if(!horDiasSel.length){ showToast('⚠️ Marque pelo menos um dia','tok-err'); return; }
+  const p1={abre:document.getElementById('hor-p1-abre').value,fecha:document.getElementById('hor-p1-fecha').value};
+  if(!p1.abre||!p1.fecha){ showToast('⚠️ Defina o horário do período 1','tok-err'); return; }
+  const dois=document.getElementById('hor-dois').checked;
+  const p2={abre:document.getElementById('hor-p2-abre').value,fecha:document.getElementById('hor-p2-fecha').value};
+  if(dois && (!p2.abre||!p2.fecha)){ showToast('⚠️ Defina o horário do período 2','tok-err'); return; }
+  const horarios={dias:[...horDiasSel].sort((a,b)=>a-b),p1,doisPeriodos:dois,p2:dois?p2:{abre:'',fecha:''}};
+  cfgHorarios=horarios;
+  localStorage.setItem('tcho_horarios',JSON.stringify(horarios));
+  db.collection('config').doc('operacao').set({horarios},{merge:true}).catch(console.error);
+  atualizarStatusAutoHorario();
+  showToast('✅ Dias e horários salvos!','tok-ok');
 }
 
 function atualizarStatusAutoHorario(){
@@ -3115,6 +3165,7 @@ function iniciarApp(){
     if(cfg.prazoMin) document.getElementById('cfg-prazo-min').value=cfg.prazoMin;
     if(cfg.prazoMax) document.getElementById('cfg-prazo-max').value=cfg.prazoMax;
     autoAceitar=!!cfg.autoAceitar;
+    if(cfg.horarios){ cfgHorarios=cfg.horarios; localStorage.setItem('tcho_horarios',JSON.stringify(cfg.horarios)); if(document.getElementById('hor-dias')) carregarHorarios(); }
     if(document.getElementById('cfg-auto-horario'))
       document.getElementById('cfg-auto-horario').checked=cfg.autoHorario!==false;
     if(document.getElementById('cfg-forcar-aberta'))

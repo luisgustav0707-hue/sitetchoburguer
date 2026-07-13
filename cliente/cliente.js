@@ -87,13 +87,9 @@ function atualizarPrazoBadge(){
   if(el) el.textContent = `${prazoEntrega.min}–${prazoEntrega.max} min`;
 }
 
-// Verifica se está dentro do horário de funcionamento
-function lojaAbertaAgora(){
-  const agora = new Date();
-  const dia   = agora.getDay(); // 0=Dom 4=Qui 5=Sex 6=Sab
-  const hora  = agora.getHours();
-  return [0,4,5,6].includes(dia) && hora >= 19 && hora < 23;
-}
+// Verifica se está dentro do horário de funcionamento (usa o agendamento do
+// admin; estaAbertaAgora vem de shared/crm.js, com fallback pro padrão antigo).
+function lojaAbertaAgora(horarios){ return estaAbertaAgora(horarios); }
 
 function aplicarEstadoLoja(data){
   let aberta;
@@ -102,7 +98,7 @@ function aplicarEstadoLoja(data){
   } else if(data.forcarAberta){           // forçar aberta (ignora horário)
     aberta = true;
   } else if(data.autoHorario !== false){  // horário automático
-    aberta = lojaAbertaAgora();
+    aberta = estaAbertaAgora(data.horarios);
   } else {
     aberta = data.lojaAberta !== false;
   }

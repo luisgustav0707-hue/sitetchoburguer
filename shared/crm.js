@@ -79,3 +79,28 @@ function crmDiasDesde(v){
   if(!d || isNaN(d)) return null;
   return Math.floor((Date.now()-d.getTime())/86400000);
 }
+
+// ── HORÁRIO DE FUNCIONAMENTO (usado no admin e no cliente) ──────
+// Config: { dias:[0..6], p1:{abre:'HH:MM',fecha:'HH:MM'}, doisPeriodos:bool, p2:{abre,fecha} }
+// 0=Dom, 1=Seg ... 6=Sáb. Padrão = comportamento antigo (Qui–Dom, 19h–23h).
+function horarioPadrao(){
+  return { dias:[0,4,5,6], p1:{abre:'19:00',fecha:'23:00'}, doisPeriodos:false, p2:{abre:'',fecha:''} };
+}
+function _dentroPeriodo(min, per){
+  if(!per || !per.abre || !per.fecha) return false;
+  const [ah,am]=String(per.abre).split(':').map(Number);
+  const [fh,fm]=String(per.fecha).split(':').map(Number);
+  if(isNaN(ah)||isNaN(fh)) return false;
+  const ini=ah*60+(am||0), fim=fh*60+(fm||0);
+  return min>=ini && min<fim;
+}
+// true se a loja está aberta AGORA conforme o agendamento.
+function estaAbertaAgora(horarios){
+  const h=(horarios && Array.isArray(horarios.dias)) ? horarios : horarioPadrao();
+  const agora=new Date();
+  if(!h.dias.includes(agora.getDay())) return false;
+  const min=agora.getHours()*60+agora.getMinutes();
+  if(_dentroPeriodo(min,h.p1)) return true;
+  if(h.doisPeriodos && _dentroPeriodo(min,h.p2)) return true;
+  return false;
+}

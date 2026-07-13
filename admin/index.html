@@ -322,6 +322,21 @@
 
     <div class="section cfg-panel" id="cfg-bairros">
       <div class="sec-title">🛵 Bairros e taxas de entrega</div>
+
+      <div style="background:var(--card);border:1px solid #3a3530;border-radius:10px;padding:12px;margin-bottom:14px">
+        <div style="font-size:.82rem;font-weight:700;color:var(--orange);margin-bottom:6px">📍 Sugerir bairros por distância</div>
+        <div style="font-size:.66rem;color:var(--muted);margin-bottom:10px">Informe o endereço da loja e o raio. O sistema sugere bairros ao redor com taxa por km — você escolhe quais adicionar. <b>Não altera</b> os bairros que você já atende.</div>
+        <label class="edit-lbl">Endereço da loja</label>
+        <input id="ent-endereco" class="edit-inp" type="text" placeholder="Rua, número, bairro, cidade, MG" style="margin-bottom:8px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div><label class="edit-lbl">Raio (km)</label><input id="ent-raio" class="edit-inp" type="number" min="1" step="0.5" placeholder="5"></div>
+          <div><label class="edit-lbl">Taxa base (R$)</label><input id="ent-taxabase" class="edit-inp" type="number" min="0" step="0.5" placeholder="4"></div>
+          <div><label class="edit-lbl">Taxa por km (R$)</label><input id="ent-taxakm" class="edit-inp" type="number" min="0" step="0.5" placeholder="1.5"></div>
+        </div>
+        <button onclick="buscarBairrosNoRaio()" style="width:100%;margin-top:10px;padding:9px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;font-weight:700;cursor:pointer">🔍 Buscar bairros no raio</button>
+        <div id="ent-resultado" style="margin-top:10px"></div>
+      </div>
+
       <div id="lista-bairros"></div>
     </div>
 

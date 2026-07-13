@@ -66,7 +66,7 @@ function showConfig(k){
   const CFG_MERGED={ operacao:['cfg-operacao','cfg-horario'], entrega:['cfg-prazo','cfg-bairros'] };
   if(CFG_MERGED[k]){
     CFG_MERGED[k].forEach(id=>{const el=document.getElementById(id); if(el) el.classList.add('active');});
-    if(k==='entrega') renderBairros();
+    if(k==='entrega'){ renderBairros(); carregarConfigEntrega(); }
   } else {
     const pg=document.getElementById('cfg-'+k)||document.getElementById('inner-'+k);
     if(pg) pg.classList.add('active');
@@ -1735,6 +1735,89 @@ function saveBairrosAdmin(arr){
   arr.sort((a,b)=>a.nome.localeCompare(b.nome));            // mantém em ordem alfabética
   localStorage.setItem('tcho_bairros',JSON.stringify(arr));
   salvarCardapioFS('bairros',{lista:arr});                  // reflete no site do cliente
+}
+
+// ── ENTREGA: sugerir bairros por distância (aditivo — não mexe nos atuais) ──
+// Lista de bairros candidatos da região (Norte de BH / Venda Nova / Pampulha).
+// Só os que NÃO estão na sua lista e caírem no raio viram sugestão.
+const BH_BAIRROS_CANDIDATOS = ['Venda Nova','Céu Azul','Serra Verde','Rio Branco','Mantiqueira','Piratininga','Letícia','Santa Mônica','Jardim Leblon','Copacabana','Minascaixa','Jaqueline','Floramar','Guarani','Jardim Guanabara','Tupi','Aarão Reis','Novo Aarão Reis','Conjunto Paulo VI','Ribeiro de Abreu','São Gabriel','Belmonte','Jardim Vitória','Maria Goretti','Ouro Preto','Castelo','Jaraguá','Braúnas','São Luiz','Liberdade','Santa Amélia','Santa Branca','Planalto','Itapoã','Serrano','Universitário','Confisco','Dona Clara','Indaiá','São Francisco','Heliópolis','Etelvina Carneiro','Vila Clóris','Nova Pampulha','Justinópolis'];
+
+const _geoCache = JSON.parse(localStorage.getItem('tcho_geo')||'{}');
+async function geocodeOSM(q){
+  const key=q.toLowerCase().trim();
+  if(_geoCache[key]) return _geoCache[key];
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`,{headers:{'Accept':'application/json'}});
+    const d=await r.json();
+    if(d && d[0]){ const res={lat:parseFloat(d[0].lat),lng:parseFloat(d[0].lon)}; _geoCache[key]=res; localStorage.setItem('tcho_geo',JSON.stringify(_geoCache)); return res; }
+  }catch(e){ console.error('geocode:',e); }
+  return null;
+}
+function haversineKm(a,b){
+  const R=6371, toR=x=>x*Math.PI/180;
+  const dLat=toR(b.lat-a.lat), dLng=toR(b.lng-a.lng);
+  const s=Math.sin(dLat/2)**2 + Math.cos(toR(a.lat))*Math.cos(toR(b.lat))*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));
+}
+const _sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+function carregarConfigEntrega(){
+  let s=null;
+  try{ s=JSON.parse(localStorage.getItem('tcho_entrega')||'null'); }catch(e){}
+  const set=(id,v)=>{const el=document.getElementById(id); if(el && v!=null && el.value==='') el.value=v;};
+  if(s){ set('ent-endereco',s.endereco); set('ent-raio',s.raioKm); set('ent-taxabase',s.taxaBase); set('ent-taxakm',s.taxaKm); }
+  db.collection('config').doc('entrega').get().then(d=>{ if(d.exists){ const x=d.data(); localStorage.setItem('tcho_entrega',JSON.stringify(x)); set('ent-endereco',x.endereco); set('ent-raio',x.raioKm); set('ent-taxabase',x.taxaBase); set('ent-taxakm',x.taxaKm);} }).catch(()=>{});
+}
+
+async function buscarBairrosNoRaio(){
+  const endereco=document.getElementById('ent-endereco').value.trim();
+  const raio=parseFloat(document.getElementById('ent-raio').value)||0;
+  const base=parseFloat(document.getElementById('ent-taxabase').value)||0;
+  const perKm=parseFloat(document.getElementById('ent-taxakm').value)||0;
+  const out=document.getElementById('ent-resultado');
+  if(!endereco){ showToast('⚠️ Informe o endereço da loja','tok-err'); return; }
+  if(raio<=0){ showToast('⚠️ Informe o raio (km)','tok-err'); return; }
+  // salva a config de entrega (não mexe nos bairros)
+  const cfg={endereco,raioKm:raio,taxaBase:base,taxaKm:perKm};
+  localStorage.setItem('tcho_entrega',JSON.stringify(cfg));
+  db.collection('config').doc('entrega').set(cfg,{merge:true}).catch(()=>{});
+
+  out.innerHTML='<div style="font-size:.75rem;color:var(--muted)">📍 Localizando seu endereço...</div>';
+  const loja=await geocodeOSM(endereco);
+  if(!loja){ out.innerHTML='<div style="font-size:.75rem;color:#e74c3c">❌ Não localizei esse endereço. Inclua bairro, cidade e "MG".</div>'; return; }
+
+  const jaAtende=new Set(getBairrosAdmin().map(b=>(b.nome||'').toLowerCase().trim()));
+  const candidatos=BH_BAIRROS_CANDIDATOS.filter(n=>!jaAtende.has(n.toLowerCase().trim()));
+  const achados=[];
+  for(let i=0;i<candidatos.length;i++){
+    out.innerHTML=`<div style="font-size:.75rem;color:var(--muted)">🔎 Analisando bairros... ${i+1}/${candidatos.length}</div>`;
+    const nb=candidatos[i];
+    const q=`${nb}, Belo Horizonte, MG`;
+    const jaCache=!!_geoCache[q.toLowerCase().trim()];
+    const co=await geocodeOSM(q);
+    if(co){
+      const dist=haversineKm(loja,co);
+      if(dist<=raio) achados.push({nome:nb,dist,taxa:Math.max(0,Math.round(base+perKm*dist))});
+    }
+    if(!jaCache) await _sleep(1100);   // respeita o limite do OpenStreetMap (só quando não veio do cache)
+  }
+  achados.sort((a,b)=>a.dist-b.dist);
+  if(!achados.length){ out.innerHTML=`<div style="font-size:.75rem;color:var(--muted)">Nenhum bairro novo dentro de ${raio} km (ou já estão todos na sua lista).</div>`; return; }
+  out.innerHTML=`<div style="font-size:.72rem;color:var(--muted);margin-bottom:6px">${achados.length} bairro(s) sugerido(s) dentro de ${raio} km:</div>`+achados.map(a=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #2a2520">
+      <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:.82rem;color:var(--cream)">${a.nome}</div><div style="font-size:.66rem;color:var(--muted)">${a.dist.toFixed(1)} km · taxa sugerida R$${a.taxa}</div></div>
+      <button class="opc-btn" onclick="adicionarBairroSugerido('${a.nome.replace(/'/g,"\\'")}',${a.taxa},this)">➕ Adicionar</button>
+    </div>`).join('');
+}
+
+function adicionarBairroSugerido(nome,taxa,btn){
+  const arr=getBairrosAdmin();
+  if(arr.some(b=>(b.nome||'').toLowerCase().trim()===nome.toLowerCase().trim())){ showToast('Esse bairro já está na lista','tok-info'); return; }
+  arr.push({nome,taxa});
+  saveBairrosAdmin(arr);
+  renderBairros();
+  showToast(`✅ "${nome}" adicionado (R$${taxa})`,'tok-ok');
+  if(btn){ btn.textContent='✓ Adicionado'; btn.disabled=true; btn.style.opacity='.6'; }
 }
 let editBairroIdx=null, addBairroAberto=false;
 

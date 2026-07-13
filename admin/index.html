@@ -55,7 +55,6 @@
     <div class="nav-tab active" onclick="showPage('cozinha')">🍳 Cozinha <span class="nav-badge" id="badge-novos" style="display:none">0</span></div>
     <div class="nav-tab" onclick="showPage('pedidos')">📋 Pedidos</div>
     <div class="nav-tab" onclick="showPage('config')">⚙️ Config</div>
-    <div class="nav-tab" onclick="showPage('marketing')">📣 Marketing</div>
     <div class="nav-tab" onclick="showPage('crm')">👥 CRM</div>
     <div class="nav-tab" onclick="showPage('cardapio')">🍔 Cardápio</div>
     <div class="nav-tab" onclick="showPage('financeiro')">💰 Financeiro</div>
@@ -145,7 +144,22 @@
 
   <!-- ── CONFIG ── -->
   <div class="page" id="page-config">
-    <div class="section">
+   <div class="cfg-wrap">
+    <div class="cfg-side">
+      <div class="cfg-side-grp">Geral</div>
+      <button class="cfg-side-item active" data-cfg="operacao"  onclick="showConfig('operacao')">🛵 Operação</button>
+      <button class="cfg-side-item"        data-cfg="horario"   onclick="showConfig('horario')">🕐 Horário</button>
+      <button class="cfg-side-item"        data-cfg="automacao" onclick="showConfig('automacao')">🤖 Automação</button>
+      <button class="cfg-side-item"        data-cfg="prazo"     onclick="showConfig('prazo')">⏱ Prazo de entrega</button>
+      <button class="cfg-side-item"        data-cfg="acessos"   onclick="showConfig('acessos')">📊 Acessos</button>
+      <button class="cfg-side-item"        data-cfg="nfce"      onclick="showConfig('nfce')">🧾 NFC-e</button>
+      <div class="cfg-side-grp">Marketing</div>
+      <button class="cfg-side-item"        data-cfg="cupons"      onclick="showConfig('cupons')">🎟️ Cupons</button>
+      <button class="cfg-side-item"        data-cfg="fidelidade"  onclick="showConfig('fidelidade')">🎁 Fidelidade</button>
+      <button class="cfg-side-item"        data-cfg="recuperacao" onclick="showConfig('recuperacao')">💌 Recuperação</button>
+    </div>
+    <div class="cfg-content">
+    <div class="section cfg-panel" id="cfg-acessos">
       <div class="sec-title">📊 Acessos do site</div>
       <div style="display:flex;align-items:center;gap:8px;background:#0d1a0d;border:1px solid #1a8f4c;border-radius:8px;padding:10px 12px;margin-bottom:10px">
         <span style="width:10px;height:10px;border-radius:50%;background:#27ae60;box-shadow:0 0 8px #27ae60;flex-shrink:0"></span>
@@ -161,7 +175,7 @@
       </div>
       <div style="font-size:.66rem;color:var(--muted);margin-top:6px">Visitas contam 1 por sessão (não conta recarregar a página).</div>
     </div>
-    <div class="section">
+    <div class="section cfg-panel" id="cfg-horario">
       <div class="sec-title">🕐 Horário automático</div>
       <div class="toggle-row">
         <div class="toggle-info">
@@ -179,7 +193,7 @@
       </div>
       <div id="auto-horario-status" style="font-size:.75rem;padding:8px 10px;background:#1a1510;border-radius:8px;margin-top:8px"></div>
     </div>
-    <div class="section">
+    <div class="section cfg-panel active" id="cfg-operacao">
       <div class="sec-title">🛵 Operação</div>
       <div id="cfg-loja-row" class="toggle-row">
         <div class="toggle-info"><div class="toggle-label">Loja aberta</div><div class="toggle-desc">Desligue para fechar a loja na hora (bloqueia pedidos)</div></div>
@@ -194,7 +208,7 @@
         <label class="toggle-wrap"><input type="checkbox" id="cfg-retirada" checked onchange="salvarConfig()"><span class="slider"></span></label>
       </div>
     </div>
-    <div class="section">
+    <div class="section cfg-panel" id="cfg-automacao">
       <div class="sec-title">🤖 Automação</div>
       <div class="toggle-row">
         <div class="toggle-info"><div class="toggle-label">Aceite automático</div><div class="toggle-desc">Pedidos aceitos automaticamente ao chegar</div></div>
@@ -205,7 +219,7 @@
         <label class="toggle-wrap"><input type="checkbox" id="cfg-print" checked onchange="salvarConfig()"><span class="slider"></span></label>
       </div>
     </div>
-    <div class="section">
+    <div class="section cfg-panel" id="cfg-prazo">
       <div class="sec-title">⏱ Prazo de entrega</div>
       <div class="toggle-row">
         <div class="toggle-info">
@@ -224,7 +238,7 @@
     </div>
 
     <!-- ══════ NFC-e (Nota Fiscal) ══════ -->
-    <div class="section">
+    <div class="section cfg-panel" id="cfg-nfce">
       <div class="sec-title">🧾 NFC-e (Nota Fiscal)</div>
       <div style="font-size:.72rem;color:#f39c12;background:#1a1510;border:1px solid #4a3410;border-radius:8px;padding:9px 11px;margin-bottom:12px">
         ⚠️ Emissão ainda <b>não está ativa</b> — depende de credenciamento na SEFAZ, certificado digital e integração (ver <b>PLANO-NFCE.md</b>). Preencha aqui os dados que o contador fornecer; ficam salvos para quando ligarmos a emissão.
@@ -307,19 +321,8 @@
       <button onclick="salvarConfigFiscal()" style="width:100%;margin-top:14px;padding:11px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;cursor:pointer">💾 SALVAR DADOS FISCAIS</button>
     </div>
 
-  </div>
-
-  <!-- ══════ MARKETING (aba própria) ══════ -->
-  <div class="page" id="page-marketing">
-    <div class="section" style="margin-top:6px"><div class="sec-title">📣 Marketing</div></div>
-    <div class="inner-tabs">
-      <div class="inner-tab active" onclick="showInner('cupons')">🎟️ Cupons</div>
-      <div class="inner-tab" onclick="showInner('fidelidade')">🎁 Fidelidade</div>
-      <div class="inner-tab" onclick="showInner('recuperacao');initRecuperacao()">💌 Recuperação</div>
-    </div>
-
     <!-- CUPONS -->
-    <div class="inner-page active" id="inner-cupons">
+    <div class="inner-page cfg-panel" id="inner-cupons">
       <div class="mkt-stats">
         <div class="mkt-stat"><div class="mkt-stat-n" id="mkt-ativos">0</div><div class="mkt-stat-l">Ativos</div></div>
         <div class="mkt-stat"><div class="mkt-stat-n" id="mkt-usos">0</div><div class="mkt-stat-l">Usos totais</div></div>
@@ -358,7 +361,7 @@
     </div>
 
     <!-- FIDELIDADE -->
-    <div class="inner-page" id="inner-fidelidade">
+    <div class="inner-page cfg-panel" id="inner-fidelidade">
       <div class="section">
         <div class="sec-title">🎁 Programa de Fidelidade</div>
         <div class="toggle-row">
@@ -380,7 +383,7 @@
     </div>
 
     <!-- RECUPERAÇÃO -->
-    <div class="inner-page" id="inner-recuperacao">
+    <div class="inner-page cfg-panel" id="inner-recuperacao">
       <div class="section">
         <div class="sec-title">💌 Recuperação de Clientes</div>
         <div class="toggle-row" style="padding-top:0">
@@ -406,7 +409,9 @@
       </div>
       <div id="rec-lista"></div>
     </div>
-  </div>
+    </div><!-- /cfg-content -->
+   </div><!-- /cfg-wrap -->
+  </div><!-- /page-config -->
 
   <!-- ══════ CRM / MARKETING ══════ -->
   <div class="page" id="page-crm">

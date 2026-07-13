@@ -268,6 +268,23 @@ input:checked+.slider:before{transform:translateX(22px);background:#000}
 .inner-page{display:none}
 .inner-page.active{display:block}
 
+/* ── CONFIG COM MENU LATERAL ── */
+.cfg-wrap{display:flex;gap:14px;align-items:flex-start}
+.cfg-side{flex:0 0 190px;display:flex;flex-direction:column;gap:3px;position:sticky;top:8px}
+.cfg-side-grp{font-size:.6rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding:12px 8px 4px}
+.cfg-side-item{text-align:left;padding:9px 11px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--cream);font-size:.78rem;font-weight:600;cursor:pointer;transition:all .15s;width:100%}
+.cfg-side-item:hover{background:var(--card)}
+.cfg-side-item.active{background:var(--card);border-color:var(--orange);color:var(--orange)}
+.cfg-content{flex:1;min-width:0}
+.cfg-panel{display:none}
+.cfg-panel.active{display:block}
+@media(max-width:640px){
+  .cfg-wrap{flex-direction:column}
+  .cfg-side{flex:none;width:100%;flex-direction:row;flex-wrap:wrap;position:static}
+  .cfg-side-grp{width:100%;padding:6px 4px 2px}
+  .cfg-side-item{width:auto;flex:1 1 auto;text-align:center;font-size:.72rem;padding:7px 10px}
+}
+
 /* AUTO BANNER */
 .auto-banner{background:#1a1508;border-bottom:1px solid #4a3010;padding:6px 16px;font-size:.7rem;color:#f39c12;display:none;align-items:center;gap:6px}
 .auto-banner.show{display:flex}

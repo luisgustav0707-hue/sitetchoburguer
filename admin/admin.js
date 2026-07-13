@@ -46,15 +46,29 @@ if(localStorage.getItem('tcho_admin_logado')==='true'){
 
 // ── NAVEGAÇÃO ──────────────────────────────────────────────────
 function showPage(p){
-  document.querySelectorAll('.nav-tab').forEach((el,i)=>el.classList.toggle('active',['cozinha','pedidos','config','marketing','crm','cardapio','financeiro'][i]===p));
+  document.querySelectorAll('.nav-tab').forEach((el,i)=>el.classList.toggle('active',['cozinha','pedidos','config','crm','cardapio','financeiro'][i]===p));
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
   if(p==='cardapio')  renderCardapio();
   if(p==='pedidos')   carregarLog();
-  if(p==='config'){ carregarAcessos(); iniciarPresencaAdmin(); carregarConfigFiscal(); }
-  if(p==='marketing') renderCupons();  // Cupons/Fidelidade/Recuperação agora em aba própria
+  if(p==='config')    showConfig(cfgAtual);   // Config agora tem menu lateral (Geral + Marketing)
   if(p==='crm')       carregarCRM();
   if(p==='financeiro') carregarFinanceiro();
+}
+
+// ── Config com menu lateral: troca o painel visível e carrega o que ele precisa ──
+let cfgAtual='operacao';
+function showConfig(k){
+  cfgAtual=k;
+  document.querySelectorAll('#page-config .cfg-side-item').forEach(b=>b.classList.toggle('active',b.dataset.cfg===k));
+  document.querySelectorAll('#page-config .cfg-panel').forEach(p=>p.classList.remove('active'));
+  const pg=document.getElementById('cfg-'+k)||document.getElementById('inner-'+k);
+  if(pg) pg.classList.add('active');
+  // Cada painel carrega seus dados só quando aberto
+  if(k==='acessos'){ carregarAcessos(); iniciarPresencaAdmin(); }
+  if(k==='nfce')        carregarConfigFiscal();
+  if(k==='cupons')      renderCupons();
+  if(k==='recuperacao') initRecuperacao();
 }
 
 // ── ACESSOS DO SITE (analytics simples no Firestore) ───────────

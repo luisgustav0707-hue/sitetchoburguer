@@ -62,11 +62,11 @@ function showConfig(k){
   cfgAtual=k;
   document.querySelectorAll('#page-config .cfg-side-item').forEach(b=>b.classList.toggle('active',b.dataset.cfg===k));
   document.querySelectorAll('#page-config .cfg-panel').forEach(p=>p.classList.remove('active'));
-  if(k==='entrega'){
-    // "Entrega" junta Prazo + Bairros/taxas num painel só
-    document.getElementById('cfg-prazo')?.classList.add('active');
-    document.getElementById('cfg-bairros')?.classList.add('active');
-    renderBairros();
+  // Itens que juntam mais de uma seção num painel só
+  const CFG_MERGED={ operacao:['cfg-operacao','cfg-horario'], entrega:['cfg-prazo','cfg-bairros'] };
+  if(CFG_MERGED[k]){
+    CFG_MERGED[k].forEach(id=>{const el=document.getElementById(id); if(el) el.classList.add('active');});
+    if(k==='entrega') renderBairros();
   } else {
     const pg=document.getElementById('cfg-'+k)||document.getElementById('inner-'+k);
     if(pg) pg.classList.add('active');

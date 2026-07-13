@@ -46,13 +46,14 @@ if(localStorage.getItem('tcho_admin_logado')==='true'){
 
 // ── NAVEGAÇÃO ──────────────────────────────────────────────────
 function showPage(p){
-  document.querySelectorAll('.nav-tab').forEach((el,i)=>el.classList.toggle('active',['cozinha','pedidos','config','marketing','cardapio','financeiro'][i]===p));
+  document.querySelectorAll('.nav-tab').forEach((el,i)=>el.classList.toggle('active',['cozinha','pedidos','config','marketing','crm','cardapio','financeiro'][i]===p));
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
   if(p==='cardapio')  renderCardapio();
   if(p==='pedidos')   carregarLog();
   if(p==='config'){ carregarAcessos(); iniciarPresencaAdmin(); carregarConfigFiscal(); }
   if(p==='marketing') renderCupons();  // Cupons/Fidelidade/Recuperação agora em aba própria
+  if(p==='crm')       carregarCRM();
   if(p==='financeiro') carregarFinanceiro();
 }
 
@@ -554,6 +555,7 @@ async function salvarPedidoManual(){
   const msg = statusPedido==='finalizado'
     ? `✅ Pedido ${pedido.num} lançado em ${dataPedido.toLocaleDateString('pt-BR')} (finalizado)`
     : `✅ Pedido ${pedido.num} adicionado — ${nome}`;
+  try{ upsertCliente(pedido); }catch(e){}                   // CRM: cadastra/atualiza o cliente
   try{
     await db.collection('pedidos').add(pedido);            // o listener cuida de render/notificação/impressão (só p/ 'novo')
     showToast(msg,'tok-ok');
@@ -1966,6 +1968,116 @@ function renderInativos(){
         </a>
       </div>`;
     }).join('')}`;
+}
+
+// ── CRM / MARKETING (aba própria) ──────────────────────────────
+let crmClientes=[];        // cache dos clientes carregados do Firestore
+let crmFiltro='todos';
+
+function carregarCRM(){
+  showCrm('clientes');
+  const el=document.getElementById('crm-clientes-lista');
+  if(el) el.innerHTML='<div style="color:var(--muted);font-size:.78rem;padding:10px 0">🔍 Carregando clientes...</div>';
+  db.collection('clientes').get().then(snap=>{
+    crmClientes=snap.docs.map(d=>({_id:d.id,...d.data()}));
+    renderClientesCRM();
+    renderDashCRM();
+  }).catch(e=>{
+    if(el) el.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div>Erro ao carregar clientes</div></div>';
+    console.error('carregarCRM:',e);
+  });
+}
+
+function showCrm(t){
+  document.querySelectorAll('#page-crm .crm-tab').forEach(b=>{
+    const on=b.dataset.crm===t;
+    b.classList.toggle('active',on);
+    b.style.borderColor=on?'var(--orange)':'#3a3530';
+    b.style.color=on?'var(--orange)':'var(--cream)';
+  });
+  ['clientes','dashboard','campanhas'].forEach(k=>{
+    const pg=document.getElementById('crm-'+k); if(pg) pg.style.display = (k===t?'block':'none');
+  });
+  if(t==='clientes') renderClientesCRM();
+  if(t==='dashboard') renderDashCRM();
+}
+
+const CRM_FILTROS=[
+  {k:'todos',l:'Todos'},{k:'novos',l:'Novos'},{k:'recorrentes',l:'Recorrentes'},{k:'vip',l:'VIP'},
+  {k:'i7',l:'Parados 7d'},{k:'i15',l:'Parados 15d'},{k:'i30',l:'Parados 30d'},
+];
+function setCrmFiltro(k){ crmFiltro=k; renderClientesCRM(); }
+
+function filtrarClientesCRM(){
+  return crmClientes.filter(c=>{
+    const cls=classificarCliente(c).label;
+    const dias=crmDiasDesde(c.dataUltimaCompra);
+    switch(crmFiltro){
+      case 'novos':       return cls==='Novo';
+      case 'recorrentes': return cls==='Recorrente';
+      case 'vip':         return cls==='VIP';
+      case 'i7':          return dias!=null && dias>=7;
+      case 'i15':         return dias!=null && dias>=15;
+      case 'i30':         return dias!=null && dias>=30;
+      default:            return true;
+    }
+  });
+}
+
+function renderClientesCRM(){
+  const fEl=document.getElementById('crm-filtros');
+  if(fEl){
+    fEl.innerHTML=CRM_FILTROS.map(f=>{
+      const on=crmFiltro===f.k;
+      return `<button onclick="setCrmFiltro('${f.k}')" style="padding:6px 11px;border-radius:20px;border:1px solid ${on?'var(--orange)':'#3a3530'};background:${on?'var(--orange)':'var(--card)'};color:${on?'#000':'var(--cream)'};font-size:.72rem;font-weight:700;cursor:pointer">${f.l}</button>`;
+    }).join('');
+  }
+  const el=document.getElementById('crm-clientes-lista');
+  if(!el) return;
+  if(!crmClientes.length){ el.innerHTML='<div class="empty"><div class="empty-icon">👥</div><div>Nenhum cliente cadastrado ainda</div><div style="font-size:.72rem;color:var(--muted);margin-top:6px">Os clientes aparecem aqui sozinhos conforme os pedidos entram.</div></div>'; return; }
+  const lista=filtrarClientesCRM().sort((a,b)=>(b.valorTotalGasto||0)-(a.valorTotalGasto||0));
+  if(!lista.length){ el.innerHTML='<div class="empty"><div class="empty-icon">🔍</div><div>Nenhum cliente nesse filtro</div></div>'; return; }
+  const r=n=>'R$'+Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+  el.innerHTML=`<div style="font-size:.72rem;color:var(--muted);margin-bottom:10px">${lista.length} cliente${lista.length!==1?'s':''}</div>`+lista.map(c=>{
+    const cls=classificarCliente(c);
+    const dias=crmDiasDesde(c.dataUltimaCompra);
+    const tel=crmTelLimpo(c.telefone||c._id);
+    const wa=`https://wa.me/55${tel}?text=${encodeURIComponent('Olá '+(c.nome||'cliente')+'! 🍔 Aqui é da Tcho Burguer.')}`;
+    return `<div style="background:var(--card);border:1px solid #2a2520;border-radius:10px;padding:13px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
+        <div>
+          <div style="font-weight:700;font-size:.95rem;color:var(--cream)">${c.nome||'—'}</div>
+          <div style="font-size:.8rem;color:var(--orange);font-weight:600">📱 ${c.telefone||c._id}</div>
+        </div>
+        <span style="flex-shrink:0;font-size:.6rem;font-weight:800;padding:3px 8px;border-radius:20px;background:${cls.cor}22;color:${cls.cor};border:1px solid ${cls.cor}">${cls.label}</span>
+      </div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:.7rem;color:var(--muted);margin-bottom:10px">
+        <span>🛒 <b style="color:var(--cream)">${c.quantidadePedidos||0}</b> pedidos</span>
+        <span>💰 <b style="color:var(--cream)">${r(c.valorTotalGasto)}</b></span>
+        <span>🎫 ticket <b style="color:var(--cream)">${r(c.ticketMedio)}</b></span>
+        <span>🕐 ${dias==null?'—':(dias===0?'hoje':dias+'d atrás')}</span>
+      </div>
+      <a href="${wa}" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#25d366;color:#000;font-weight:700;font-size:.8rem;padding:9px;border-radius:8px;text-decoration:none;width:100%;box-sizing:border-box">💬 WhatsApp</a>
+    </div>`;
+  }).join('');
+}
+
+function renderDashCRM(){
+  const el=document.getElementById('crm-dash-cards');
+  if(!el) return;
+  const total=crmClientes.length;
+  const ativos=crmClientes.filter(c=>{const d=crmDiasDesde(c.dataUltimaCompra);return d!=null&&d<=30;}).length;
+  const inativos15=crmClientes.filter(c=>{const d=crmDiasDesde(c.dataUltimaCompra);return d!=null&&d>=15;}).length;
+  const cuponsGerados=(typeof cupons!=='undefined')?cupons.length:0;
+  const cuponsUsados=(typeof cupons!=='undefined')?cupons.reduce((a,c)=>a+(c.usosFeitos||0),0):0;
+  const card=(n,l,cor)=>`<div class="fin-card"><div class="fin-card-n" style="color:${cor||'var(--orange)'}">${n}</div><div class="fin-card-l">${l}</div></div>`;
+  el.innerHTML=
+    card(total,'Total de clientes')+
+    card(ativos,'Ativos (30d)','#27ae60')+
+    card(inativos15,'Parados 15d+','#f39c12')+
+    card('—','Recuperados','var(--muted)')+
+    card(cuponsGerados,'Cupons gerados')+
+    card(cuponsUsados,'Cupons usados','#27ae60');
 }
 
 // ── FINANCEIRO ─────────────────────────────────────────────────

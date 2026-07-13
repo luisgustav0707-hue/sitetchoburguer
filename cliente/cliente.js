@@ -715,6 +715,8 @@ async function finalizarPedido(){
   }
   // Notifica admin instantaneamente via BroadcastChannel (quando em HTTP)
   try { new BroadcastChannel('tcho_pedidos').postMessage(pedidoLocal); } catch(e){}
+  // CRM: cria/atualiza o cadastro do cliente a partir deste pedido
+  try{ upsertCliente(pedido); }catch(e){}
   // Contabiliza o uso do cupom (incrementa usosFeitos no cupom do admin)
   if(cupomAtual && cupomAtual._id){
     db.collection('cupons').doc(cupomAtual._id)

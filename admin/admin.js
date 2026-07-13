@@ -62,14 +62,20 @@ function showConfig(k){
   cfgAtual=k;
   document.querySelectorAll('#page-config .cfg-side-item').forEach(b=>b.classList.toggle('active',b.dataset.cfg===k));
   document.querySelectorAll('#page-config .cfg-panel').forEach(p=>p.classList.remove('active'));
-  const pg=document.getElementById('cfg-'+k)||document.getElementById('inner-'+k);
-  if(pg) pg.classList.add('active');
+  if(k==='entrega'){
+    // "Entrega" junta Prazo + Bairros/taxas num painel só
+    document.getElementById('cfg-prazo')?.classList.add('active');
+    document.getElementById('cfg-bairros')?.classList.add('active');
+    renderBairros();
+  } else {
+    const pg=document.getElementById('cfg-'+k)||document.getElementById('inner-'+k);
+    if(pg) pg.classList.add('active');
+  }
   // Cada painel carrega seus dados só quando aberto
   if(k==='acessos'){ carregarAcessos(); iniciarPresencaAdmin(); }
   if(k==='nfce')        carregarConfigFiscal();
   if(k==='cupons')      renderCupons();
   if(k==='recuperacao') initRecuperacao();
-  if(k==='bairros')     renderBairros();
 }
 
 // ── ACESSOS DO SITE (analytics simples no Firestore) ───────────

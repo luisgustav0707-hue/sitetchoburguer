@@ -1200,6 +1200,7 @@ function salvarFotoData(id,src){
   const fotos=JSON.parse(localStorage.getItem('tcho_fotos')||'{}');
   fotos[id]=src;
   localStorage.setItem('tcho_fotos',JSON.stringify(fotos));
+  db.collection('fotos').doc(id).set({src}).catch(console.error);   // reflete no site do cliente
   renderCardapio();
   showToast('📷 Foto salva!','tok-ok');
 }
@@ -1207,31 +1208,32 @@ function removerFotoAdmin(id){
   const fotos=JSON.parse(localStorage.getItem('tcho_fotos')||'{}');
   delete fotos[id];
   localStorage.setItem('tcho_fotos',JSON.stringify(fotos));
+  db.collection('fotos').doc(id).delete().catch(()=>{});           // remove do site do cliente
   renderCardapio();
   showToast('🗑️ Foto removida','tok-info');
+}
+// Lê um arquivo de imagem, redimensiona (máx 700px, JPEG) e devolve o dataURL.
+function lerFotoRedimensionada(file, cb){
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const img=new Image();
+    img.onload=()=>{
+      const canvas=document.createElement('canvas');
+      const MAX=700; let w=img.width,h=img.height;
+      if(w>h){if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}}
+      else{if(h>MAX){w=Math.round(w*MAX/h);h=MAX;}}
+      canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      cb(canvas.toDataURL('image/jpeg',0.82));
+    };
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 function abrirUploadFoto(id){
   const inp=document.createElement('input');
   inp.type='file';inp.accept='image/*';
-  inp.onchange=e=>{
-    const file=e.target.files[0];if(!file)return;
-    const reader=new FileReader();
-    reader.onload=ev=>{
-      const img=new Image();
-      img.onload=()=>{
-        const canvas=document.createElement('canvas');
-        const MAX=700;
-        let w=img.width,h=img.height;
-        if(w>h){if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}}
-        else{if(h>MAX){w=Math.round(w*MAX/h);h=MAX;}}
-        canvas.width=w;canvas.height=h;
-        canvas.getContext('2d').drawImage(img,0,0,w,h);
-        salvarFotoData(id,canvas.toDataURL('image/jpeg',0.82));
-      };
-      img.src=ev.target.result;
-    };
-    reader.readAsDataURL(file);
-  };
+  inp.onchange=e=>{ const file=e.target.files[0]; if(file) lerFotoRedimensionada(file,src=>salvarFotoData(id,src)); };
   inp.click();
 }
 function salvarFotoUrl(id){
@@ -1485,6 +1487,23 @@ function renderCustomCats(){
 
 // ── NOVO PRODUTO ───────────────────────────────────────────────
 let addProdCat=null;
+let novoProdFoto=null;   // foto (dataURL) escolhida no formulário de novo produto
+
+// HTML interno da área de foto do novo produto (preview + botões)
+function nprodFotoInner(){
+  return (novoProdFoto
+    ? `<img src="${novoProdFoto}" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid #3a3530">`
+    : `<div style="width:52px;height:52px;border-radius:8px;border:1px dashed #3a3530;display:flex;align-items:center;justify-content:center;font-size:1.3rem;color:var(--muted)">📷</div>`)
+    + `<button type="button" class="opc-btn" onclick="escolherFotoNovoProd()">📁 ${novoProdFoto?'Trocar foto':'Adicionar foto'}</button>`
+    + (novoProdFoto?`<button type="button" class="opc-btn" style="background:#3a1010;color:#e74c3c" onclick="removerFotoNovoProd()">Remover</button>`:'');
+}
+function escolherFotoNovoProd(){
+  const inp=document.createElement('input');
+  inp.type='file';inp.accept='image/*';
+  inp.onchange=e=>{ const file=e.target.files[0]; if(file) lerFotoRedimensionada(file,src=>{ novoProdFoto=src; const a=document.getElementById('nprod-foto-area'); if(a) a.innerHTML=nprodFotoInner(); }); };
+  inp.click();
+}
+function removerFotoNovoProd(){ novoProdFoto=null; const a=document.getElementById('nprod-foto-area'); if(a) a.innerHTML=nprodFotoInner(); }
 
 function getCatTipo(cat){
   if(cat==='b')return'b';if(cat==='c')return'c';
@@ -1536,6 +1555,10 @@ function renderFormNovoProd(catInicial){
       <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Opções para o cliente escolher</div>
       <input style="${inp};width:100%;box-sizing:border-box" id="nprod-opcoes" placeholder="Separadas por vírgula (ex: Coca-Cola, Guaraná)">
     </div>
+    <div style="margin-bottom:10px">
+      <div style="font-size:.65rem;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Foto (aparece no cardápio do cliente)</div>
+      <div id="nprod-foto-area" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${nprodFotoInner()}</div>
+    </div>
     <div style="display:flex;gap:6px">
       <button class="opc-btn" onclick="salvarNovoProd()">✓ Adicionar</button>
       <button class="opc-btn" style="background:#2a2520;color:var(--muted)" onclick="fecharFormNovoProd()">Cancelar</button>
@@ -1556,8 +1579,8 @@ function onMudaCatProd(val){
   }
 }
 
-function abrirFormNovoProd(cat){addProdCat=cat;renderCardapio();setTimeout(()=>document.getElementById('nprod-nome')?.focus(),60);}
-function fecharFormNovoProd(){addProdCat=null;renderCardapio();}
+function abrirFormNovoProd(cat){addProdCat=cat;novoProdFoto=null;renderCardapio();setTimeout(()=>document.getElementById('nprod-nome')?.focus(),60);}
+function fecharFormNovoProd(){addProdCat=null;novoProdFoto=null;renderCardapio();}
 
 function salvarNovoProd(){
   const emoji=document.getElementById('nprod-emoji')?.value.trim()||'🍔';
@@ -1584,6 +1607,7 @@ function salvarNovoProd(){
   arr.push({id,cat:catFinal,emoji,n:nome,p:preco,nome,preco,desc,opcoes,tipo,ativo:true});
   saveProdsCustom(arr);
   est[id]={ativo:true,modo:'inf',qtd:10};
+  if(novoProdFoto){ salvarFotoData(id,novoProdFoto); novoProdFoto=null; }   // salva a foto do novo produto
   addProdCat=null;renderCardapio();
   showToast(`✅ "${nome}" adicionado!`,'tok-ok');
 }
@@ -3174,6 +3198,14 @@ function iniciarApp(){
     atualizarBadgeLoja();
     atualizarStatusAutoHorario();
   },()=>{});
+
+  // Carrega as fotos dos produtos (coleção própria — 1 doc por produto)
+  db.collection('fotos').get().then(snap=>{
+    if(snap.empty) return;
+    const fotos={}; snap.forEach(d=>{ if(d.data().src) fotos[d.id]=d.data().src; });
+    localStorage.setItem('tcho_fotos',JSON.stringify(fotos));
+    renderCardapio();
+  }).catch(()=>{});
 
   // Carrega cardápio do Firestore (sincroniza entre dispositivos)
   db.collection('cardapio').get().then(snapshot=>{

@@ -1107,6 +1107,14 @@ db.collection('cardapio').get().then(snapshot=>{
   renderBurguers();renderExtras();renderCustomCategorias();updateFloat();
 }).catch(()=>{});
 
+// Fotos dos produtos (coleção própria — 1 doc por produto). Mostra no cardápio.
+db.collection('fotos').get().then(snap=>{
+  if(snap.empty) return;
+  const fotos={}; snap.forEach(d=>{ const src=d.data().src; if(src) fotos[d.id]=src; });
+  localStorage.setItem('tcho_fotos',JSON.stringify(fotos));
+  renderBurguers();renderExtras();renderCustomCategorias();
+}).catch(()=>{});
+
 // Estoque ao vivo: a bebida some do cardápio assim que esgota, sem recarregar a página
 db.collection('cardapio').doc('estoque').onSnapshot(doc=>{
   if(!doc.exists) return;

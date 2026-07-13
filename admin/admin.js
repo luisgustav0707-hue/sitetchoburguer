@@ -2014,6 +2014,7 @@ function showCrm(t){
   });
   if(t==='clientes') renderClientesCRM();
   if(t==='dashboard') renderDashCRM();
+  if(t==='campanhas') carregarCampanhas();
 }
 
 const CRM_FILTROS=[
@@ -2092,6 +2093,129 @@ function renderDashCRM(){
     card('—','Recuperados','var(--muted)')+
     card(cuponsGerados,'Cupons gerados')+
     card(cuponsUsados,'Cupons usados','#27ae60');
+}
+
+// ── CRM Campanhas (Fase 2) ────────────────────────────────────
+let campanhas=[];
+
+function abrirFormCampanha(){
+  document.getElementById('camp-form').style.display='block';
+  ['camp-nome','camp-dias','camp-minped','camp-mingasto','camp-cupompct','camp-cupomval'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  document.getElementById('camp-msg').value='Olá {nome}, sentimos sua falta! 🍔\n\nUse o cupom {cupom} e volte a pedir pelo nosso site.';
+  document.getElementById('camp-gerarcupom').checked=false;
+  toggleCampCupom();
+  document.getElementById('camp-resultado').innerHTML='';
+  previewCampanha();
+}
+function fecharFormCampanha(){ const f=document.getElementById('camp-form'); if(f) f.style.display='none'; }
+function toggleCampCupom(){
+  const on=document.getElementById('camp-gerarcupom').checked;
+  document.getElementById('camp-cupom-cfg').style.display=on?'grid':'none';
+}
+
+// Filtra os clientes (já carregados no CRM) pela regra da campanha.
+function filtrarClientesCampanha(){
+  const dias=parseInt(document.getElementById('camp-dias').value)||0;
+  const minPed=parseInt(document.getElementById('camp-minped').value)||0;
+  const minGasto=parseFloat(document.getElementById('camp-mingasto').value)||0;
+  return crmClientes.filter(c=>{
+    const d=crmDiasDesde(c.dataUltimaCompra);
+    if(dias>0 && !(d!=null && d>=dias)) return false;
+    if(minPed>0 && (c.quantidadePedidos||0)<minPed) return false;
+    if(minGasto>0 && (c.valorTotalGasto||0)<minGasto) return false;
+    return true;
+  });
+}
+function previewCampanha(){
+  const el=document.getElementById('camp-preview'); if(!el) return;
+  const n=filtrarClientesCampanha().length;
+  el.innerHTML=`🎯 <b style="color:var(--cream)">${n}</b> cliente${n!==1?'s':''} nesse filtro`;
+}
+
+// Gera um código de cupom individual a partir do nome (sem acento) + % + aleatório.
+function gerarCodigoCupom(nome,pct){
+  const base=(nome||'CLIENTE').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z]/g,'').toUpperCase().slice(0,6)||'CLIENTE';
+  const rnd=Math.random().toString(36).slice(2,5).toUpperCase();
+  return `${base}${pct}${rnd}`;
+}
+
+async function gerarCampanha(){
+  const nome=document.getElementById('camp-nome').value.trim();
+  if(!nome){ showToast('⚠️ Dê um nome à campanha','tok-err'); return; }
+  const msgTpl=document.getElementById('camp-msg').value.trim();
+  if(!msgTpl){ showToast('⚠️ Escreva a mensagem','tok-err'); return; }
+  const alvo=filtrarClientesCampanha();
+  if(!alvo.length){ showToast('⚠️ Nenhum cliente nesse filtro','tok-err'); return; }
+  const gerarCupom=document.getElementById('camp-gerarcupom').checked;
+  const pct=parseInt(document.getElementById('camp-cupompct').value)||10;
+  const valDias=parseInt(document.getElementById('camp-cupomval').value)||7;
+  if(gerarCupom && (pct<1||pct>100)){ showToast('⚠️ Desconto entre 1 e 100%','tok-err'); return; }
+
+  const dias=parseInt(document.getElementById('camp-dias').value)||0;
+  const minPed=parseInt(document.getElementById('camp-minped').value)||0;
+  const minGasto=parseFloat(document.getElementById('camp-mingasto').value)||0;
+  const hojeStr=dataLocalHoje();
+
+  // Salva a campanha
+  const campanha={nome,dias,minPedidos:minPed,minGasto,mensagem:msgTpl,gerarCupom,cupomPct:gerarCupom?pct:0,cupomValidadeDias:gerarCupom?valDias:0,totalClientes:alvo.length,criadoEm:hojeStr,ts:Date.now()};
+  let campId=null;
+  try{ const ref=await db.collection('campanhas').add(campanha); campId=ref.id; }catch(e){ console.error('campanha:',e); }
+
+  const val=dataLocalHoje(new Date(Date.now()+valDias*86400000));
+
+  // Gera cupom + link por cliente
+  const linhas=[];
+  for(const c of alvo){
+    let codigo='';
+    if(gerarCupom){
+      codigo=gerarCodigoCupom(c.nome,pct);
+      const cupom={codigo,tipo:'pct',valor:pct,minimo:0,usosMax:1,usosFeitos:0,validade:val,descricao:`Campanha: ${nome}`,item:'',ativo:true,criadoEm:hojeStr,clienteId:c._id,campanhaId:campId};
+      try{ await db.collection('cupons').add(cupom); }catch(e){ console.error('cupom:',e); }
+    }
+    const msg=msgTpl.replace(/\{nome\}/g,c.nome||'cliente').replace(/\{cupom\}/g,codigo||'');
+    const tel=crmTelLimpo(c.telefone||c._id);
+    linhas.push({nome:c.nome,tel,codigo,wa:`https://wa.me/55${tel}?text=${encodeURIComponent(msg)}`});
+  }
+
+  showToast(`🚀 Campanha "${nome}" gerada — ${alvo.length} cliente(s)`,'tok-ok');
+  fecharFormCampanha();
+  renderResultadoCampanha(nome,linhas,gerarCupom);
+  try{ renderCupons(); }catch(e){}
+  carregarCampanhas();
+}
+
+function renderResultadoCampanha(nome,linhas,comCupom){
+  const el=document.getElementById('camp-resultado'); if(!el) return;
+  el.innerHTML=`<div style="background:var(--card);border:1px solid #27ae60;border-radius:10px;padding:12px;margin-bottom:12px">
+    <div style="font-weight:700;color:#27ae60;margin-bottom:4px">✅ Campanha "${nome}" pronta — ${linhas.length} cliente(s)</div>
+    <div style="font-size:.72rem;color:var(--muted)">Clique em "Enviar" pra disparar no WhatsApp${comCupom?' (cada um já com o cupom dele)':''}.</div>
+  </div>`+linhas.map(l=>`
+    <div style="background:var(--card);border:1px solid #2a2520;border-radius:10px;padding:11px;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <div style="min-width:0">
+        <div style="font-weight:700;font-size:.85rem;color:var(--cream)">${l.nome||'—'}</div>
+        <div style="font-size:.7rem;color:var(--muted)">📱 ${l.tel}${l.codigo?` · 🎟️ <b style="color:var(--orange)">${l.codigo}</b>`:''}</div>
+      </div>
+      <a href="${l.wa}" target="_blank" style="flex-shrink:0;background:#25d366;color:#000;font-weight:700;font-size:.75rem;padding:8px 12px;border-radius:8px;text-decoration:none">💬 Enviar</a>
+    </div>`).join('');
+}
+
+function carregarCampanhas(){
+  db.collection('campanhas').get().then(snap=>{
+    campanhas=snap.docs.map(d=>({_id:d.id,...d.data()})).sort((a,b)=>(b.ts||0)-(a.ts||0));
+    renderCampanhas();
+  }).catch(e=>console.error('carregarCampanhas:',e));
+}
+function renderCampanhas(){
+  const el=document.getElementById('camp-lista'); if(!el) return;
+  if(!campanhas.length){ el.innerHTML=''; return; }
+  el.innerHTML=`<div style="font-size:.7rem;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px">Campanhas anteriores</div>`+campanhas.map(c=>`
+    <div style="background:var(--surface);border:1px solid #2a2520;border-radius:10px;padding:11px;margin-bottom:7px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div style="font-weight:700;font-size:.85rem;color:var(--cream)">📣 ${c.nome}</div>
+        <div style="font-size:.66rem;color:var(--muted)">${c.criadoEm||''}</div>
+      </div>
+      <div style="font-size:.68rem;color:var(--muted);margin-top:4px">${c.totalClientes||0} cliente(s)${c.gerarCupom?` · cupom ${c.cupomPct}% (${c.cupomValidadeDias}d)`:''}${c.dias?` · parados ${c.dias}d+`:''}${c.minPedidos?` · ${c.minPedidos}+ pedidos`:''}${c.minGasto?` · gastou R$${c.minGasto}+`:''}</div>
+    </div>`).join('');
 }
 
 // ── FINANCEIRO ─────────────────────────────────────────────────

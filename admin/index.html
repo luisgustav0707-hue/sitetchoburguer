@@ -434,9 +434,47 @@
       <div style="font-size:.66rem;color:var(--muted);margin-top:8px">Clientes ativos = compraram nos últimos 30 dias. "Recuperados" será medido quando as campanhas (Fase 2) estiverem ativas.</div>
     </div>
 
-    <!-- CAMPANHAS (Fase 2) -->
+    <!-- CAMPANHAS -->
     <div class="crm-page" id="crm-campanhas" style="display:none">
-      <div class="empty"><div class="empty-icon">📣</div><div>Campanhas chegam na Fase 2</div><div style="font-size:.72rem;color:var(--muted);margin-top:6px">Criar campanha por comportamento (inativos há X dias, nº de pedidos, valor gasto), mensagem com {nome}/{cupom} e disparo em massa pelo WhatsApp.</div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:.8rem;color:var(--muted)">Dispare mensagens segmentadas no WhatsApp</div>
+        <button class="btn-criar" onclick="abrirFormCampanha()">+ Nova campanha</button>
+      </div>
+
+      <div id="camp-form" style="display:none;background:var(--surface);border:1px solid var(--orange);border-radius:12px;padding:16px;margin-bottom:14px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--orange);letter-spacing:1px;margin-bottom:12px">Nova campanha</div>
+        <label class="edit-lbl">Nome da campanha</label>
+        <input id="camp-nome" class="edit-inp" type="text" placeholder="Ex.: Clientes parados 15 dias" style="margin-bottom:10px">
+
+        <div style="font-size:.7rem;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin:6px 0">Quem vai receber</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div><label class="edit-lbl">Sem comprar há (dias)</label><input id="camp-dias" class="edit-inp" type="number" min="0" placeholder="15" oninput="previewCampanha()"></div>
+          <div><label class="edit-lbl">Mín. de pedidos</label><input id="camp-minped" class="edit-inp" type="number" min="0" placeholder="0" oninput="previewCampanha()"></div>
+          <div><label class="edit-lbl">Gastou no mín. (R$)</label><input id="camp-mingasto" class="edit-inp" type="number" min="0" placeholder="0" oninput="previewCampanha()"></div>
+        </div>
+        <div id="camp-preview" style="font-size:.75rem;color:var(--muted);margin:8px 0"></div>
+
+        <div style="font-size:.7rem;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin:6px 0">Cupom (opcional)</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:.78rem;cursor:pointer;margin-bottom:8px">
+          <input type="checkbox" id="camp-gerarcupom" onchange="toggleCampCupom()"> Gerar cupom individual pra cada cliente
+        </label>
+        <div id="camp-cupom-cfg" style="display:none;grid-template-columns:1fr 1fr;gap:8px">
+          <div><label class="edit-lbl">Desconto (%)</label><input id="camp-cupompct" class="edit-inp" type="number" min="1" max="100" placeholder="10"></div>
+          <div><label class="edit-lbl">Validade (dias)</label><input id="camp-cupomval" class="edit-inp" type="number" min="1" placeholder="7"></div>
+        </div>
+
+        <div style="font-size:.7rem;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin:12px 0 4px">Mensagem</div>
+        <div style="font-size:.66rem;color:var(--muted);margin-bottom:4px">Use <b>{nome}</b> e <b>{cupom}</b> — trocados por cliente no disparo.</div>
+        <textarea id="camp-msg" class="edit-inp" rows="5" style="resize:vertical" placeholder="Olá {nome}, sentimos sua falta! 🍔 Use o cupom {cupom} e volte a pedir."></textarea>
+
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button onclick="fecharFormCampanha()" style="flex:1;padding:10px;background:var(--card);color:var(--muted);border:1px solid #3a3530;border-radius:8px;cursor:pointer">Cancelar</button>
+          <button onclick="gerarCampanha()" style="flex:2;padding:10px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;font-weight:700;cursor:pointer">🚀 Gerar campanha</button>
+        </div>
+      </div>
+
+      <div id="camp-resultado"></div>
+      <div id="camp-lista"></div>
     </div>
   </div>
 

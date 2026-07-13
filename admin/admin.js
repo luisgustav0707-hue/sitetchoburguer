@@ -69,6 +69,7 @@ function showConfig(k){
   if(k==='nfce')        carregarConfigFiscal();
   if(k==='cupons')      renderCupons();
   if(k==='recuperacao') initRecuperacao();
+  if(k==='bairros')     renderBairros();
 }
 
 // ── ACESSOS DO SITE (analytics simples no Firestore) ───────────
@@ -1798,7 +1799,7 @@ function salvarNovoBairro(){
   addBairroAberto=false;renderBairros();showToast(`✅ "${nome}" adicionado!`,'tok-ok');
 }
 
-function renderCardapio(){renderLista('b','lista-burguers');renderLista('e','lista-extras');renderLista('c','lista-combo');renderCatTitles();renderCustomCats();renderNovaCatArea();renderAdicionais();renderBairros();}
+function renderCardapio(){renderLista('b','lista-burguers');renderLista('e','lista-extras');renderLista('c','lista-combo');renderCatTitles();renderCustomCats();renderNovaCatArea();renderAdicionais();}
 function toggleAtivo(id,val){
   est[id].ativo=val;
   if(id.startsWith('cp_')){const arr=getProdsCustom(),idx=arr.findIndex(x=>x.id===id);if(idx!==-1){arr[idx].ativo=val;saveProdsCustom(arr);}}

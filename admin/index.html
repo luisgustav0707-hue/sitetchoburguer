@@ -153,6 +153,7 @@
       <button class="cfg-side-item"        data-cfg="prazo"     onclick="showConfig('prazo')">⏱ Prazo de entrega</button>
       <button class="cfg-side-item"        data-cfg="acessos"   onclick="showConfig('acessos')">📊 Acessos</button>
       <button class="cfg-side-item"        data-cfg="nfce"      onclick="showConfig('nfce')">🧾 NFC-e</button>
+      <button class="cfg-side-item"        data-cfg="bairros"   onclick="showConfig('bairros')">🛵 Entrega</button>
       <div class="cfg-side-grp">Marketing</div>
       <button class="cfg-side-item"        data-cfg="cupons"      onclick="showConfig('cupons')">🎟️ Cupons</button>
       <button class="cfg-side-item"        data-cfg="fidelidade"  onclick="showConfig('fidelidade')">🎁 Fidelidade</button>
@@ -319,6 +320,11 @@
       </div>
 
       <button onclick="salvarConfigFiscal()" style="width:100%;margin-top:14px;padding:11px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;cursor:pointer">💾 SALVAR DADOS FISCAIS</button>
+    </div>
+
+    <div class="section cfg-panel" id="cfg-bairros">
+      <div class="sec-title">🛵 Bairros e taxas de entrega</div>
+      <div id="lista-bairros"></div>
     </div>
 
     <!-- CUPONS -->
@@ -495,10 +501,6 @@
     <div class="section">
       <div class="sec-title">➕ Acréscimos</div>
       <div id="lista-adicionais"></div>
-    </div>
-    <div class="section">
-      <div class="sec-title">🛵 Bairros e taxas de entrega</div>
-      <div id="lista-bairros"></div>
     </div>
     <div id="custom-cats-container"></div>
     <div id="nova-cat-area"></div>

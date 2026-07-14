@@ -274,7 +274,8 @@ function aplicarModalidades(){
 }
 // ══════════════════ SALÃO — mesas e garçons (Fase 2) ══════════════════
 let mesas=[], garcons=[], unsubMesas=null, editMesaId=null, editGarcomId=null, _garcomFotoTmp=null;
-let salAtual='mesas';
+let salAtual='mesas', comandaMesaId=null, rodadaItens=[];
+function comandaTotal(m){ return ((m&&m.sessao&&m.sessao.itens)||[]).reduce((a,it)=>a+((it.preco||0)*(it.qtd||1)),0); }
 const MESA_STATUS={
   livre:      {l:'Livre',                c:'#27ae60'},
   ocupada:    {l:'Ocupada',              c:'#e67e22'},
@@ -306,6 +307,8 @@ function iniciarMesasListener(){
   unsubMesas=db.collection('mesas').onSnapshot(snap=>{
     mesas=snap.docs.map(d=>({_id:d.id,...d.data()})).sort((a,b)=>String(a.numero||'').localeCompare(String(b.numero||''),'pt',{numeric:true}));
     renderMapaMesas();
+    const modal=document.getElementById('modal-salao');
+    if(comandaMesaId && modal && modal.style.display==='flex') renderComanda();
   },()=>{});
 }
 function renderMapaMesas(){
@@ -314,8 +317,13 @@ function renderMapaMesas(){
   const el=document.getElementById('mapa-mesas'); if(!el) return;
   const ativas=mesas.filter(m=>m.ativo!==false);
   if(!ativas.length){ el.innerHTML='<div class="empty"><div class="empty-icon">🪑</div><div>Nenhuma mesa cadastrada</div></div>'; return; }
+  const r=n=>'R$'+Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
   el.innerHTML=ativas.map(m=>{
     const st=MESA_STATUS[m.status]||MESA_STATUS.livre;
+    const emUso=m.status==='ocupada'||m.status==='aguardando';
+    const acao=m.status==='livre'
+      ? `<button onclick="abrirMesa('${m._id}')" style="width:100%;margin-top:8px;padding:7px;background:var(--orange);color:#000;border:none;border-radius:7px;font-weight:700;font-size:.72rem;cursor:pointer">Abrir mesa</button>`
+      : `<button onclick="abrirComanda('${m._id}')" style="width:100%;margin-top:8px;padding:7px;background:${st.c};color:#000;border:none;border-radius:7px;font-weight:700;font-size:.72rem;cursor:pointer">Ver comanda</button>`;
     return `<div style="background:var(--card);border:1px solid ${st.c};border-radius:10px;overflow:hidden">
       <div style="background:${st.c}22;border-bottom:1px solid ${st.c};padding:6px 9px;display:flex;justify-content:space-between;align-items:center">
         <span style="font-family:'Bebas Neue',sans-serif;font-size:1.25rem;color:${st.c};line-height:1">${m.numero||'?'}</span>
@@ -324,8 +332,10 @@ function renderMapaMesas(){
       <div style="padding:8px 9px">
         <div style="font-size:.68rem;color:var(--muted)">👥 ${m.capacidade||'-'} lugares</div>
         ${m.ambiente?`<div style="font-size:.66rem;color:var(--muted)">📍 ${m.ambiente}</div>`:''}
-        <div style="display:flex;gap:4px;margin-top:8px">
-          <button class="btn-editar-card" onclick="abrirFormMesa('${m._id}')" title="Editar">✏️</button>
+        ${emUso&&m.sessao?`<div style="font-size:.66rem;color:var(--muted);margin-top:3px">🧑‍🍳 ${m.sessao.garcomNome||'—'}</div><div style="font-size:.82rem;font-weight:700;color:${st.c}">${r(comandaTotal(m))}</div>`:''}
+        ${acao}
+        <div style="display:flex;gap:4px;margin-top:6px">
+          <button class="btn-editar-card" onclick="abrirFormMesa('${m._id}')" title="Editar cadastro">✏️</button>
           <button class="btn-editar-card" onclick="excluirMesa('${m._id}')" title="Excluir" style="color:#e74c3c">🗑️</button>
         </div>
       </div>
@@ -433,6 +443,100 @@ function salvarGarcom(){
 }
 function toggleGarcomAtivo(id){ const g=garcons.find(x=>x._id===id); if(!g)return; db.collection('garcons').doc(id).update({ativo:g.ativo===false}).then(()=>carregarGarcons()).catch(console.error); }
 function excluirGarcom(id){ const g=garcons.find(x=>x._id===id); if(!g||!confirm(`Excluir o garçom "${g.nome}"?`))return; db.collection('garcons').doc(id).delete().then(()=>{showToast('🗑️ Garçom excluído','tok-info');carregarGarcons();}).catch(console.error); }
+
+// ── ABRIR MESA + COMANDA (Fase 3) ──
+function fecharModalSalao(){ const el=document.getElementById('modal-salao'); if(el) el.style.display='none'; comandaMesaId=null; rodadaItens=[]; }
+function abrirMesa(id){
+  const m=mesas.find(x=>x._id===id); if(!m) return;
+  const ativos=garcons.filter(g=>g.ativo!==false);
+  const box=document.getElementById('modal-salao-box'); if(!box) return;
+  box.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--orange);letter-spacing:2px">🍽️ ABRIR MESA ${m.numero}</div>
+      <button onclick="fecharModalSalao()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer">✕</button>
+    </div>
+    <label class="edit-lbl">Garçom responsável</label>
+    <select id="am-garcom" class="edit-inp" style="width:100%;box-sizing:border-box;margin-bottom:10px">${ativos.length?ativos.map(g=>`<option value="${g._id}">${g.nome}</option>`).join(''):'<option value="">— cadastre um garçom antes —</option>'}</select>
+    <label class="edit-lbl">Número de pessoas</label>
+    <input id="am-pessoas" class="edit-inp" type="number" min="1" value="${m.capacidade||2}" style="width:100%;box-sizing:border-box;margin-bottom:16px">
+    <button onclick="confirmarAbrirMesa('${id}')" style="width:100%;padding:11px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:2px;cursor:pointer">ABRIR MESA</button>`;
+  document.getElementById('modal-salao').style.display='flex';
+}
+function confirmarAbrirMesa(id){
+  const m=mesas.find(x=>x._id===id); if(!m) return;
+  const gid=document.getElementById('am-garcom').value;
+  const g=garcons.find(x=>x._id===gid);
+  const pessoas=parseInt(document.getElementById('am-pessoas').value)||1;
+  const sessao={id:Date.now(),garcom:gid,garcomNome:g?g.nome:'',pessoas,abertaEm:new Date().toISOString(),itens:[]};
+  db.collection('mesas').doc(id).set({status:'ocupada',sessao},{merge:true}).catch(console.error);
+  m.status='ocupada'; m.sessao=sessao;
+  showToast(`🍽️ Mesa ${m.numero} aberta`,'tok-ok');
+  abrirComanda(id);
+}
+function abrirComanda(id){ comandaMesaId=id; rodadaItens=[]; renderComanda(); document.getElementById('modal-salao').style.display='flex'; }
+function renderComanda(){
+  const m=mesas.find(x=>x._id===comandaMesaId); if(!m){ fecharModalSalao(); return; }
+  const box=document.getElementById('modal-salao-box'); if(!box) return;
+  const r=n=>'R$'+Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+  const sess=m.sessao||{itens:[]};
+  const prods=listaProdutosManual();
+  const totalRodada=rodadaItens.reduce((a,it)=>a+it.preco*it.qtd,0);
+  box.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--orange);letter-spacing:2px">🍽️ MESA ${m.numero}</div>
+      <button onclick="fecharModalSalao()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer">✕</button>
+    </div>
+    <div style="font-size:.7rem;color:var(--muted);margin-bottom:12px">🧑‍🍳 ${sess.garcomNome||'—'} · 👥 ${sess.pessoas||'-'} pessoas</div>
+    <div style="font-size:.68rem;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Comanda (já na cozinha)</div>
+    <div style="max-height:150px;overflow-y:auto;margin-bottom:8px">
+      ${(sess.itens||[]).length?sess.itens.map(it=>`<div style="display:flex;justify-content:space-between;font-size:.76rem;padding:3px 0;border-bottom:1px solid #2a2520"><span>${it.qtd>1?it.qtd+'x ':''}${it.nome}${it.obs?` <span style="color:var(--muted)">(${it.obs})</span>`:''}</span><span>${r((it.preco||0)*(it.qtd||1))}</span></div>`).join(''):'<div style="font-size:.72rem;color:var(--muted)">Nada enviado ainda</div>'}
+    </div>
+    <div style="display:flex;justify-content:space-between;font-weight:700;color:var(--orange);margin-bottom:16px"><span>Total parcial</span><span>${r(comandaTotal(m))}</span></div>
+    <div style="font-size:.68rem;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Nova rodada</div>
+    <div style="display:flex;gap:6px;margin-bottom:8px">
+      <select id="cmd-prod" class="edit-inp" style="flex:1;min-width:0;font-size:.74rem">${prods.map((p,i)=>`<option value="${i}">${p.nome} — R$${p.preco}</option>`).join('')}</select>
+      <input id="cmd-qtd" class="edit-inp" type="number" min="1" value="1" style="width:52px">
+    </div>
+    <input id="cmd-obs" class="edit-inp" placeholder="Observação (ex.: sem cebola, ao ponto)" style="width:100%;box-sizing:border-box;font-size:.74rem;margin-bottom:8px">
+    <button onclick="addRodadaItem()" style="width:100%;padding:8px;background:var(--card);color:var(--orange);border:1px solid var(--orange);border-radius:8px;font-weight:700;cursor:pointer;margin-bottom:10px">+ Adicionar à rodada</button>
+    ${rodadaItens.length?`<div style="background:var(--card);border-radius:8px;padding:8px;margin-bottom:10px">${rodadaItens.map((it,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:.74rem;padding:2px 0"><span>${it.qtd>1?it.qtd+'x ':''}${it.nome}${it.obs?` (${it.obs})`:''}</span><span style="display:flex;gap:8px;align-items:center">${r(it.preco*it.qtd)} <button onclick="removerRodadaItem(${i})" style="background:none;border:none;color:#e74c3c;cursor:pointer">✕</button></span></div>`).join('')}<div style="display:flex;justify-content:space-between;font-weight:700;border-top:1px solid #2a2520;margin-top:4px;padding-top:4px"><span>Rodada</span><span>${r(totalRodada)}</span></div></div>
+    <button onclick="enviarRodada()" style="width:100%;padding:11px;background:linear-gradient(135deg,#27ae60,#1e8449);color:#fff;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:1px;cursor:pointer">🍳 ENVIAR RODADA PRA COZINHA</button>`:''}`;
+}
+function addRodadaItem(){
+  const idx=parseInt(document.getElementById('cmd-prod').value);
+  const prod=listaProdutosManual()[idx]; if(!prod) return;
+  const qtd=parseInt(document.getElementById('cmd-qtd').value)||1;
+  const obs=(document.getElementById('cmd-obs').value||'').trim();
+  rodadaItens.push({nome:prod.nome,preco:prod.preco,qtd,obs});
+  renderComanda();
+}
+function removerRodadaItem(i){ rodadaItens.splice(i,1); renderComanda(); }
+async function enviarRodada(){
+  const m=mesas.find(x=>x._id===comandaMesaId);
+  if(!m||!rodadaItens.length){ showToast('⚠️ Adicione itens à rodada','tok-err'); return; }
+  let numOrdem;
+  try{ const ref=db.collection('config').doc('contador'); numOrdem=await db.runTransaction(async t=>{const d=await t.get(ref);const n=(d.exists?d.data().ultimo:0)+1;t.set(ref,{ultimo:n},{merge:true});return n;}); }
+  catch(e){ numOrdem=Math.floor(Math.random()*900)+100; }
+  const num='#'+String(numOrdem).padStart(3,'0');
+  const itensTxt=rodadaItens.map(it=>`${it.qtd>1?it.qtd+'x ':''}${it.nome}${it.obs?` (${it.obs})`:''} — R$${it.preco*it.qtd}`);
+  const total=rodadaItens.reduce((a,it)=>a+it.preco*it.qtd,0);
+  const pedido={
+    id:numOrdem, num, tipo:'mesa', mesaId:m._id, mesaNumero:m.numero, sessaoId:m.sessao?m.sessao.id:null,
+    nome:`Mesa ${m.numero}`, tel:'', garcom:m.sessao?m.sessao.garcomNome:'',
+    pag:'', frete:0, desconto:0, cupom:'', obs:'', itens:itensTxt, total,
+    status:'novo', origem:'mesa',
+    hora:firebase.firestore.FieldValue.serverTimestamp(),
+    horaStr:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
+    impresso:false, criadoEm:firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  db.collection('pedidos').add(pedido).catch(console.error);   // cai no MESMO Kanban + imprime (listener existente)
+  const novaItens=[...((m.sessao&&m.sessao.itens)||[]), ...rodadaItens];
+  db.collection('mesas').doc(m._id).set({sessao:{...(m.sessao||{}),itens:novaItens}},{merge:true}).catch(console.error);
+  if(m.sessao) m.sessao.itens=novaItens;
+  rodadaItens=[];
+  showToast(`🍳 Rodada da mesa ${m.numero} enviada pra cozinha`,'tok-ok');
+  renderComanda();
+}
 
 // ── CONFIG FISCAL (NFC-e) ──────────────────────────────────────
 // Guarda os dados que o contador fornecer. A emissão em si vem depois
@@ -1039,7 +1143,9 @@ function horaPedido(p){
 
 function renderCard(p){
   const m=getMin(p.hora),cls=tc(m,p.status);
-  const tipoEl=p.tipo==='delivery'?`<span class="card-tipo td">🛵 DEL</span>`:`<span class="card-tipo tr">🏃 RET</span>`;
+  const tipoEl = p.tipo==='delivery' ? `<span class="card-tipo td">🛵 DEL</span>`
+              : p.tipo==='mesa'     ? `<span class="card-tipo tr" style="background:#2a1a08;color:#e67e22">🍽️ MESA ${p.mesaNumero||''}</span>`
+              : `<span class="card-tipo tr">🏃 RET</span>`;
   const pb=p.impresso?`<span class="badge-print">🖨</span>`:'';
   const fid=p._id;
   let btns='';

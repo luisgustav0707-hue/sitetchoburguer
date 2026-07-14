@@ -75,8 +75,6 @@ function showConfig(k){
   // Cada painel carrega seus dados só quando aberto
   if(k==='acessos'){ carregarAcessos(); iniciarPresencaAdmin(); }
   if(k==='nfce')        carregarConfigFiscal();
-  if(k==='cupons')      renderCupons();
-  if(k==='recuperacao') initRecuperacao();
 }
 
 // ── ACESSOS DO SITE (analytics simples no Firestore) ───────────
@@ -2166,19 +2164,28 @@ function carregarCRM(){
   });
 }
 
+// Move os painéis de marketing (Cupons/Fidelidade/Recuperação), que vivem no
+// HTML dentro do Config, para dentro do conteúdo do CRM. Feito 1x via JS pra
+// não precisar duplicar/recortar formulários grandes.
+let _crmMktMovido=false;
+function moverMarketingParaCRM(){
+  if(_crmMktMovido) return;
+  const content=document.getElementById('crm-content'); if(!content) return;
+  ['inner-cupons','inner-fidelidade','inner-recuperacao'].forEach(id=>{const el=document.getElementById(id); if(el) content.appendChild(el);});
+  _crmMktMovido=true;
+}
+
 function showCrm(t){
-  document.querySelectorAll('#page-crm .crm-tab').forEach(b=>{
-    const on=b.dataset.crm===t;
-    b.classList.toggle('active',on);
-    b.style.borderColor=on?'var(--orange)':'#3a3530';
-    b.style.color=on?'var(--orange)':'var(--cream)';
-  });
-  ['clientes','dashboard','campanhas'].forEach(k=>{
-    const pg=document.getElementById('crm-'+k); if(pg) pg.style.display = (k===t?'block':'none');
-  });
-  if(t==='clientes') renderClientesCRM();
-  if(t==='dashboard') renderDashCRM();
-  if(t==='campanhas') carregarCampanhas();
+  moverMarketingParaCRM();
+  document.querySelectorAll('#page-crm .cfg-side-item').forEach(b=>b.classList.toggle('active',b.dataset.crm===t));
+  document.querySelectorAll('#page-crm .cfg-panel').forEach(p=>p.classList.remove('active'));
+  const pg=document.getElementById('crm-'+t)||document.getElementById('inner-'+t);
+  if(pg) pg.classList.add('active');
+  if(t==='clientes')    renderClientesCRM();
+  if(t==='dashboard')   renderDashCRM();
+  if(t==='campanhas')   carregarCampanhas();
+  if(t==='cupons')      renderCupons();
+  if(t==='recuperacao') initRecuperacao();
 }
 
 const CRM_FILTROS=[

@@ -152,10 +152,6 @@
       <button class="cfg-side-item"        data-cfg="entrega"   onclick="showConfig('entrega')">🛵 Entrega</button>
       <button class="cfg-side-item"        data-cfg="acessos"   onclick="showConfig('acessos')">📊 Acessos</button>
       <button class="cfg-side-item"        data-cfg="nfce"      onclick="showConfig('nfce')">🧾 NFC-e</button>
-      <div class="cfg-side-grp">Marketing</div>
-      <button class="cfg-side-item"        data-cfg="cupons"      onclick="showConfig('cupons')">🎟️ Cupons</button>
-      <button class="cfg-side-item"        data-cfg="fidelidade"  onclick="showConfig('fidelidade')">🎁 Fidelidade</button>
-      <button class="cfg-side-item"        data-cfg="recuperacao" onclick="showConfig('recuperacao')">💌 Recuperação</button>
     </div>
     <div class="cfg-content">
     <div class="section cfg-panel" id="cfg-acessos">
@@ -457,26 +453,33 @@
   <!-- ══════ CRM / MARKETING ══════ -->
   <div class="page" id="page-crm">
     <div class="section" style="margin-top:6px"><div class="sec-title">👥 CRM / Marketing</div></div>
-    <div style="display:flex;gap:6px;margin-bottom:14px">
-      <button class="crm-tab active" data-crm="clientes" onclick="showCrm('clientes')" style="flex:1;padding:9px;background:var(--card);border:1px solid #3a3530;border-radius:8px;color:var(--cream);font-weight:700;font-size:.78rem;cursor:pointer">🧑‍🤝‍🧑 Clientes</button>
-      <button class="crm-tab" data-crm="dashboard" onclick="showCrm('dashboard')" style="flex:1;padding:9px;background:var(--card);border:1px solid #3a3530;border-radius:8px;color:var(--cream);font-weight:700;font-size:.78rem;cursor:pointer">📊 Dashboard</button>
-      <button class="crm-tab" data-crm="campanhas" onclick="showCrm('campanhas')" style="flex:1;padding:9px;background:var(--card);border:1px solid #3a3530;border-radius:8px;color:var(--cream);font-weight:700;font-size:.78rem;cursor:pointer">📣 Campanhas</button>
+   <div class="cfg-wrap">
+    <div class="cfg-side">
+      <div class="cfg-side-grp">CRM</div>
+      <button class="cfg-side-item active" data-crm="clientes"   onclick="showCrm('clientes')">🧑‍🤝‍🧑 Clientes</button>
+      <button class="cfg-side-item"        data-crm="dashboard"  onclick="showCrm('dashboard')">📊 Dashboard</button>
+      <div class="cfg-side-grp">Marketing</div>
+      <button class="cfg-side-item"        data-crm="campanhas"   onclick="showCrm('campanhas')">📣 Campanhas</button>
+      <button class="cfg-side-item"        data-crm="cupons"      onclick="showCrm('cupons')">🎟️ Cupons</button>
+      <button class="cfg-side-item"        data-crm="fidelidade"  onclick="showCrm('fidelidade')">🎁 Fidelidade</button>
+      <button class="cfg-side-item"        data-crm="recuperacao" onclick="showCrm('recuperacao')">💌 Recuperação</button>
     </div>
+    <div class="cfg-content" id="crm-content">
 
     <!-- CLIENTES -->
-    <div class="crm-page active" id="crm-clientes">
+    <div class="cfg-panel active" id="crm-clientes">
       <div id="crm-filtros" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
       <div id="crm-clientes-lista"></div>
     </div>
 
     <!-- DASHBOARD -->
-    <div class="crm-page" id="crm-dashboard" style="display:none">
+    <div class="cfg-panel" id="crm-dashboard">
       <div class="fin-cards" id="crm-dash-cards"></div>
       <div style="font-size:.66rem;color:var(--muted);margin-top:8px">Clientes ativos = compraram nos últimos 30 dias. "Recuperados" será medido quando as campanhas (Fase 2) estiverem ativas.</div>
     </div>
 
     <!-- CAMPANHAS -->
-    <div class="crm-page" id="crm-campanhas" style="display:none">
+    <div class="cfg-panel" id="crm-campanhas">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div style="font-size:.8rem;color:var(--muted)">Dispare mensagens segmentadas no WhatsApp</div>
         <button class="btn-criar" onclick="abrirFormCampanha()">+ Nova campanha</button>
@@ -517,6 +520,8 @@
       <div id="camp-resultado"></div>
       <div id="camp-lista"></div>
     </div>
+    </div><!-- /crm-content -->
+   </div><!-- /cfg-wrap -->
   </div>
 
   <!-- ── CARDÁPIO ── -->

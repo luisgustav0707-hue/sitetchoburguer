@@ -1065,7 +1065,7 @@ function renderKanbanCols(){
   const stages=getKanbanStages().filter(s=>s.on);
   kb.style.gridTemplateColumns='repeat('+Math.max(1,stages.length)+',1fr)';
   kb.innerHTML=stages.map(s=>`
-    <div class="col" id="col-${s.id}" ondragover="onDragOver(event,'${s.id}')" ondragleave="onDragLeave(event,'${s.id}')" ondrop="onDrop(event,'${s.id}')">
+    <div class="col col-${s.id}" id="col-${s.id}" ondragover="onDragOver(event,'${s.id}')" ondragleave="onDragLeave(event,'${s.id}')" ondrop="onDrop(event,'${s.id}')">
       <div class="col-hdr"><div class="col-title">${s.e} ${s.t}</div><div class="col-cnt" id="cnt-${s.id}">0</div></div>
       <div class="col-body" id="body-${s.id}"><div class="vazio-col">${KB_VAZIO[s.id]||'Vazio'}</div></div>
     </div>`).join('');

@@ -526,9 +526,29 @@
 
   <!-- ── SALÃO (mesas/garçons) — habilitado pela modalidade Mesa ── -->
   <div class="page" id="page-salao">
-    <div class="section" style="margin-top:6px">
-      <div class="sec-title">🍽️ Salão</div>
-      <div style="font-size:.8rem;color:var(--muted)">Mesas, garçons, comandas e mapa do salão chegam na <b>Fase 2</b>.</div>
+    <div class="section" style="margin-top:6px"><div class="sec-title">🍽️ Salão</div></div>
+    <div style="display:flex;gap:6px;margin-bottom:14px">
+      <button class="sal-tab active" data-sal="mesas" onclick="showSalao('mesas')" style="flex:1;padding:9px;background:var(--card);border:1px solid var(--orange);border-radius:8px;color:var(--orange);font-weight:700;font-size:.8rem;cursor:pointer">🪑 Mesas</button>
+      <button class="sal-tab" data-sal="garcons" onclick="showSalao('garcons')" style="flex:1;padding:9px;background:var(--card);border:1px solid #3a3530;border-radius:8px;color:var(--cream);font-weight:700;font-size:.8rem;cursor:pointer">🧑‍🍳 Garçons</button>
+    </div>
+
+    <div id="sal-mesas">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:.8rem;color:var(--muted)">Mapa do salão</div>
+        <button class="btn-criar" onclick="abrirFormMesa()">+ Nova mesa</button>
+      </div>
+      <div id="mesa-form" style="display:none"></div>
+      <div id="mesa-legenda" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;font-size:.68rem;color:var(--muted)"></div>
+      <div id="mapa-mesas" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px"></div>
+    </div>
+
+    <div id="sal-garcons" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:.8rem;color:var(--muted)">Equipe de garçons</div>
+        <button class="btn-criar" onclick="abrirFormGarcom()">+ Novo garçom</button>
+      </div>
+      <div id="garcom-form" style="display:none"></div>
+      <div id="lista-garcons"></div>
     </div>
   </div>
 

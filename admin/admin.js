@@ -272,8 +272,167 @@ function aplicarModalidades(){
   const mesaOn = document.getElementById('cfg-mesa') ? document.getElementById('cfg-mesa').checked : false;
   const tab=document.getElementById('nav-salao'); if(tab) tab.style.display = mesaOn ? '' : 'none';
 }
-// Placeholder da aba Salão (conteúdo real vem na Fase 2).
-function renderSalao(){}
+// ══════════════════ SALÃO — mesas e garçons (Fase 2) ══════════════════
+let mesas=[], garcons=[], unsubMesas=null, editMesaId=null, editGarcomId=null, _garcomFotoTmp=null;
+let salAtual='mesas';
+const MESA_STATUS={
+  livre:      {l:'Livre',                c:'#27ae60'},
+  ocupada:    {l:'Ocupada',              c:'#e67e22'},
+  aguardando: {l:'Aguardando pagamento', c:'#f1c40f'},
+  reservada:  {l:'Reservada',            c:'#3498db'},
+};
+
+function renderSalao(){
+  showSalao(salAtual);
+  iniciarMesasListener();
+  carregarGarcons();
+}
+function showSalao(t){
+  salAtual=t;
+  document.querySelectorAll('#page-salao .sal-tab').forEach(b=>{
+    const on=b.dataset.sal===t;
+    b.classList.toggle('active',on);
+    b.style.borderColor=on?'var(--orange)':'#3a3530';
+    b.style.color=on?'var(--orange)':'var(--cream)';
+  });
+  const m=document.getElementById('sal-mesas'), g=document.getElementById('sal-garcons');
+  if(m) m.style.display=t==='mesas'?'block':'none';
+  if(g) g.style.display=t==='garcons'?'block':'none';
+}
+
+// ── MESAS (mapa ao vivo) ──
+function iniciarMesasListener(){
+  if(unsubMesas) return;
+  unsubMesas=db.collection('mesas').onSnapshot(snap=>{
+    mesas=snap.docs.map(d=>({_id:d.id,...d.data()})).sort((a,b)=>String(a.numero||'').localeCompare(String(b.numero||''),'pt',{numeric:true}));
+    renderMapaMesas();
+  },()=>{});
+}
+function renderMapaMesas(){
+  const leg=document.getElementById('mesa-legenda');
+  if(leg) leg.innerHTML=Object.values(MESA_STATUS).map(s=>`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:11px;height:11px;border-radius:3px;background:${s.c}"></span>${s.l}</span>`).join('');
+  const el=document.getElementById('mapa-mesas'); if(!el) return;
+  const ativas=mesas.filter(m=>m.ativo!==false);
+  if(!ativas.length){ el.innerHTML='<div class="empty"><div class="empty-icon">🪑</div><div>Nenhuma mesa cadastrada</div></div>'; return; }
+  el.innerHTML=ativas.map(m=>{
+    const st=MESA_STATUS[m.status]||MESA_STATUS.livre;
+    return `<div style="background:var(--card);border:1px solid ${st.c};border-radius:10px;overflow:hidden">
+      <div style="background:${st.c}22;border-bottom:1px solid ${st.c};padding:6px 9px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:1.25rem;color:${st.c};line-height:1">${m.numero||'?'}</span>
+        <span style="font-size:.54rem;font-weight:800;color:${st.c};text-transform:uppercase;text-align:right">${st.l}</span>
+      </div>
+      <div style="padding:8px 9px">
+        <div style="font-size:.68rem;color:var(--muted)">👥 ${m.capacidade||'-'} lugares</div>
+        ${m.ambiente?`<div style="font-size:.66rem;color:var(--muted)">📍 ${m.ambiente}</div>`:''}
+        <div style="display:flex;gap:4px;margin-top:8px">
+          <button class="btn-editar-card" onclick="abrirFormMesa('${m._id}')" title="Editar">✏️</button>
+          <button class="btn-editar-card" onclick="excluirMesa('${m._id}')" title="Excluir" style="color:#e74c3c">🗑️</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function abrirFormMesa(id){
+  editMesaId=id||null;
+  const m=id?(mesas.find(x=>x._id===id)||{}):{};
+  const inp='width:100%;box-sizing:border-box;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:6px;padding:7px 9px;font-size:.8rem;outline:none';
+  const el=document.getElementById('mesa-form');
+  el.innerHTML=`<div class="new-prod-form" style="margin-bottom:12px">
+    <div style="font-size:.72rem;font-weight:700;color:var(--orange);letter-spacing:1px;margin-bottom:10px">${id?'EDITAR MESA':'NOVA MESA'}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><label class="edit-lbl">Número / nome</label><input id="mesa-num" style="${inp}" value="${String(m.numero||'').replace(/"/g,'&quot;')}" placeholder="Ex.: 01, Varanda 1"></div>
+      <div><label class="edit-lbl">Capacidade</label><input id="mesa-cap" type="number" min="1" style="${inp}" value="${m.capacidade||''}" placeholder="Lugares"></div>
+      <div><label class="edit-lbl">Ambiente (opcional)</label><input id="mesa-amb" style="${inp}" value="${(m.ambiente||'').replace(/"/g,'&quot;')}" placeholder="Salão, Varanda..."></div>
+      <div><label class="edit-lbl">Status</label><select id="mesa-status" style="${inp}">${Object.entries(MESA_STATUS).map(([k,v])=>`<option value="${k}" ${(m.status||'livre')===k?'selected':''}>${v.l}</option>`).join('')}</select></div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <button class="opc-btn" onclick="salvarMesa()">✓ Salvar</button>
+      <button class="opc-btn" style="background:#2a2520;color:var(--muted)" onclick="fecharFormMesa()">Cancelar</button>
+    </div>
+  </div>`;
+  el.style.display='block';
+}
+function fecharFormMesa(){ const el=document.getElementById('mesa-form'); if(el){el.style.display='none';el.innerHTML='';} editMesaId=null; }
+function salvarMesa(){
+  const numero=document.getElementById('mesa-num').value.trim();
+  if(!numero){ showToast('⚠️ Informe o número/nome da mesa','tok-err'); return; }
+  const dados={
+    numero,
+    capacidade:parseInt(document.getElementById('mesa-cap').value)||0,
+    ambiente:document.getElementById('mesa-amb').value.trim(),
+    status:document.getElementById('mesa-status').value||'livre',
+    ativo:true,
+  };
+  if(editMesaId) db.collection('mesas').doc(editMesaId).set(dados,{merge:true}).then(()=>showToast('✅ Mesa atualizada','tok-ok')).catch(console.error);
+  else { dados.criadoEm=new Date().toISOString(); db.collection('mesas').add(dados).then(()=>showToast('✅ Mesa criada','tok-ok')).catch(console.error); }
+  fecharFormMesa();
+}
+function excluirMesa(id){ const m=mesas.find(x=>x._id===id); if(!m||!confirm(`Excluir a mesa "${m.numero}"?`))return; db.collection('mesas').doc(id).delete().then(()=>showToast('🗑️ Mesa excluída','tok-info')).catch(console.error); }
+
+// ── GARÇONS ──
+function carregarGarcons(){
+  db.collection('garcons').get().then(snap=>{
+    garcons=snap.docs.map(d=>({_id:d.id,...d.data()})).sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+    renderGarcons();
+  }).catch(()=>{});
+}
+function renderGarcons(){
+  const el=document.getElementById('lista-garcons'); if(!el) return;
+  if(!garcons.length){ el.innerHTML='<div class="empty"><div class="empty-icon">🧑‍🍳</div><div>Nenhum garçom cadastrado</div></div>'; return; }
+  el.innerHTML=garcons.map(g=>`
+    <div style="background:var(--card);border:1px solid #2a2520;border-radius:10px;padding:11px;margin-bottom:8px;display:flex;align-items:center;gap:10px;opacity:${g.ativo===false?'.5':'1'}">
+      ${g.foto?`<img src="${g.foto}" style="width:42px;height:42px;border-radius:50%;object-fit:cover;flex-shrink:0">`:`<div style="width:42px;height:42px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">🧑‍🍳</div>`}
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:.9rem;color:var(--cream)">${g.nome||'—'}</div>
+        <div style="font-size:.68rem;color:var(--muted)">PIN: ${g.pin?'••••':'—'}${g.ativo===false?' · inativo':''}</div>
+      </div>
+      <button class="btn-editar-card" onclick="toggleGarcomAtivo('${g._id}')" title="${g.ativo===false?'Ativar':'Inativar'}">${g.ativo===false?'✅':'🔒'}</button>
+      <button class="btn-editar-card" onclick="abrirFormGarcom('${g._id}')" title="Editar">✏️</button>
+      <button class="btn-editar-card" onclick="excluirGarcom('${g._id}')" title="Excluir" style="color:#e74c3c">🗑️</button>
+    </div>`).join('');
+}
+function garcomFotoInner(foto){
+  return (foto
+    ? `<img src="${foto}" style="width:48px;height:48px;border-radius:50%;object-fit:cover">`
+    : `<div style="width:48px;height:48px;border-radius:50%;border:1px dashed #3a3530;display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:var(--muted)">📷</div>`)
+    + `<button type="button" class="opc-btn" onclick="escolherFotoGarcom()">📁 ${foto?'Trocar':'Foto'}</button>`
+    + (foto?`<button type="button" class="opc-btn" style="background:#3a1010;color:#e74c3c" onclick="removerFotoGarcom()">Remover</button>`:'');
+}
+function escolherFotoGarcom(){ const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.onchange=e=>{const f=e.target.files[0]; if(f) lerFotoRedimensionada(f,src=>{_garcomFotoTmp=src; const a=document.getElementById('garcom-foto-area'); if(a)a.innerHTML=garcomFotoInner(src);});}; inp.click(); }
+function removerFotoGarcom(){ _garcomFotoTmp=null; const a=document.getElementById('garcom-foto-area'); if(a)a.innerHTML=garcomFotoInner(null); }
+function abrirFormGarcom(id){
+  editGarcomId=id||null;
+  const g=id?(garcons.find(x=>x._id===id)||{}):{};
+  _garcomFotoTmp=g.foto||null;
+  const inp='width:100%;box-sizing:border-box;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:6px;padding:7px 9px;font-size:.8rem;outline:none';
+  const el=document.getElementById('garcom-form');
+  el.innerHTML=`<div class="new-prod-form" style="margin-bottom:12px">
+    <div style="font-size:.72rem;font-weight:700;color:var(--orange);letter-spacing:1px;margin-bottom:10px">${id?'EDITAR GARÇOM':'NOVO GARÇOM'}</div>
+    <div id="garcom-foto-area" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">${garcomFotoInner(g.foto)}</div>
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+      <div><label class="edit-lbl">Nome</label><input id="garcom-nome" style="${inp}" value="${(g.nome||'').replace(/"/g,'&quot;')}" placeholder="Nome do garçom"></div>
+      <div><label class="edit-lbl">PIN (4 dígitos)</label><input id="garcom-pin" type="text" inputmode="numeric" maxlength="4" style="${inp}" value="${g.pin||''}" placeholder="1234"></div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <button class="opc-btn" onclick="salvarGarcom()">✓ Salvar</button>
+      <button class="opc-btn" style="background:#2a2520;color:var(--muted)" onclick="fecharFormGarcom()">Cancelar</button>
+    </div>
+  </div>`;
+  el.style.display='block';
+}
+function fecharFormGarcom(){ const el=document.getElementById('garcom-form'); if(el){el.style.display='none';el.innerHTML='';} editGarcomId=null; _garcomFotoTmp=null; }
+function salvarGarcom(){
+  const nome=document.getElementById('garcom-nome').value.trim();
+  const pin=(document.getElementById('garcom-pin').value||'').replace(/\D/g,'');
+  if(!nome){ showToast('⚠️ Informe o nome','tok-err'); return; }
+  if(pin && pin.length!==4){ showToast('⚠️ O PIN deve ter 4 dígitos','tok-err'); return; }
+  const dados={nome,pin,foto:_garcomFotoTmp||'',ativo:true};
+  if(editGarcomId){ const prev=garcons.find(x=>x._id===editGarcomId); dados.ativo=prev?prev.ativo!==false:true; db.collection('garcons').doc(editGarcomId).set(dados,{merge:true}).then(()=>{showToast('✅ Garçom atualizado','tok-ok');carregarGarcons();}).catch(console.error); }
+  else { dados.criadoEm=new Date().toISOString(); db.collection('garcons').add(dados).then(()=>{showToast('✅ Garçom cadastrado','tok-ok');carregarGarcons();}).catch(console.error); }
+  fecharFormGarcom();
+}
+function toggleGarcomAtivo(id){ const g=garcons.find(x=>x._id===id); if(!g)return; db.collection('garcons').doc(id).update({ativo:g.ativo===false}).then(()=>carregarGarcons()).catch(console.error); }
+function excluirGarcom(id){ const g=garcons.find(x=>x._id===id); if(!g||!confirm(`Excluir o garçom "${g.nome}"?`))return; db.collection('garcons').doc(id).delete().then(()=>{showToast('🗑️ Garçom excluído','tok-info');carregarGarcons();}).catch(console.error); }
 
 // ── CONFIG FISCAL (NFC-e) ──────────────────────────────────────
 // Guarda os dados que o contador fornecer. A emissão em si vem depois

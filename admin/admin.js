@@ -93,6 +93,7 @@ if(localStorage.getItem('tcho_admin_logado')==='true'){
   document.getElementById('app').classList.add('show');
   setTimeout(iniciarApp, 0);   // roda só depois do arquivo terminar de carregar
 }
+try{ aplicarMarca(); }catch(e){}   // nome/logo/cores personalizados (white label) já no login
 
 // ── NAVEGAÇÃO ──────────────────────────────────────────────────
 function showPage(p){
@@ -128,6 +129,7 @@ function showConfig(k){
   if(k==='nfce')        carregarConfigFiscal();
   if(k==='kanban')      carregarKanbanCfg();
   if(k==='usuarios')    carregarUsuarios();
+  if(k==='marca')       carregarMarca();
 }
 
 // ── ACESSOS DO SITE (analytics simples no Firestore) ───────────
@@ -378,6 +380,66 @@ function salvarUsuario(){
 }
 function toggleUsuarioAtivo(id){ const u=usuarios.find(x=>x._id===id); if(!u)return; db.collection('usuarios').doc(id).update({ativo:u.ativo===false}).then(()=>carregarUsuarios()).catch(console.error); }
 function excluirUsuario(id){ const u=usuarios.find(x=>x._id===id); if(!u||!confirm(`Excluir o usuário "${u.nome}"?`))return; db.collection('usuarios').doc(id).delete().then(()=>{showToast('🗑️ Usuário excluído','tok-info');carregarUsuarios();}).catch(console.error); }
+
+// ── MARCA / WHITE LABEL (nome, logo, cores) ──
+let _marcaLogoTmp=null;
+const MARCA_DEFAULT={corPrimaria:'#f5820a',corSecundaria:'#ff6b00'};
+function getMarca(){ try{ return JSON.parse(localStorage.getItem('tcho_marca')||'null'); }catch(e){ return null; } }
+function aplicarMarca(m){
+  m=m||getMarca(); if(!m) return;
+  if(m.corPrimaria)   document.documentElement.style.setProperty('--orange',  m.corPrimaria);
+  if(m.corSecundaria) document.documentElement.style.setProperty('--orange2', m.corSecundaria);
+  if(m.nome){ document.querySelectorAll('.marca-nome,.login-title').forEach(e=>e.textContent=m.nome); }
+  if(m.logo){ document.querySelectorAll('img[data-logo]').forEach(e=>e.src=m.logo); }
+}
+function marcaLogoInner(){
+  const src=_marcaLogoTmp;
+  return (src?`<img src="${src}" style="height:44px;width:auto;object-fit:contain;background:#0d0a07;border-radius:6px;padding:2px">`:`<div style="width:60px;height:44px;border:1px dashed #3a3530;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:var(--muted)">🖼️</div>`)
+    +`<button type="button" class="opc-btn" onclick="escolherLogoMarca()">📁 ${src?'Trocar':'Logo'}</button>`
+    +(src?`<button type="button" class="opc-btn" style="background:#3a1010;color:#e74c3c" onclick="removerLogoMarca()">Remover</button>`:'');
+}
+function escolherLogoMarca(){ const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.onchange=e=>{const f=e.target.files[0]; if(f) lerFotoRedimensionada(f,src=>{_marcaLogoTmp=src; const a=document.getElementById('marca-logo-area'); if(a)a.innerHTML=marcaLogoInner();});}; inp.click(); }
+function removerLogoMarca(){ _marcaLogoTmp=null; const a=document.getElementById('marca-logo-area'); if(a)a.innerHTML=marcaLogoInner(); }
+function carregarMarca(){
+  const m=getMarca()||{};
+  const nEl=document.getElementById('marca-nome-inp'); if(nEl) nEl.value=m.nome||'';
+  const c1=document.getElementById('marca-cor1'); if(c1) c1.value=m.corPrimaria||MARCA_DEFAULT.corPrimaria;
+  const c2=document.getElementById('marca-cor2'); if(c2) c2.value=m.corSecundaria||MARCA_DEFAULT.corSecundaria;
+  _marcaLogoTmp=m.logo||null;
+  const a=document.getElementById('marca-logo-area'); if(a) a.innerHTML=marcaLogoInner();
+}
+function salvarMarca(){
+  const m={
+    nome:document.getElementById('marca-nome-inp').value.trim(),
+    logo:_marcaLogoTmp||'',
+    corPrimaria:document.getElementById('marca-cor1').value||MARCA_DEFAULT.corPrimaria,
+    corSecundaria:document.getElementById('marca-cor2').value||MARCA_DEFAULT.corSecundaria,
+  };
+  localStorage.setItem('tcho_marca',JSON.stringify(m));
+  db.collection('config').doc('marca').set(m,{merge:true}).catch(console.error);
+  aplicarMarca(m);
+  showToast('✅ Marca atualizada','tok-ok');
+}
+
+// ── SEED de dados de demonstração (só popula se estiver vazio) ──
+async function seedDemo(){
+  let temDados=false;
+  try{
+    const [mS,gS,uS]=await Promise.all([db.collection('mesas').limit(1).get(),db.collection('garcons').limit(1).get(),db.collection('usuarios').limit(1).get()]);
+    temDados=!mS.empty||!gS.empty||!uS.empty;
+  }catch(e){}
+  if(temDados && !confirm('Já existem dados cadastrados. Adicionar os dados de demonstração mesmo assim?')) return;
+  const ts=()=>new Date().toISOString();
+  const amb=['Salão interno','Varanda','Área externa'], caps=[2,4,4,6];
+  const b=db.batch();
+  for(let i=1;i<=10;i++) b.set(db.collection('mesas').doc(),{numero:String(i).padStart(2,'0'),capacidade:caps[i%4],ambiente:amb[i%3],status:'livre',ativo:true,criadoEm:ts()});
+  [{nome:'João',pin:'1111'},{nome:'Maria',pin:'2222'},{nome:'Carlos',pin:'3333'}].forEach(g=>b.set(db.collection('garcons').doc(),{nome:g.nome,pin:g.pin,foto:'',ativo:true,criadoEm:ts()}));
+  [{nome:'Gerente Demo',login:'gerente',senha:'123',perfil:'gerente'},{nome:'Caixa Demo',login:'caixa',senha:'123',perfil:'caixa'}].forEach(u=>b.set(db.collection('usuarios').doc(),{...u,ativo:true,criadoEm:ts()}));
+  try{ await b.commit(); showToast('🌱 Dados de demonstração criados!','tok-ok'); }
+  catch(e){ console.error(e); showToast('❌ Erro ao criar demo','tok-err'); return; }
+  carregarGarcons(); carregarUsuarios();
+  if(document.getElementById('mapa-mesas')) renderSalao();
+}
 // ══════════════════ SALÃO — mesas e garçons (Fase 2) ══════════════════
 let mesas=[], garcons=[], unsubMesas=null, editMesaId=null, editGarcomId=null, _garcomFotoTmp=null;
 let salAtual='mesas', comandaMesaId=null, rodadaItens=[];
@@ -3789,6 +3851,7 @@ function iniciarApp(){
   aplicarAcesso();                 // esconde abas conforme o perfil logado
   carregarGarcons();               // cacheia garçons (tcho_garcons) p/ login por PIN
   carregarUsuarios();              // cacheia usuários p/ login por senha
+  db.collection('config').doc('marca').get().then(d=>{ if(d.exists){ localStorage.setItem('tcho_marca',JSON.stringify(d.data())); aplicarMarca(d.data()); if(document.getElementById('marca-nome-inp')) carregarMarca(); } }).catch(()=>{});
   // Preenche datas padrão com hoje
   const hoje = dataLocalHoje();
   const iniEl = document.getElementById('fin-ini');

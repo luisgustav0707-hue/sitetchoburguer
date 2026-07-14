@@ -814,8 +814,13 @@ function acompanharPedido(){
 function atualizarRastreamento(status, tipo){
   const passos = tipo==='delivery' ? PASSOS_DELIVERY : PASSOS_RETIRADA;
   const labels  = tipo==='delivery' ? LABELS_DELIVERY  : LABELS_RETIRADA;
-  const atual   = labels[status] || labels['novo'];
-  const idx     = passos.indexOf(status);
+  let atual   = labels[status] || labels['novo'];
+  let idx     = passos.indexOf(status);
+  // Etapa personalizada do admin (status fora do fluxo padrão): estado genérico
+  if(idx===-1 && status!=='cancelado' && !labels[status]){
+    atual = { icon:'👨‍🍳', texto:'Pedido em andamento', desc:'Estamos cuidando do seu pedido' };
+    idx = Math.max(0, passos.indexOf('pronto'));
+  }
 
   // Mensagem de status
   const msgEl = document.getElementById('tracking-status-msg');

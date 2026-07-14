@@ -361,8 +361,7 @@ function carregarFinalizadosHoje(){
     })
     .catch(()=>{});
 }
-const STATUS_COLS=['novo','prep','pronto','entrega'];
-function canDrop(from,to){const fi=STATUS_COLS.indexOf(from),ti=STATUS_COLS.indexOf(to);return ti===fi+1||ti===fi-1;}
+function canDrop(from,to){const c=statusCols();const fi=c.indexOf(from),ti=c.indexOf(to);return fi!==-1&&ti!==-1&&(ti===fi+1||ti===fi-1);}
 
 function toggleAutoAceitar(){
   autoAceitar=!autoAceitar;
@@ -878,6 +877,7 @@ function renderCard(p){
   else if(p.status==='prep'){btns=`<button class="btn-k bk-pronto" onclick="moverStatus('${fid}','pronto')">PRONTO ✓</button>`;}
   else if(p.status==='pronto'){btns=p.tipo==='delivery'?`<button class="btn-k bk-entrega" onclick="moverStatus('${fid}','entrega')">SAIU 🛵</button>`:`<button class="btn-k bk-final" onclick="moverStatus('${fid}','finalizado')">RETIRADO ✓</button>`;}
   else if(p.status==='entrega'){btns=`<button class="btn-k bk-final" onclick="moverStatus('${fid}','finalizado')">ENTREGUE ✓</button>`;}
+  else{btns=`<button class="btn-k bk-final" onclick="moverStatus('${fid}','finalizado')">FINALIZAR ✓</button>`;}  // etapa customizada
   const nextLabel={novo:'Em preparo →',prep:'Pronto →',pronto:p.tipo==='delivery'?'Entrega →':'',entrega:''}[p.status];
   const dragHint=nextLabel?`<div class="drag-hint">↔ Arraste para ${nextLabel}</div>`:'';
   return`<div class="card" id="card-${fid}" draggable="true" ondragstart="onDragStart(event,'${fid}','${p.status}')" ondragend="onDragEnd()">
@@ -1030,49 +1030,84 @@ function salvarEdicaoPedido(imprimir=false){
   if(imprimir) setTimeout(()=>reimprimirPedido(idPedido), 150);
 }
 
-// ── CONFIG DO KANBAN (quais colunas/módulos aparecem na tela inicial) ──
-const KB_COLS=[['novo','col-novo'],['prep','col-prep'],['pronto','col-pronto'],['entrega','col-entrega']];
-function getKanbanCfg(){
+// ── CONFIG DO KANBAN: etapas (colunas) editáveis + personalizadas ──────
+// Etapas base (não podem ser removidas — só renomeadas/desligadas):
+const KB_BASE=[
+  {id:'novo',   e:'🔴', t:'Novos'},
+  {id:'prep',   e:'🟡', t:'Em preparo'},
+  {id:'pronto', e:'🟢', t:'Prontos'},
+  {id:'entrega',e:'🔵', t:'Entrega'},
+];
+const KB_VAZIO={novo:'Aguardando pedidos...',prep:'Nada em preparo',pronto:'Nenhum pronto',entrega:'Nenhuma entrega'};
+function getKanbanStages(){
+  let s=null; try{ s=JSON.parse(localStorage.getItem('tcho_kanban_stages')||'null'); }catch(e){}
+  if(Array.isArray(s)&&s.length){
+    const out=s.map(x=>({id:x.id,e:x.e||'⬜',t:x.t||x.id,on:x.on!==false,base:KB_BASE.some(b=>b.id===x.id)}));
+    KB_BASE.forEach((b,i)=>{ if(!out.find(x=>x.id===b.id)) out.splice(i,0,{...b,on:true,base:true}); });  // garante as 4 base
+    return out;
+  }
+  return KB_BASE.map(b=>({...b,on:true,base:true}));
+}
+function saveKanbanStages(arr){
+  localStorage.setItem('tcho_kanban_stages',JSON.stringify(arr));
+  db.collection('config').doc('operacao').set({kanbanStages:arr},{merge:true}).catch(console.error);
+}
+function getKanbanCfg(){   // só o toggle de "finalizados de hoje"
   let s=null; try{ s=JSON.parse(localStorage.getItem('tcho_kanban')||'null'); }catch(e){}
-  return Object.assign({novo:true,prep:true,pronto:true,entrega:true,finalizados:true}, s||{});
+  return Object.assign({finalizados:true}, s||{});
 }
-function aplicarKanbanCfg(){
-  const k=getKanbanCfg();
-  let visiveis=0;
-  KB_COLS.forEach(([key,id])=>{const el=document.getElementById(id); if(el){ const on=k[key]!==false; el.style.display=on?'':'none'; if(on) visiveis++; }});
-  const kb=document.querySelector('.kanban'); if(kb) kb.style.gridTemplateColumns='repeat('+Math.max(1,visiveis)+',1fr)';
-  if(k.finalizados===false){ const fin=document.getElementById('secao-fin-hoje'); if(fin) fin.style.display='none'; }
+// Ordem dos status ativos (usado no drag e na query do listener)
+function statusCols(){ const a=getKanbanStages().filter(s=>s.on).map(s=>s.id); return a.length?a:['novo','prep','pronto','entrega']; }
+
+// Monta as colunas do kanban a partir das etapas ativas
+function renderKanbanCols(){
+  const kb=document.getElementById('kanban'); if(!kb) return;
+  const stages=getKanbanStages().filter(s=>s.on);
+  kb.style.gridTemplateColumns='repeat('+Math.max(1,stages.length)+',1fr)';
+  kb.innerHTML=stages.map(s=>`
+    <div class="col" id="col-${s.id}" ondragover="onDragOver(event,'${s.id}')" ondragleave="onDragLeave(event,'${s.id}')" ondrop="onDrop(event,'${s.id}')">
+      <div class="col-hdr"><div class="col-title">${s.e} ${s.t}</div><div class="col-cnt" id="cnt-${s.id}">0</div></div>
+      <div class="col-body" id="body-${s.id}"><div class="vazio-col">${KB_VAZIO[s.id]||'Vazio'}</div></div>
+    </div>`).join('');
 }
+
+// ── Painel de config do Kanban (renomear/ligar/adicionar etapas) ──
+function renderKbLinhas(){
+  const el=document.getElementById('kb-linhas'); if(!el) return;
+  const stages=getKanbanStages();
+  el.innerHTML=stages.map((s,i)=>`
+    <div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid #2a2520">
+      <input class="edit-inp" style="width:44px;text-align:center;flex-shrink:0" value="${(s.e||'').replace(/"/g,'&quot;')}" onchange="editKbStage(${i},'e',this.value)">
+      <input class="edit-inp" style="flex:1;min-width:0" value="${(s.t||'').replace(/"/g,'&quot;')}" onchange="editKbStage(${i},'t',this.value)">
+      <label class="toggle-wrap" style="flex-shrink:0"><input type="checkbox" ${s.on!==false?'checked':''} onchange="editKbStage(${i},'on',this.checked)"><span class="slider"></span></label>
+      ${s.base?'<span style="width:28px;flex-shrink:0"></span>':`<button type="button" onclick="removerKbStage(${i})" title="Remover etapa" style="background:#3a1010;color:#e74c3c;border:none;border-radius:6px;width:28px;height:28px;cursor:pointer;flex-shrink:0">✕</button>`}
+    </div>`).join('');
+}
+function editKbStage(i,campo,val){ const arr=getKanbanStages(); if(!arr[i])return; arr[i][campo]=val; saveKanbanStages(arr); renderKbLinhas(); renderAll(); }
+function addColunaKanban(){ const arr=getKanbanStages(); arr.push({id:'kb_'+Date.now(),e:'⬜',t:'Nova etapa',on:true,base:false}); saveKanbanStages(arr); renderKbLinhas(); iniciarListenerPedidos(); renderAll(); showToast('✅ Etapa adicionada','tok-ok'); }
+function removerKbStage(i){ const arr=getKanbanStages(); const s=arr[i]; if(!s||s.base)return; if(!confirm(`Remover a etapa "${s.t}"? Pedidos nela não somem, mas a coluna deixa de aparecer.`))return; arr.splice(i,1); saveKanbanStages(arr); renderKbLinhas(); renderAll(); showToast('🗑️ Etapa removida','tok-info'); }
 function carregarKanbanCfg(){
-  const k=getKanbanCfg();
-  const set=(id,v)=>{const e=document.getElementById(id); if(e) e.checked=v!==false;};
-  set('cfg-kb-novo',k.novo); set('cfg-kb-prep',k.prep); set('cfg-kb-pronto',k.pronto); set('cfg-kb-entrega',k.entrega); set('cfg-kb-finalizados',k.finalizados);
+  renderKbLinhas();
+  const fin=document.getElementById('cfg-kb-finalizados'); if(fin) fin.checked=getKanbanCfg().finalizados!==false;
 }
 function salvarKanbanCfg(){
-  const g=id=>document.getElementById(id)?.checked!==false;
-  const k={novo:g('cfg-kb-novo'),prep:g('cfg-kb-prep'),pronto:g('cfg-kb-pronto'),entrega:g('cfg-kb-entrega'),finalizados:g('cfg-kb-finalizados')};
+  const k={finalizados:document.getElementById('cfg-kb-finalizados')?.checked!==false};
   localStorage.setItem('tcho_kanban',JSON.stringify(k));
   db.collection('config').doc('operacao').set({kanban:k},{merge:true}).catch(console.error);
-  aplicarKanbanCfg();
+  renderAll();
   showToast('✅ Kanban atualizado!','tok-ok');
 }
 
 function renderAll(){
-  const cols={novo:[],prep:[],pronto:[],entrega:[]};
-  pedidos.forEach(p=>{if(cols[p.status]) cols[p.status].push(p);});
-  const finHoje=[...pedidosFinHoje];
-  ['novo','prep','pronto','entrega'].forEach(s=>{
-    document.getElementById('cnt-'+s).textContent=cols[s].length;
-  });
-  document.getElementById('sn').textContent=cols.novo.length;
-  document.getElementById('sp').textContent=cols.prep.length;
-  document.getElementById('sk').textContent=cols.pronto.length;
-  document.getElementById('se').textContent=cols.entrega.length;
-  document.getElementById('st').textContent=totalHoje;
-  const vazio={novo:'Aguardando pedidos...',prep:'Nada em preparo',pronto:'Nenhum pronto',entrega:'Nenhuma entrega'};
-  Object.entries(cols).forEach(([s,list])=>{document.getElementById('body-'+s).innerHTML=list.length?list.map(renderCard).join(''):`<div class="vazio-col">${vazio[s]}</div>`;});
-  renderFinalizadosHoje(finHoje);
-  aplicarKanbanCfg();
+  renderKanbanCols();
+  const stages=getKanbanStages().filter(s=>s.on);
+  const cols={}; stages.forEach(s=>cols[s.id]=[]);
+  pedidos.forEach(p=>{ if(cols[p.status]) cols[p.status].push(p); });
+  stages.forEach(s=>{ const c=document.getElementById('cnt-'+s.id); if(c) c.textContent=(cols[s.id]||[]).length; });
+  const setTxt=(id,v)=>{const e=document.getElementById(id); if(e) e.textContent=v;};
+  setTxt('sn',(cols.novo||[]).length); setTxt('sp',(cols.prep||[]).length); setTxt('sk',(cols.pronto||[]).length); setTxt('se',(cols.entrega||[]).length); setTxt('st',totalHoje);
+  stages.forEach(s=>{ const body=document.getElementById('body-'+s.id); if(body){ const list=cols[s.id]||[]; body.innerHTML=list.length?list.map(renderCard).join(''):`<div class="vazio-col">${KB_VAZIO[s.id]||'Vazio'}</div>`; } });
+  renderFinalizadosHoje([...pedidosFinHoje]);
 }
 
 function renderFinalizadosHoje(lista){
@@ -3117,7 +3152,7 @@ function lerPedidosLocal(){
 function iniciarListenerPedidos(){
   if(unsubPedidos){ unsubPedidos(); unsubPedidos=null; }
   unsubPedidos = db.collection('pedidos')
-    .where('status','in',['novo','prep','pronto','entrega'])
+    .where('status','in',statusCols().slice(0,30))
     .onSnapshot(snapshot=>{
       // conexão OK: cancela reconexão pendente e o polling local de fallback
       if(reconnectPedidosTimer){ clearTimeout(reconnectPedidosTimer); reconnectPedidosTimer=null; }
@@ -3227,7 +3262,9 @@ function iniciarApp(){
     if(cfg.prazoMax) document.getElementById('cfg-prazo-max').value=cfg.prazoMax;
     autoAceitar=!!cfg.autoAceitar;
     if(cfg.horarios){ cfgHorarios=cfg.horarios; localStorage.setItem('tcho_horarios',JSON.stringify(cfg.horarios)); if(document.getElementById('hor-dias')) carregarHorarios(); }
-    if(cfg.kanban){ localStorage.setItem('tcho_kanban',JSON.stringify(cfg.kanban)); aplicarKanbanCfg(); if(document.getElementById('cfg-kb-novo')) carregarKanbanCfg(); }
+    if(cfg.kanbanStages){ localStorage.setItem('tcho_kanban_stages',JSON.stringify(cfg.kanbanStages)); }
+    if(cfg.kanban){ localStorage.setItem('tcho_kanban',JSON.stringify(cfg.kanban)); }
+    if(cfg.kanbanStages||cfg.kanban){ renderAll(); if(document.getElementById('kb-linhas')) carregarKanbanCfg(); }
     if(document.getElementById('cfg-auto-horario'))
       document.getElementById('cfg-auto-horario').checked=cfg.autoHorario!==false;
     if(document.getElementById('cfg-forcar-aberta'))

@@ -93,24 +93,7 @@
         </div>
       </div>
     </div>
-    <div class="kanban">
-      <div class="col col-novo" id="col-novo" ondragover="onDragOver(event,'novo')" ondragleave="onDragLeave(event,'novo')" ondrop="onDrop(event,'novo')">
-        <div class="col-hdr"><div class="col-title">🔴 Novos</div><div class="col-cnt" id="cnt-novo">0</div></div>
-        <div class="col-body" id="body-novo"><div class="vazio-col">Aguardando pedidos...</div></div>
-      </div>
-      <div class="col col-prep" id="col-prep" ondragover="onDragOver(event,'prep')" ondragleave="onDragLeave(event,'prep')" ondrop="onDrop(event,'prep')">
-        <div class="col-hdr"><div class="col-title">🟡 Em preparo</div><div class="col-cnt" id="cnt-prep">0</div></div>
-        <div class="col-body" id="body-prep"><div class="vazio-col">Nada em preparo</div></div>
-      </div>
-      <div class="col col-pronto" id="col-pronto" ondragover="onDragOver(event,'pronto')" ondragleave="onDragLeave(event,'pronto')" ondrop="onDrop(event,'pronto')">
-        <div class="col-hdr"><div class="col-title">🟢 Prontos</div><div class="col-cnt" id="cnt-pronto">0</div></div>
-        <div class="col-body" id="body-pronto"><div class="vazio-col">Nenhum pronto</div></div>
-      </div>
-      <div class="col col-entrega" id="col-entrega" ondragover="onDragOver(event,'entrega')" ondragleave="onDragLeave(event,'entrega')" ondrop="onDrop(event,'entrega')">
-        <div class="col-hdr"><div class="col-title">🔵 Entrega</div><div class="col-cnt" id="cnt-entrega">0</div></div>
-        <div class="col-body" id="body-entrega"><div class="vazio-col">Nenhuma entrega</div></div>
-      </div>
-    </div>
+    <div class="kanban" id="kanban"></div>
     <!-- FINALIZADOS HOJE -->
     <div id="secao-fin-hoje" style="display:none;padding:0 14px 16px">
       <div style="display:flex;align-items:center;gap:8px;margin:12px 0 8px">
@@ -257,12 +240,12 @@
 
     <div class="section cfg-panel" id="cfg-kanban">
       <div class="sec-title">🍳 Kanban (tela inicial)</div>
-      <div style="font-size:.66rem;color:var(--muted);margin-bottom:10px">Escolha quais colunas/módulos aparecem no kanban. Ex.: se você só faz retirada, desligue "Saiu para entrega".</div>
-      <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">🔴 Novos</div></div><label class="toggle-wrap"><input type="checkbox" id="cfg-kb-novo" checked onchange="salvarKanbanCfg()"><span class="slider"></span></label></div>
-      <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">🟡 Em preparo</div></div><label class="toggle-wrap"><input type="checkbox" id="cfg-kb-prep" checked onchange="salvarKanbanCfg()"><span class="slider"></span></label></div>
-      <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">🟢 Prontos</div></div><label class="toggle-wrap"><input type="checkbox" id="cfg-kb-pronto" checked onchange="salvarKanbanCfg()"><span class="slider"></span></label></div>
-      <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">🔵 Saiu para entrega</div><div class="toggle-desc">Desligue se você só trabalha com retirada</div></div><label class="toggle-wrap"><input type="checkbox" id="cfg-kb-entrega" checked onchange="salvarKanbanCfg()"><span class="slider"></span></label></div>
-      <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">✅ Finalizados de hoje</div></div><label class="toggle-wrap"><input type="checkbox" id="cfg-kb-finalizados" checked onchange="salvarKanbanCfg()"><span class="slider"></span></label></div>
+      <div style="font-size:.66rem;color:var(--muted);margin-bottom:10px">Edite o emoji/nome, ligue/desligue cada coluna, ou crie etapas novas. Ex.: só retirada → desligue "Saiu para entrega".</div>
+      <div style="display:flex;gap:6px;font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:0 2px 4px"><span style="width:44px;text-align:center;flex-shrink:0">Emoji</span><span style="flex:1">Nome da coluna</span><span style="flex-shrink:0">On/Off</span></div>
+      <div id="kb-linhas"></div>
+      <button type="button" onclick="addColunaKanban()" style="width:100%;margin-top:8px;padding:8px;background:var(--card);color:var(--orange);border:1px dashed var(--orange);border-radius:8px;font-weight:700;cursor:pointer">➕ Adicionar etapa</button>
+      <div class="toggle-row" style="margin-top:10px;border-top:1px solid #2a2520;padding-top:10px"><div class="toggle-info"><div class="toggle-label">✅ Finalizados de hoje</div></div><label class="toggle-wrap"><input type="checkbox" id="cfg-kb-finalizados" checked onchange="salvarKanbanCfg()"><span class="slider"></span></label></div>
+      <div style="font-size:.62rem;color:#f39c12;margin-top:10px">⚠️ Etapas novas viram status do pedido. As 4 padrão (Novos, Preparo, Prontos, Entrega) não podem ser removidas — só renomeadas/desligadas.</div>
     </div>
 
     <!-- ══════ NFC-e (Nota Fiscal) ══════ -->

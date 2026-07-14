@@ -1,17 +1,66 @@
 ﻿// ── LOGIN ──────────────────────────────────────────────────────
-const CREDENCIAIS = { usuario:'tcho', senha:'Lgferreir@07' };
+const CREDENCIAIS = { usuario:'tcho', senha:'Lgferreir@07' };   // admin mestre (fallback)
 
+// Perfis e quais abas cada um enxerga. NOTA (Fase 5): auth simples via
+// localStorage/Firestore, sem hash/backend — deixado pronto pra evoluir.
+const PERFIL_ABAS={
+  admin:   ['cozinha','salao','pedidos','config','crm','cardapio','financeiro'],
+  gerente: ['cozinha','salao','pedidos','crm','cardapio','financeiro'],
+  caixa:   ['cozinha','salao','pedidos','financeiro'],
+  garcom:  ['salao'],
+};
+const PERFIL_LABEL={admin:'Admin',gerente:'Gerente',caixa:'Caixa',garcom:'Garçom'};
+function perfilLabel(p){ return PERFIL_LABEL[p]||p||''; }
+function getUsuariosLS(){ try{ return JSON.parse(localStorage.getItem('tcho_usuarios')||'[]'); }catch(e){ return []; } }
+function getGarconsLS(){ try{ return JSON.parse(localStorage.getItem('tcho_garcons')||'[]'); }catch(e){ return []; } }
+function perfilAtual(){ try{ return (JSON.parse(localStorage.getItem('tcho_sessao')||'null')||{}).perfil||'admin'; }catch(e){ return 'admin'; } }
+
+function entrarApp(perfil,nome){
+  localStorage.setItem('tcho_admin_logado','true');
+  localStorage.setItem('tcho_sessao',JSON.stringify({perfil,nome}));
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').classList.add('show');
+  iniciarApp();
+}
 function fazerLogin(){
   const u=document.getElementById('login-user').value.trim();
   const p=document.getElementById('login-pass').value;
-  if(u===CREDENCIAIS.usuario && p===CREDENCIAIS.senha){
-    localStorage.setItem('tcho_admin_logado','true');
-    document.getElementById('login-screen').style.display='none';
-    document.getElementById('app').classList.add('show');
-    iniciarApp();
-  } else {
-    document.getElementById('login-err').textContent='Usuário ou senha incorretos';
-    document.getElementById('login-pass').value='';
+  if(u===CREDENCIAIS.usuario && p===CREDENCIAIS.senha){ entrarApp('admin','Administrador'); return; }
+  const us=getUsuariosLS().find(x=>(x.login||'').toLowerCase()===u.toLowerCase() && x.senha===p && x.ativo!==false);
+  if(us){ entrarApp(us.perfil||'caixa', us.nome||us.login); return; }
+  document.getElementById('login-err').textContent='Usuário ou senha incorretos';
+  document.getElementById('login-pass').value='';
+}
+function fazerLoginPin(){
+  const pin=(document.getElementById('login-pin').value||'').replace(/\D/g,'');
+  const g=getGarconsLS().find(x=>x.pin && x.pin===pin && x.ativo!==false);
+  if(g){ entrarApp('garcom', g.nome||'Garçom'); return; }
+  document.getElementById('login-err').textContent='PIN inválido';
+  document.getElementById('login-pin').value='';
+}
+function mostrarLoginPin(){ document.getElementById('login-form-senha').style.display='none'; document.getElementById('login-form-pin').style.display='block'; document.getElementById('login-err').textContent=''; document.getElementById('login-pin').focus(); }
+function mostrarLoginSenha(){ document.getElementById('login-form-pin').style.display='none'; document.getElementById('login-form-senha').style.display='block'; document.getElementById('login-err').textContent=''; }
+
+// Mostra só as abas permitidas ao perfil logado (+ Salão só com modalidade Mesa).
+function aplicarAcesso(){
+  const perfil=perfilAtual();
+  const abas=PERFIL_ABAS[perfil]||PERFIL_ABAS.admin;
+  const mesaOn=document.getElementById('cfg-mesa')?document.getElementById('cfg-mesa').checked:false;
+  const ordem=['cozinha','salao','pedidos','config','crm','cardapio','financeiro'];
+  document.querySelectorAll('.nav-tab').forEach((el,i)=>{
+    const nome=ordem[i];
+    let mostra=abas.includes(nome);
+    if(nome==='salao') mostra=mostra&&mesaOn;
+    el.style.display=mostra?'':'none';
+  });
+  const caixaTab=document.querySelector('#page-salao .sal-tab[data-sal="caixa"]');
+  if(caixaTab) caixaTab.style.display = perfil==='garcom' ? 'none' : '';
+  const badge=document.getElementById('user-badge');
+  if(badge){ const s=(()=>{try{return JSON.parse(localStorage.getItem('tcho_sessao')||'null');}catch(e){return null;}})(); badge.textContent = s ? `${s.nome} · ${perfilLabel(perfil)}` : ''; }
+  const ativa=document.querySelector('.nav-tab.active');
+  if(ativa && ativa.style.display==='none'){
+    const primeira=abas.find(a=>a!=='salao'||mesaOn) || (mesaOn?'salao':abas[0]);
+    if(primeira) showPage(primeira);
   }
 }
 // Mostra/oculta a senha digitada (botão 👁️ na tela de login)
@@ -26,6 +75,7 @@ function toggleSenha(){
 function logout(){
   // Remove o flag de login e cancela listeners antes de recarregar
   localStorage.removeItem('tcho_admin_logado');
+  localStorage.removeItem('tcho_sessao');
   if(unsubPedidos){ unsubPedidos(); unsubPedidos=null; }
   if(unsubConfig){ unsubConfig(); unsubConfig=null; }
   if(pollingLocalInterval){ clearInterval(pollingLocalInterval); pollingLocalInterval=null; }
@@ -77,6 +127,7 @@ function showConfig(k){
   if(k==='acessos'){ carregarAcessos(); iniciarPresencaAdmin(); }
   if(k==='nfce')        carregarConfigFiscal();
   if(k==='kanban')      carregarKanbanCfg();
+  if(k==='usuarios')    carregarUsuarios();
 }
 
 // ── ACESSOS DO SITE (analytics simples no Firestore) ───────────
@@ -267,11 +318,66 @@ function salvarConfig(){
   showToast('✅ Configuração salva!','tok-ok');
 }
 
-// Mostra/esconde a aba Salão conforme a modalidade "Mesa" estiver ligada.
-function aplicarModalidades(){
-  const mesaOn = document.getElementById('cfg-mesa') ? document.getElementById('cfg-mesa').checked : false;
-  const tab=document.getElementById('nav-salao'); if(tab) tab.style.display = mesaOn ? '' : 'none';
+// Aba Salão depende da modalidade "Mesa" — e o resto das abas do perfil logado.
+function aplicarModalidades(){ aplicarAcesso(); }
+
+// ── USUÁRIOS (Config → Usuários; só admin enxerga o Config) ──
+let usuarios=[], editUsuarioId=null;
+function carregarUsuarios(){
+  db.collection('usuarios').get().then(snap=>{
+    usuarios=snap.docs.map(d=>({_id:d.id,...d.data()})).sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+    localStorage.setItem('tcho_usuarios',JSON.stringify(usuarios));   // cache p/ login por senha
+    renderUsuarios();
+  }).catch(()=>{ usuarios=getUsuariosLS(); renderUsuarios(); });
 }
+function renderUsuarios(){
+  const el=document.getElementById('lista-usuarios'); if(!el) return;
+  if(!usuarios.length){ el.innerHTML='<div class="empty"><div class="empty-icon">👤</div><div>Nenhum usuário criado</div><div style="font-size:.72rem;color:var(--muted);margin-top:6px">O admin mestre (login fixo) sempre funciona. Garçons entram pelo PIN (cadastro na aba Salão).</div></div>'; return; }
+  el.innerHTML=usuarios.map(u=>`
+    <div style="background:var(--card);border:1px solid #2a2520;border-radius:10px;padding:11px;margin-bottom:8px;display:flex;align-items:center;gap:10px;opacity:${u.ativo===false?'.5':'1'}">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:.9rem;color:var(--cream)">${u.nome||'—'} <span style="font-size:.58rem;color:var(--orange);border:1px solid var(--orange);border-radius:10px;padding:1px 7px;margin-left:4px">${perfilLabel(u.perfil)}</span></div>
+        <div style="font-size:.68rem;color:var(--muted)">login: ${u.login||'—'}${u.ativo===false?' · inativo':''}</div>
+      </div>
+      <button class="btn-editar-card" onclick="toggleUsuarioAtivo('${u._id}')" title="${u.ativo===false?'Ativar':'Inativar'}">${u.ativo===false?'✅':'🔒'}</button>
+      <button class="btn-editar-card" onclick="abrirFormUsuario('${u._id}')" title="Editar">✏️</button>
+      <button class="btn-editar-card" onclick="excluirUsuario('${u._id}')" title="Excluir" style="color:#e74c3c">🗑️</button>
+    </div>`).join('');
+}
+function abrirFormUsuario(id){
+  editUsuarioId=id||null;
+  const u=id?(usuarios.find(x=>x._id===id)||{}):{};
+  const inp='width:100%;box-sizing:border-box;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:6px;padding:7px 9px;font-size:.8rem;outline:none';
+  const el=document.getElementById('usuario-form');
+  el.innerHTML=`<div class="new-prod-form" style="margin-bottom:12px">
+    <div style="font-size:.72rem;font-weight:700;color:var(--orange);letter-spacing:1px;margin-bottom:10px">${id?'EDITAR USUÁRIO':'NOVO USUÁRIO'}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><label class="edit-lbl">Nome</label><input id="us-nome" style="${inp}" value="${(u.nome||'').replace(/"/g,'&quot;')}"></div>
+      <div><label class="edit-lbl">Perfil</label><select id="us-perfil" style="${inp}">${['gerente','caixa','admin'].map(p=>`<option value="${p}" ${(u.perfil||'caixa')===p?'selected':''}>${perfilLabel(p)}</option>`).join('')}</select></div>
+      <div><label class="edit-lbl">Login</label><input id="us-login" style="${inp}" value="${(u.login||'').replace(/"/g,'&quot;')}"></div>
+      <div><label class="edit-lbl">Senha</label><input id="us-senha" style="${inp}" value="${(u.senha||'').replace(/"/g,'&quot;')}"></div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <button class="opc-btn" onclick="salvarUsuario()">✓ Salvar</button>
+      <button class="opc-btn" style="background:#2a2520;color:var(--muted)" onclick="fecharFormUsuario()">Cancelar</button>
+    </div>
+  </div>`;
+  el.style.display='block';
+}
+function fecharFormUsuario(){ const el=document.getElementById('usuario-form'); if(el){el.style.display='none';el.innerHTML='';} editUsuarioId=null; }
+function salvarUsuario(){
+  const nome=document.getElementById('us-nome').value.trim();
+  const login=document.getElementById('us-login').value.trim();
+  const senha=document.getElementById('us-senha').value;
+  const perfil=document.getElementById('us-perfil').value;
+  if(!nome||!login||!senha){ showToast('⚠️ Preencha nome, login e senha','tok-err'); return; }
+  const dados={nome,login,senha,perfil,ativo:true};
+  if(editUsuarioId){ const prev=usuarios.find(x=>x._id===editUsuarioId); dados.ativo=prev?prev.ativo!==false:true; db.collection('usuarios').doc(editUsuarioId).set(dados,{merge:true}).then(()=>{showToast('✅ Usuário atualizado','tok-ok');carregarUsuarios();}).catch(console.error); }
+  else { dados.criadoEm=new Date().toISOString(); db.collection('usuarios').add(dados).then(()=>{showToast('✅ Usuário criado','tok-ok');carregarUsuarios();}).catch(console.error); }
+  fecharFormUsuario();
+}
+function toggleUsuarioAtivo(id){ const u=usuarios.find(x=>x._id===id); if(!u)return; db.collection('usuarios').doc(id).update({ativo:u.ativo===false}).then(()=>carregarUsuarios()).catch(console.error); }
+function excluirUsuario(id){ const u=usuarios.find(x=>x._id===id); if(!u||!confirm(`Excluir o usuário "${u.nome}"?`))return; db.collection('usuarios').doc(id).delete().then(()=>{showToast('🗑️ Usuário excluído','tok-info');carregarUsuarios();}).catch(console.error); }
 // ══════════════════ SALÃO — mesas e garçons (Fase 2) ══════════════════
 let mesas=[], garcons=[], unsubMesas=null, editMesaId=null, editGarcomId=null, _garcomFotoTmp=null;
 let salAtual='mesas', comandaMesaId=null, rodadaItens=[];
@@ -383,6 +489,7 @@ function excluirMesa(id){ const m=mesas.find(x=>x._id===id); if(!m||!confirm(`Ex
 function carregarGarcons(){
   db.collection('garcons').get().then(snap=>{
     garcons=snap.docs.map(d=>({_id:d.id,...d.data()})).sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+    localStorage.setItem('tcho_garcons',JSON.stringify(garcons));   // cache p/ login por PIN
     renderGarcons();
   }).catch(()=>{});
 }
@@ -3679,6 +3786,9 @@ function registrarHandlersConexao(){
 function iniciarApp(){
   renderAll();
   atualizarBotaoSom();
+  aplicarAcesso();                 // esconde abas conforme o perfil logado
+  carregarGarcons();               // cacheia garçons (tcho_garcons) p/ login por PIN
+  carregarUsuarios();              // cacheia usuários p/ login por senha
   // Preenche datas padrão com hoje
   const hoje = dataLocalHoje();
   const iniEl = document.getElementById('fin-ini');

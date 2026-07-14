@@ -23,12 +23,20 @@
     <img src="../logo/logo.png" alt="Tcho Burguer" style="height:80px;width:auto;object-fit:contain;margin-bottom:8px">
     <div class="login-title">TCHO BURGUER</div>
     <div class="login-sub">Painel Administrativo</div>
-    <input class="login-input" type="text" id="login-user" placeholder="Usuário" autocomplete="username">
-    <div style="position:relative;margin-bottom:10px">
-      <input class="login-input" type="password" id="login-pass" placeholder="Senha" autocomplete="current-password" style="margin-bottom:0;padding-right:46px" onkeydown="if(event.key==='Enter')fazerLogin()">
-      <button type="button" id="btn-ver-senha" onclick="toggleSenha()" title="Mostrar senha" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.05rem;line-height:1;padding:6px">👁️</button>
+    <div id="login-form-senha">
+      <input class="login-input" type="text" id="login-user" placeholder="Usuário" autocomplete="username">
+      <div style="position:relative;margin-bottom:10px">
+        <input class="login-input" type="password" id="login-pass" placeholder="Senha" autocomplete="current-password" style="margin-bottom:0;padding-right:46px" onkeydown="if(event.key==='Enter')fazerLogin()">
+        <button type="button" id="btn-ver-senha" onclick="toggleSenha()" title="Mostrar senha" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.05rem;line-height:1;padding:6px">👁️</button>
+      </div>
+      <button class="login-btn" onclick="fazerLogin()">ENTRAR</button>
+      <div onclick="mostrarLoginPin()" style="margin-top:12px;font-size:.78rem;color:var(--orange);cursor:pointer">🧑‍🍳 Sou garçom — entrar com PIN</div>
     </div>
-    <button class="login-btn" onclick="fazerLogin()">ENTRAR</button>
+    <div id="login-form-pin" style="display:none">
+      <input class="login-input" type="password" inputmode="numeric" maxlength="4" id="login-pin" placeholder="PIN (4 dígitos)" style="text-align:center;letter-spacing:6px;margin-bottom:10px" onkeydown="if(event.key==='Enter')fazerLoginPin()">
+      <button class="login-btn" onclick="fazerLoginPin()">ENTRAR</button>
+      <div onclick="mostrarLoginSenha()" style="margin-top:12px;font-size:.78rem;color:var(--muted);cursor:pointer">← Voltar (usuário e senha)</div>
+    </div>
     <div class="login-err" id="login-err"></div>
   </div>
 </div>
@@ -43,6 +51,7 @@
       TCHO BURGUER — ADMIN
     </div>
     <div class="topbar-right">
+      <span id="user-badge" style="font-size:.68rem;color:var(--muted)"></span>
       <div class="loja-badge aberta" id="loja-badge" onclick="toggleLoja()">🟢 ABERTA</div>
       <button class="btn-logout" onclick="logout()">SAIR</button>
     </div>
@@ -137,6 +146,7 @@
       <button class="cfg-side-item"        data-cfg="entrega"   onclick="showConfig('entrega')">🛵 Entrega</button>
       <button class="cfg-side-item"        data-cfg="acessos"   onclick="showConfig('acessos')">📊 Acessos</button>
       <button class="cfg-side-item"        data-cfg="nfce"      onclick="showConfig('nfce')">🧾 NFC-e</button>
+      <button class="cfg-side-item"        data-cfg="usuarios"  onclick="showConfig('usuarios')">👤 Usuários</button>
     </div>
     <div class="cfg-content">
     <div class="section cfg-panel" id="cfg-acessos">
@@ -242,6 +252,16 @@
           <span style="font-size:.8rem;color:var(--muted)">min</span>
         </div>
       </div>
+    </div>
+
+    <div class="section cfg-panel" id="cfg-usuarios">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div class="sec-title" style="margin:0">👤 Usuários e acessos</div>
+        <button class="btn-criar" onclick="abrirFormUsuario()">+ Novo usuário</button>
+      </div>
+      <div style="font-size:.66rem;color:var(--muted);margin-bottom:10px">Crie Gerente, Caixa e Admin (com login e senha). Garçons entram por <b>PIN</b> (cadastro na aba Salão). O admin mestre (login fixo) sempre funciona.</div>
+      <div id="usuario-form" style="display:none"></div>
+      <div id="lista-usuarios"></div>
     </div>
 
     <div class="section cfg-panel" id="cfg-kanban">

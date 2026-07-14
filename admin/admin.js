@@ -296,9 +296,8 @@ function showSalao(t){
     b.style.borderColor=on?'var(--orange)':'#3a3530';
     b.style.color=on?'var(--orange)':'var(--cream)';
   });
-  const m=document.getElementById('sal-mesas'), g=document.getElementById('sal-garcons');
-  if(m) m.style.display=t==='mesas'?'block':'none';
-  if(g) g.style.display=t==='garcons'?'block':'none';
+  ['mesas','caixa','garcons'].forEach(k=>{const el=document.getElementById('sal-'+k); if(el) el.style.display=(k===t?'block':'none');});
+  if(t==='caixa') renderCaixa();
 }
 
 // ── MESAS (mapa ao vivo) ──
@@ -307,6 +306,7 @@ function iniciarMesasListener(){
   unsubMesas=db.collection('mesas').onSnapshot(snap=>{
     mesas=snap.docs.map(d=>({_id:d.id,...d.data()})).sort((a,b)=>String(a.numero||'').localeCompare(String(b.numero||''),'pt',{numeric:true}));
     renderMapaMesas();
+    const cx=document.getElementById('sal-caixa'); if(cx && cx.style.display!=='none') renderCaixa();
     const modal=document.getElementById('modal-salao');
     if(comandaMesaId && modal && modal.style.display==='flex') renderComanda();
   },()=>{});
@@ -524,7 +524,7 @@ async function enviarRodada(){
     id:numOrdem, num, tipo:'mesa', mesaId:m._id, mesaNumero:m.numero, sessaoId:m.sessao?m.sessao.id:null,
     nome:`Mesa ${m.numero}`, tel:'', garcom:m.sessao?m.sessao.garcomNome:'',
     pag:'', frete:0, desconto:0, cupom:'', obs:'', itens:itensTxt, total,
-    status:'novo', origem:'mesa',
+    status:'novo', origem:'mesa-rodada', contabil:false,   // rodada é só p/ cozinha; o caixa conta a venda
     hora:firebase.firestore.FieldValue.serverTimestamp(),
     horaStr:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
     impresso:false, criadoEm:firebase.firestore.FieldValue.serverTimestamp(),
@@ -536,6 +536,174 @@ async function enviarRodada(){
   rodadaItens=[];
   showToast(`🍳 Rodada da mesa ${m.numero} enviada pra cozinha`,'tok-ok');
   renderComanda();
+}
+
+// ── CAIXA — fechamento de conta (Fase 4) ──
+let caixaMesaId=null, cupomCaixa=null, fcForma='pix', _fcCalc={};
+const _rBRL=n=>'R$'+Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+
+function renderCaixa(){
+  const el=document.getElementById('lista-caixa'); if(!el) return;
+  const abertas=mesas.filter(m=>m.status==='ocupada'||m.status==='aguardando');
+  if(!abertas.length){ el.innerHTML='<div class="empty"><div class="empty-icon">💵</div><div>Nenhuma mesa aberta</div></div>'; return; }
+  el.innerHTML=abertas.map(m=>{
+    const st=MESA_STATUS[m.status]||MESA_STATUS.ocupada;
+    return `<div style="background:var(--card);border:1px solid ${st.c};border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div style="min-width:0">
+        <div style="font-weight:700;font-size:.95rem;color:var(--cream)">🍽️ Mesa ${m.numero}</div>
+        <div style="font-size:.68rem;color:var(--muted)">🧑‍🍳 ${(m.sessao&&m.sessao.garcomNome)||'—'} · 👥 ${(m.sessao&&m.sessao.pessoas)||'-'} · ${st.l}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:${st.c};line-height:1">${_rBRL(comandaTotal(m))}</div>
+        <button onclick="abrirFechamento('${m._id}')" style="margin-top:4px;padding:6px 12px;background:${st.c};color:#000;border:none;border-radius:7px;font-weight:700;font-size:.72rem;cursor:pointer">Fechar conta</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function abrirFechamento(mesaId){
+  caixaMesaId=mesaId; cupomCaixa=null; fcForma='pix';
+  const m=mesas.find(x=>x._id===mesaId); if(!m) return;
+  const box=document.getElementById('modal-salao-box'); if(!box) return;
+  const sess=m.sessao||{itens:[]};
+  const inp='width:100%;box-sizing:border-box;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:6px;padding:6px 8px;font-size:.8rem;outline:none';
+  box.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--orange);letter-spacing:2px">💵 FECHAR MESA ${m.numero}</div>
+      <button onclick="fecharModalSalao()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer">✕</button>
+    </div>
+    <div style="font-size:.7rem;color:var(--muted);margin-bottom:8px">🧑‍🍳 ${sess.garcomNome||'—'} · 👥 ${sess.pessoas||'-'} pessoas</div>
+    <div style="max-height:110px;overflow-y:auto;margin-bottom:6px">
+      ${(sess.itens||[]).map(it=>`<div style="display:flex;justify-content:space-between;font-size:.74rem;padding:2px 0;color:var(--muted)"><span>${it.qtd>1?it.qtd+'x ':''}${it.nome}</span><span>${_rBRL((it.preco||0)*(it.qtd||1))}</span></div>`).join('')||'<div style="font-size:.72rem;color:var(--muted)">Sem itens</div>'}
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:.8rem;padding:4px 0;border-top:1px solid #2a2520"><span>Subtotal</span><span>${_rBRL(comandaTotal(m))}</span></div>
+    <label style="display:flex;align-items:center;justify-content:space-between;font-size:.78rem;padding:6px 0">
+      <span style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="fc-taxa-on" checked onchange="recalcFechamento()"> Taxa de serviço</span>
+      <span style="display:flex;align-items:center;gap:4px"><input id="fc-taxa-pct" type="number" min="0" max="100" value="10" oninput="recalcFechamento()" style="width:48px;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:6px;padding:4px 6px;font-size:.78rem;text-align:center">%</span>
+    </label>
+    <div style="display:flex;gap:8px;margin:4px 0">
+      <div style="flex:1"><label class="edit-lbl">Desconto (R$)</label><input id="fc-desc" type="number" min="0" value="0" oninput="recalcFechamento()" style="${inp}"></div>
+      <div style="flex:1"><label class="edit-lbl">Nº de pessoas</label><input id="fc-pessoas" type="number" min="1" value="${sess.pessoas||1}" oninput="recalcFechamento()" style="${inp}"></div>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:4px">
+      <input id="fc-cupom" placeholder="Cupom (opcional)" style="flex:1;${inp};text-transform:uppercase">
+      <button onclick="aplicarCupomCaixa()" class="opc-btn">Aplicar</button>
+    </div>
+    <div id="fc-cupom-msg" style="font-size:.68rem;margin-bottom:6px"></div>
+    <div style="display:flex;justify-content:space-between;font-size:.74rem;color:var(--muted);padding:2px 0"><span>Taxa de serviço</span><span id="fc-taxa-v">R$0,00</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:.74rem;color:var(--muted);padding:2px 0"><span>Desconto</span><span id="fc-desc-v">R$0,00</span></div>
+    <div style="display:flex;justify-content:space-between;font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--orange);border-top:1px solid #2a2520;padding-top:6px;margin-top:4px"><span>TOTAL</span><span id="fc-total">R$0,00</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);margin-bottom:12px"><span id="fc-div-lbl">Por pessoa (1)</span><span id="fc-div">R$0,00</span></div>
+    <label class="edit-lbl">Pagamento</label>
+    <div style="display:flex;gap:6px;margin:4px 0 8px">
+      <button class="edit-pag-btn fc-pag sel" data-pag="pix" onclick="selFormaPag('pix')">📱 PIX</button>
+      <button class="edit-pag-btn fc-pag" data-pag="dinheiro" onclick="selFormaPag('dinheiro')">💵 Dinheiro</button>
+      <button class="edit-pag-btn fc-pag" data-pag="cartao" onclick="selFormaPag('cartao')">💳 Cartão</button>
+    </div>
+    <div id="fc-troco-wrap" style="display:none;gap:8px;margin-bottom:8px">
+      <div style="flex:1"><label class="edit-lbl">Valor recebido (R$)</label><input id="fc-recebido" type="number" min="0" oninput="recalcFechamento()" style="${inp}"></div>
+      <div style="flex:1"><label class="edit-lbl">Troco</label><div id="fc-troco" style="padding:7px 8px;font-weight:700;color:#27ae60">R$0,00</div></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <button onclick="imprimirConta()" style="flex:1;padding:10px;background:var(--card);color:var(--cream);border:1px solid #3a3530;border-radius:8px;font-weight:700;cursor:pointer">🖨️ Imprimir conta</button>
+      <button onclick="concluirFechamento()" style="flex:2;padding:10px;background:linear-gradient(135deg,#27ae60,#1e8449);color:#fff;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:1px;cursor:pointer">✓ RECEBER E LIBERAR</button>
+    </div>`;
+  document.getElementById('modal-salao').style.display='flex';
+  recalcFechamento();
+}
+function recalcFechamento(){
+  const m=mesas.find(x=>x._id===caixaMesaId); if(!m) return;
+  const subtotal=comandaTotal(m);
+  const taxaOn=document.getElementById('fc-taxa-on')?.checked;
+  const taxaPct=parseFloat(document.getElementById('fc-taxa-pct')?.value)||0;
+  const taxa=taxaOn?Math.round(subtotal*taxaPct)/100:0;
+  const descManual=parseFloat(document.getElementById('fc-desc')?.value)||0;
+  const descCupom=cupomCaixa?cupomCaixa.desconto:0;
+  const desconto=descManual+descCupom;
+  const total=Math.max(0,subtotal+taxa-desconto);
+  const pessoas=Math.max(1,parseInt(document.getElementById('fc-pessoas')?.value)||1);
+  _fcCalc={subtotal,taxa,desconto,total,pessoas};
+  const set=(id,v)=>{const e=document.getElementById(id); if(e) e.textContent=v;};
+  set('fc-taxa-v',_rBRL(taxa)); set('fc-desc-v','- '+_rBRL(desconto)); set('fc-total',_rBRL(total));
+  set('fc-div-lbl',`Por pessoa (${pessoas})`); set('fc-div',_rBRL(total/pessoas));
+  if(fcForma==='dinheiro'){ const rec=parseFloat(document.getElementById('fc-recebido')?.value)||0; set('fc-troco',_rBRL(Math.max(0,rec-total))); }
+}
+function aplicarCupomCaixa(){
+  const code=(document.getElementById('fc-cupom').value||'').trim().toUpperCase();
+  const msg=document.getElementById('fc-cupom-msg');
+  const m=mesas.find(x=>x._id===caixaMesaId); const subtotal=comandaTotal(m);
+  const fail=t=>{cupomCaixa=null;msg.style.color='#e74c3c';msg.textContent=t;recalcFechamento();};
+  if(!code){ cupomCaixa=null; msg.textContent=''; recalcFechamento(); return; }
+  const c=(typeof cupons!=='undefined'?cupons:[]).find(x=>x.codigo===code);
+  if(!c) return fail('❌ Cupom inválido');
+  if(c.ativo===false || (typeof isExp==='function'&&isExp(c))) return fail('❌ Cupom inativo/expirado');
+  if(c.usosMax>0 && (c.usosFeitos||0)>=c.usosMax) return fail('❌ Cupom esgotado');
+  if(c.minimo>0 && subtotal<c.minimo) return fail(`❌ Mínimo R$${c.minimo}`);
+  let desc=0;
+  if(c.tipo==='pct') desc=Math.round(subtotal*c.valor)/100;
+  else if(c.tipo==='fixo') desc=c.valor;
+  else { cupomCaixa=null; msg.style.color='#f39c12'; msg.textContent='ℹ️ Esse tipo de cupom não se aplica no caixa'; recalcFechamento(); return; }
+  cupomCaixa={codigo:c.codigo,_id:c._id,desconto:desc};
+  msg.style.color='#27ae60'; msg.textContent=`✅ ${c.codigo} aplicado (- ${_rBRL(desc)})`;
+  recalcFechamento();
+}
+function selFormaPag(f){
+  fcForma=f;
+  document.querySelectorAll('#modal-salao-box .fc-pag').forEach(b=>b.classList.toggle('sel',b.dataset.pag===f));
+  const w=document.getElementById('fc-troco-wrap'); if(w) w.style.display=f==='dinheiro'?'flex':'none';
+  recalcFechamento();
+}
+function contaHTML(){
+  const m=mesas.find(x=>x._id===caixaMesaId); if(!m) return '';
+  const c=_fcCalc||{}, sess=m.sessao||{itens:[]};
+  const money=n=>'R$'+Number(n||0).toFixed(2).replace('.',',');
+  const linhas=(sess.itens||[]).map(it=>`<div class="row"><span>${it.qtd>1?it.qtd+'x ':''}${it.nome}</span><span>${money((it.preco||0)*(it.qtd||1))}</span></div>`).join('');
+  return `<html><head><meta charset="utf-8"><style>${CSS_CUPOM}</style></head><body>
+    <div class="c big b">${(TCHO.loja&&TCHO.loja.nome)||'TCHO BURGUER'}</div>
+    <div class="c b">CONTA — MESA ${m.numero}</div>
+    <div class="c" style="font-size:11px">${sess.garcomNome||''} · ${sess.pessoas||''} pessoa(s) · ${new Date().toLocaleString('pt-BR')}</div>
+    <div class="line"></div>${linhas}<div class="line"></div>
+    <div class="row"><span>Subtotal</span><span>${money(c.subtotal)}</span></div>
+    ${c.taxa?`<div class="row"><span>Taxa de servico</span><span>${money(c.taxa)}</span></div>`:''}
+    ${c.desconto?`<div class="row"><span>Desconto</span><span>- ${money(c.desconto)}</span></div>`:''}
+    <div class="row big b"><span>TOTAL</span><span>${money(c.total)}</span></div>
+    <div class="row"><span>Por pessoa (${c.pessoas})</span><span>${money((c.total||0)/(c.pessoas||1))}</span></div>
+    <div class="line"></div><div class="c">Obrigado pela preferencia!</div>
+  </body></html>`;
+}
+function imprimirConta(){
+  recalcFechamento();
+  const html=contaHTML(); if(!html) return;
+  fetch('http://localhost:3333/imprimir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cozinha:html})})
+    .then(r=>r.json()).then(d=>{ if(d.ok) showToast('🖨️ Conta impressa!','tok-ok'); else abrirJanelaImpressao(html,400); })
+    .catch(()=>{ showToast('🖨️ Abrindo conta...','tok-info'); abrirJanelaImpressao(html,400); });
+}
+async function concluirFechamento(){
+  const m=mesas.find(x=>x._id===caixaMesaId); if(!m) return;
+  recalcFechamento();
+  const c=_fcCalc||{}, sess=m.sessao||{itens:[]};
+  let numOrdem;
+  try{ const ref=db.collection('config').doc('contador'); numOrdem=await db.runTransaction(async t=>{const d=await t.get(ref);const n=(d.exists?d.data().ultimo:0)+1;t.set(ref,{ultimo:n},{merge:true});return n;}); }
+  catch(e){ numOrdem=Math.floor(Math.random()*900)+100; }
+  const num='#'+String(numOrdem).padStart(3,'0');
+  const itensTxt=(sess.itens||[]).map(it=>`${it.qtd>1?it.qtd+'x ':''}${it.nome} — R$${(it.preco||0)*(it.qtd||1)}`);
+  const horaStr=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  const agora=firebase.firestore.FieldValue.serverTimestamp();
+  const pedido={
+    id:numOrdem, num, tipo:'mesa', mesaNumero:m.numero, nome:`Mesa ${m.numero}`, tel:'',
+    garcom:sess.garcomNome||'', pessoas:sess.pessoas||1,
+    itens:itensTxt, total:c.total||0, subtotal:c.subtotal||0, taxaServico:c.taxa||0,
+    desconto:c.desconto||0, cupom:cupomCaixa?cupomCaixa.codigo:'', pag:fcForma||'pix',
+    frete:0, status:'finalizado', origem:'mesa', impresso:true,
+    hora:agora, horaStr, horaFim:horaStr, criadoEm:agora,
+  };
+  db.collection('pedidos').add(pedido).catch(console.error);              // conta como venda no financeiro/histórico
+  if(cupomCaixa&&cupomCaixa._id) db.collection('cupons').doc(cupomCaixa._id).update({usosFeitos:firebase.firestore.FieldValue.increment(1)}).catch(()=>{});
+  db.collection('mesas').doc(m._id).update({status:'livre', sessao:firebase.firestore.FieldValue.delete()}).catch(console.error);   // libera a mesa
+  m.status='livre'; delete m.sessao;
+  fecharModalSalao();
+  showToast(`✅ Mesa ${m.numero} paga (${fcForma}) e liberada`,'tok-ok');
+  renderCaixa(); renderMapaMesas();
 }
 
 // ── CONFIG FISCAL (NFC-e) ──────────────────────────────────────
@@ -2998,7 +3166,7 @@ async function carregarFinanceiro(){
   // 1. Sempre carrega localStorage primeiro — fonte confiável sem Firebase
   const todos = JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
   finPedidosList = todos.filter(p=>{
-    if(p.status==='cancelado') return false;          // cancelados não contam no financeiro/frete
+    if(p.status==='cancelado' || p.contabil===false) return false;   // cancelados e rodadas de mesa (só o fechamento conta)
     const h = new Date(p.hora);
     return !isNaN(h.getTime()) && h >= range.ini && h < range.fim;
   }).map(p=>({...p, hora: new Date(p.hora)}));
@@ -3013,7 +3181,7 @@ async function carregarFinanceiro(){
       finPedidosList = snap.docs.map(d=>{
         const data=d.data();
         return {...data, _id:d.id, hora:data.hora?.toDate?.() || new Date(data.hora||0)};
-      }).filter(p=>p.status!=='cancelado');   // cancelados não contam no financeiro/frete
+      }).filter(p=>p.status!=='cancelado' && p.contabil!==false);   // exclui cancelados e rodadas de mesa
     }
     // Se snap vazio → mantém dados do localStorage
   } catch(e){

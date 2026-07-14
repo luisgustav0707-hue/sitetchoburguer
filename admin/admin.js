@@ -46,9 +46,10 @@ if(localStorage.getItem('tcho_admin_logado')==='true'){
 
 // ── NAVEGAÇÃO ──────────────────────────────────────────────────
 function showPage(p){
-  document.querySelectorAll('.nav-tab').forEach((el,i)=>el.classList.toggle('active',['cozinha','pedidos','config','crm','cardapio','financeiro'][i]===p));
+  document.querySelectorAll('.nav-tab').forEach((el,i)=>el.classList.toggle('active',['cozinha','salao','pedidos','config','crm','cardapio','financeiro'][i]===p));
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
+  if(p==='salao')     renderSalao();
   if(p==='cardapio')  renderCardapio();
   if(p==='pedidos')   carregarLog();
   if(p==='config')    showConfig(cfgAtual);   // Config agora tem menu lateral (Geral + Marketing)
@@ -253,6 +254,7 @@ function salvarConfig(){
     lojaAberta:document.getElementById('cfg-loja').checked,
     deliveryAtivo:document.getElementById('cfg-delivery').checked,
     retiradaAtiva:document.getElementById('cfg-retirada').checked,
+    mesaAtiva:document.getElementById('cfg-mesa')?.checked||false,
     autoAceitar:autoAceitar,
     autoImprimir:document.getElementById('cfg-print').checked,
     prazoMin:parseInt(document.getElementById('cfg-prazo-min').value)||30,
@@ -261,8 +263,17 @@ function salvarConfig(){
     forcarAberta:document.getElementById('cfg-forcar-aberta')?.checked||false,
   };
   db.collection('config').doc('operacao').set(cfg,{merge:true}).catch(console.error);
+  aplicarModalidades();
   showToast('✅ Configuração salva!','tok-ok');
 }
+
+// Mostra/esconde a aba Salão conforme a modalidade "Mesa" estiver ligada.
+function aplicarModalidades(){
+  const mesaOn = document.getElementById('cfg-mesa') ? document.getElementById('cfg-mesa').checked : false;
+  const tab=document.getElementById('nav-salao'); if(tab) tab.style.display = mesaOn ? '' : 'none';
+}
+// Placeholder da aba Salão (conteúdo real vem na Fase 2).
+function renderSalao(){}
 
 // ── CONFIG FISCAL (NFC-e) ──────────────────────────────────────
 // Guarda os dados que o contador fornecer. A emissão em si vem depois
@@ -3257,6 +3268,8 @@ function iniciarApp(){
     document.getElementById('cfg-loja').checked=cfg.lojaAberta!==false;
     document.getElementById('cfg-delivery').checked=cfg.deliveryAtivo!==false;
     document.getElementById('cfg-retirada').checked=cfg.retiradaAtiva!==false;
+    if(document.getElementById('cfg-mesa')) document.getElementById('cfg-mesa').checked=!!cfg.mesaAtiva;
+    aplicarModalidades();
     document.getElementById('cfg-print').checked=cfg.autoImprimir!==false;
     if(cfg.prazoMin) document.getElementById('cfg-prazo-min').value=cfg.prazoMin;
     if(cfg.prazoMax) document.getElementById('cfg-prazo-max').value=cfg.prazoMax;

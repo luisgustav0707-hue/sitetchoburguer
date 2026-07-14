@@ -53,6 +53,7 @@
   <!-- NAV -->
   <div class="nav">
     <div class="nav-tab active" onclick="showPage('cozinha')">🍳 Cozinha <span class="nav-badge" id="badge-novos" style="display:none">0</span></div>
+    <div class="nav-tab" id="nav-salao" style="display:none" onclick="showPage('salao')">🍽️ Salão</div>
     <div class="nav-tab" onclick="showPage('pedidos')">📋 Pedidos</div>
     <div class="nav-tab" onclick="showPage('config')">⚙️ Config</div>
     <div class="nav-tab" onclick="showPage('crm')">👥 CRM</div>
@@ -200,13 +201,18 @@
         <div class="toggle-info"><div class="toggle-label">Loja aberta</div><div class="toggle-desc">Desligue para fechar a loja na hora (bloqueia pedidos)</div></div>
         <label class="toggle-wrap"><input type="checkbox" id="cfg-loja" checked onchange="onToggleLojaConfig()"><span class="slider"></span></label>
       </div>
+      <div style="font-size:.66rem;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin:14px 0 4px">Modalidades de atendimento</div>
       <div class="toggle-row">
-        <div class="toggle-info"><div class="toggle-label">Delivery disponível</div><div class="toggle-desc">Desative se estiver sem motoboy</div></div>
+        <div class="toggle-info"><div class="toggle-label">🛵 Delivery</div><div class="toggle-desc">Pedidos com entrega (desative se estiver sem motoboy)</div></div>
         <label class="toggle-wrap"><input type="checkbox" id="cfg-delivery" checked onchange="salvarConfig()"><span class="slider"></span></label>
       </div>
       <div class="toggle-row">
-        <div class="toggle-info"><div class="toggle-label">Retirada no local</div><div class="toggle-desc">Permite clientes retirarem na loja</div></div>
+        <div class="toggle-info"><div class="toggle-label">🏃 Retirada no local</div><div class="toggle-desc">Cliente pede e busca na loja</div></div>
         <label class="toggle-wrap"><input type="checkbox" id="cfg-retirada" checked onchange="salvarConfig()"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info"><div class="toggle-label">🍽️ Mesa (consumo no local)</div><div class="toggle-desc">Habilita a aba <b>Salão</b> (mesas/garçons) e o Caixa</div></div>
+        <label class="toggle-wrap"><input type="checkbox" id="cfg-mesa" onchange="salvarConfig()"><span class="slider"></span></label>
       </div>
     </div>
     <div class="section cfg-panel" id="cfg-automacao">
@@ -516,6 +522,14 @@
     </div>
     </div><!-- /crm-content -->
    </div><!-- /cfg-wrap -->
+  </div>
+
+  <!-- ── SALÃO (mesas/garçons) — habilitado pela modalidade Mesa ── -->
+  <div class="page" id="page-salao">
+    <div class="section" style="margin-top:6px">
+      <div class="sec-title">🍽️ Salão</div>
+      <div style="font-size:.8rem;color:var(--muted)">Mesas, garçons, comandas e mapa do salão chegam na <b>Fase 2</b>.</div>
+    </div>
   </div>
 
   <!-- ── CARDÁPIO ── -->

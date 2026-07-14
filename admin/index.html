@@ -148,6 +148,7 @@
     <div class="cfg-side">
       <div class="cfg-side-grp">Geral</div>
       <button class="cfg-side-item active" data-cfg="operacao"  onclick="showConfig('operacao')">🏪 Operação</button>
+      <button class="cfg-side-item"        data-cfg="kanban"    onclick="showConfig('kanban')">🍳 Kanban</button>
       <button class="cfg-side-item"        data-cfg="automacao" onclick="showConfig('automacao')">🤖 Automação</button>
       <button class="cfg-side-item"        data-cfg="entrega"   onclick="showConfig('entrega')">🛵 Entrega</button>
       <button class="cfg-side-item"        data-cfg="acessos"   onclick="showConfig('acessos')">📊 Acessos</button>
@@ -252,6 +253,16 @@
           <span style="font-size:.8rem;color:var(--muted)">min</span>
         </div>
       </div>
+    </div>
+
+    <div class="section cfg-panel" id="cfg-kanban">
+      <div class="sec-title">🍳 Kanban (tela inicial)</div>
+      <div style="font-size:.66rem;color:var(--muted);margin-bottom:10px">Escolha quais colunas/módulos aparecem no kanban. Ex.: se você só faz retirada, desligue "Saiu para entrega".</div>
+      <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">🔴 Novos</div></div><label class="toggle-wrap"><input type="checkbox" id="cfg-kb-novo" checked onchange="salvarKanbanCfg()"><span class="slider"></span></label></div>
+      <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">🟡 Em preparo</div></div><label class="toggle-wrap"><input type="checkbox" id="cfg-kb-prep" checked onchange="salvarKanbanCfg()"><span class="slider"></span></label></div>
+      <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">🟢 Prontos</div></div><label class="toggle-wrap"><input type="checkbox" id="cfg-kb-pronto" checked onchange="salvarKanbanCfg()"><span class="slider"></span></label></div>
+      <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">🔵 Saiu para entrega</div><div class="toggle-desc">Desligue se você só trabalha com retirada</div></div><label class="toggle-wrap"><input type="checkbox" id="cfg-kb-entrega" checked onchange="salvarKanbanCfg()"><span class="slider"></span></label></div>
+      <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">✅ Finalizados de hoje</div></div><label class="toggle-wrap"><input type="checkbox" id="cfg-kb-finalizados" checked onchange="salvarKanbanCfg()"><span class="slider"></span></label></div>
     </div>
 
     <!-- ══════ NFC-e (Nota Fiscal) ══════ -->

@@ -75,6 +75,7 @@ function showConfig(k){
   // Cada painel carrega seus dados só quando aberto
   if(k==='acessos'){ carregarAcessos(); iniciarPresencaAdmin(); }
   if(k==='nfce')        carregarConfigFiscal();
+  if(k==='kanban')      carregarKanbanCfg();
 }
 
 // ── ACESSOS DO SITE (analytics simples no Firestore) ───────────
@@ -1029,6 +1030,33 @@ function salvarEdicaoPedido(imprimir=false){
   if(imprimir) setTimeout(()=>reimprimirPedido(idPedido), 150);
 }
 
+// ── CONFIG DO KANBAN (quais colunas/módulos aparecem na tela inicial) ──
+const KB_COLS=[['novo','col-novo'],['prep','col-prep'],['pronto','col-pronto'],['entrega','col-entrega']];
+function getKanbanCfg(){
+  let s=null; try{ s=JSON.parse(localStorage.getItem('tcho_kanban')||'null'); }catch(e){}
+  return Object.assign({novo:true,prep:true,pronto:true,entrega:true,finalizados:true}, s||{});
+}
+function aplicarKanbanCfg(){
+  const k=getKanbanCfg();
+  let visiveis=0;
+  KB_COLS.forEach(([key,id])=>{const el=document.getElementById(id); if(el){ const on=k[key]!==false; el.style.display=on?'':'none'; if(on) visiveis++; }});
+  const kb=document.querySelector('.kanban'); if(kb) kb.style.gridTemplateColumns='repeat('+Math.max(1,visiveis)+',1fr)';
+  if(k.finalizados===false){ const fin=document.getElementById('secao-fin-hoje'); if(fin) fin.style.display='none'; }
+}
+function carregarKanbanCfg(){
+  const k=getKanbanCfg();
+  const set=(id,v)=>{const e=document.getElementById(id); if(e) e.checked=v!==false;};
+  set('cfg-kb-novo',k.novo); set('cfg-kb-prep',k.prep); set('cfg-kb-pronto',k.pronto); set('cfg-kb-entrega',k.entrega); set('cfg-kb-finalizados',k.finalizados);
+}
+function salvarKanbanCfg(){
+  const g=id=>document.getElementById(id)?.checked!==false;
+  const k={novo:g('cfg-kb-novo'),prep:g('cfg-kb-prep'),pronto:g('cfg-kb-pronto'),entrega:g('cfg-kb-entrega'),finalizados:g('cfg-kb-finalizados')};
+  localStorage.setItem('tcho_kanban',JSON.stringify(k));
+  db.collection('config').doc('operacao').set({kanban:k},{merge:true}).catch(console.error);
+  aplicarKanbanCfg();
+  showToast('✅ Kanban atualizado!','tok-ok');
+}
+
 function renderAll(){
   const cols={novo:[],prep:[],pronto:[],entrega:[]};
   pedidos.forEach(p=>{if(cols[p.status]) cols[p.status].push(p);});
@@ -1044,11 +1072,13 @@ function renderAll(){
   const vazio={novo:'Aguardando pedidos...',prep:'Nada em preparo',pronto:'Nenhum pronto',entrega:'Nenhuma entrega'};
   Object.entries(cols).forEach(([s,list])=>{document.getElementById('body-'+s).innerHTML=list.length?list.map(renderCard).join(''):`<div class="vazio-col">${vazio[s]}</div>`;});
   renderFinalizadosHoje(finHoje);
+  aplicarKanbanCfg();
 }
 
 function renderFinalizadosHoje(lista){
   const sec=document.getElementById('secao-fin-hoje');
   if(!sec) return;
+  if(getKanbanCfg().finalizados===false){ sec.style.display='none'; return; }
   if(!lista.length){sec.style.display='none';return;}
   lista.sort((a,b)=>(b.hora||new Date(0))-(a.hora||new Date(0)));
   document.getElementById('cnt-fin-hoje').textContent=lista.length;
@@ -3197,6 +3227,7 @@ function iniciarApp(){
     if(cfg.prazoMax) document.getElementById('cfg-prazo-max').value=cfg.prazoMax;
     autoAceitar=!!cfg.autoAceitar;
     if(cfg.horarios){ cfgHorarios=cfg.horarios; localStorage.setItem('tcho_horarios',JSON.stringify(cfg.horarios)); if(document.getElementById('hor-dias')) carregarHorarios(); }
+    if(cfg.kanban){ localStorage.setItem('tcho_kanban',JSON.stringify(cfg.kanban)); aplicarKanbanCfg(); if(document.getElementById('cfg-kb-novo')) carregarKanbanCfg(); }
     if(document.getElementById('cfg-auto-horario'))
       document.getElementById('cfg-auto-horario').checked=cfg.autoHorario!==false;
     if(document.getElementById('cfg-forcar-aberta'))

@@ -548,7 +548,7 @@ async function buscarCepPorRua(){
       return;
     }
     res.innerHTML=d.slice(0,6).map(e=>`
-      <div onclick="selecionarCepEncontrado('${e.cep}','${(e.logradouro||'').replace(/'/g,"\\'")}','${(e.bairro||'').replace(/'/g,"\\'")}')}"
+      <div onclick="selecionarCepEncontrado('${e.cep}','${(e.logradouro||'').replace(/'/g,"\\'")}','${(e.bairro||'').replace(/'/g,"\\'")}')"
         style="padding:8px 10px;border-radius:7px;cursor:pointer;margin-bottom:4px;background:var(--bg);border:1px solid #3a3530;font-size:.78rem">
         <div style="color:var(--cream);font-weight:600">${e.logradouro||'-'}</div>
         <div style="color:var(--muted);font-size:.7rem">${e.bairro||''} • ${e.cep}</div>
@@ -559,10 +559,37 @@ async function buscarCepPorRua(){
 }
 
 function selecionarCepEncontrado(cep,rua,bairro){
-  const cepFormatado=cep.replace('-','');
   document.getElementById('f-cep').value=cep;
   document.getElementById('busca-cep-rua').style.display='none';
-  buscarCep();
+  const msg=document.getElementById('cep-msg');
+  // Preenche o endereço já com o que o cliente selecionou (rua/bairro/cidade).
+  // Só número e complemento ficam pra ele digitar.
+  ultimoCep={rua:rua||'', cidade:'Belo Horizonte / MG'};
+  document.getElementById('f-rua').value=rua||'';
+  document.getElementById('f-cidade').value='Belo Horizonte / MG';
+  const enc=matchBairro(bairro);
+  if(enc){
+    msg.className='cep-msg ok'; msg.textContent=`✅ Entregamos em ${enc.nome}!`;
+    document.getElementById('f-cep').className='ok';
+    document.getElementById('aviso-bairro').classList.remove('show');
+    document.getElementById('bairros-lista').classList.remove('show');
+    document.getElementById('f-bairro').value=enc.nome;
+    document.getElementById('campos-endereco').style.display='block';
+    document.getElementById('bairro-nome-ok').textContent=enc.nome;
+    document.getElementById('frete-val').textContent=`R$${enc.taxa}`;
+    freteAtual=enc.taxa; bairroAtendido=true;
+    document.getElementById('f-num').focus();
+  }else{
+    // Bairro não atendido/identificado → cliente escolhe na lista (rua/cidade já preenchidos)
+    msg.className='cep-msg err';
+    msg.textContent=bairro?`❌ Bairro "${bairro}" não atendido — escolha na lista abaixo.`:'ℹ️ Escolha seu bairro na lista abaixo.';
+    document.getElementById('f-cep').className='';
+    document.getElementById('bairro-nao-atendido').textContent=bairro||'não identificado';
+    document.getElementById('aviso-bairro').classList.add('show');
+    bairroAtendido=false; freteAtual=0;
+    document.getElementById('bairros-lista').classList.add('show');
+    renderListaBairros();
+  }
 }
 
 // ── NAVEGAÇÃO ENTRE TELAS ──────────────────────────────────────

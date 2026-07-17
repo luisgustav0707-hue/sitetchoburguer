@@ -663,11 +663,22 @@ async function finalizarPedido(){
     alert('😔 A loja está fechada no momento. Não é possível finalizar o pedido.');
     return;
   }
-  // Número gerado localmente (sem await/Firestore antes de abrir o WhatsApp —
-  // qualquer await aqui faz o navegador bloquear a abertura do WhatsApp).
-  let numOrdem = (parseInt(localStorage.getItem('tcho_ultimo_num')||'0',10)||0)+1;
-  if(numOrdem<1 || numOrdem>9999) numOrdem = Math.floor(Math.random()*900)+100;
-  localStorage.setItem('tcho_ultimo_num', String(numOrdem));
+  // Abre a janela do WhatsApp JÁ (dentro do clique, em branco) pra o navegador
+  // não bloquear o popup — a URL é definida depois. Assim dá pra usar o contador
+  // COMPARTILHADO do Firestore (numeração sequencial e global), sem perder o popup.
+  let waWin=null; try{ waWin=window.open('','_blank'); }catch(e){}
+
+  // Número sequencial: contador único no Firestore (mesma fonte do balcão/mesa).
+  let numOrdem;
+  try {
+    const contRef = db.collection('config').doc('contador');
+    numOrdem = await db.runTransaction(async t => {
+      const d = await t.get(contRef);
+      const next = (d.exists ? d.data().ultimo : 0) + 1;
+      t.set(contRef, {ultimo: next}, {merge: true});
+      return next;
+    });
+  } catch(e) { numOrdem = Math.floor(Math.random()*900)+100; }
 
   const num=String(numOrdem).padStart(3,'0');
   document.getElementById('order-num').textContent=`#${num}`;
@@ -695,12 +706,13 @@ async function finalizarPedido(){
     criadoEm:firebase.firestore.FieldValue.serverTimestamp(),
   };
 
-  // Abre o WhatsApp da loja JÁ com o pedido preenchido, direto no clique.
-  // O botão fica visível como backup caso o navegador bloqueie o popup.
+  // Direciona a janela (já aberta no clique) pro WhatsApp com o pedido preenchido.
+  // O botão fica visível como backup caso o navegador tenha bloqueado o popup.
   const waLink=linkWhatsAppPedido(pedido);
   const waBtn=document.getElementById('btn-wa-pedido');
   if(waBtn){ waBtn.href=waLink; waBtn.style.display='inline-flex'; }
-  window.open(waLink,'_blank');
+  if(waWin && !waWin.closed){ try{ waWin.location.href=waLink; }catch(e){ window.open(waLink,'_blank'); } }
+  else window.open(waLink,'_blank');
 
   // Salva sempre no localStorage (permite admin local sem Firebase)
   const pedidoLocal = {...pedido, hora: new Date().toISOString()};

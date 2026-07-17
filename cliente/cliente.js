@@ -811,7 +811,16 @@ function iniciarRastreamento(docId, tipo){
   if(!docId) return;
   unsubRastreamento = db.collection('pedidos').doc(docId)
     .onSnapshot(doc=>{
-      if(!doc.exists){ atualizarRastreamento('cancelado', tipo); localStorage.removeItem('tcho_pedido_atual'); return; }
+      if(!doc.exists){
+        // Pedido EXCLUÍDO no admin (kanban) → some do acompanhamento do cliente
+        if(unsubRastreamento){ unsubRastreamento(); unsubRastreamento=null; }
+        localStorage.removeItem('tcho_pedido_atual');
+        try{ mostrarBotaoAcompanhar(); }catch(e){}   // esconde o banner "acompanhar meu pedido"
+        const msgEl=document.getElementById('tracking-status-msg');
+        if(msgEl){ msgEl.className='tracking-status-msg ts-cancelado'; msgEl.innerHTML='<span><strong>Pedido não encontrado</strong><br><span style="font-size:.72rem;opacity:.8">Esse pedido não está mais disponível.</span></span>'; }
+        const stepsEl=document.getElementById('tracking-steps'); if(stepsEl) stepsEl.innerHTML='';
+        return;
+      }
       const st=doc.data().status;
       atualizarRastreamento(st, tipo);
       // Pedido concluído ou cancelado: para de oferecer "acompanhar" nas próximas visitas

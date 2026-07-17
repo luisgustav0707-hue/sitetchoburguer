@@ -1252,7 +1252,7 @@ async function salvarPedidoManual(){
 }
 
 // ── IMPRESSÃO ──────────────────────────────────────────────────
-const CSS_CUPOM = `*{margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;font-size:14px;padding:10px;max-width:280px}.c{text-align:center}.b{font-weight:bold}.line{border-top:1px dashed #000;margin:7px 0}.row{display:flex;justify-content:space-between;margin:3px 0}.big{font-size:18px;font-weight:bold}.obs-box{border:2px solid #000;padding:5px 6px;margin:5px 0;font-weight:800;font-size:15px;text-align:center}@media print{@page{margin:3mm;size:80mm auto}}`;
+const CSS_CUPOM = `*{margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;font-size:14px;padding:10px;max-width:280px}.c{text-align:center}.b{font-weight:bold}.line{border-top:1px dashed #000;margin:7px 0}.row{display:flex;justify-content:space-between;margin:3px 0}.big{font-size:18px;font-weight:bold}.obs-box{border:2px solid #000;padding:5px 6px;margin:5px 0;font-weight:800;font-size:15px;text-align:center}.rem{display:inline-block;border:1.5px solid #000;border-radius:3px;padding:0 4px;font-weight:800}@media print{@page{margin:3mm;size:80mm auto}}`;
 
 function abrirJanelaImpressao(html, largura=420){
   const win = window.open('','_blank',`width=${largura},height=560`);
@@ -1261,6 +1261,10 @@ function abrirJanelaImpressao(html, largura=420){
   win.document.close();
 }
 
+// Realça "sem <ingredientes>" (removidos) no cupom pra cozinha não errar.
+function destacaRemocao(item){
+  return String(item).replace(/\bsem\s+([^•)—]+)/gi, (m,p1)=>`<span class="rem">⚠ SEM ${p1.trim().toUpperCase()}</span>`);
+}
 function cupomCozinha(p){
   const obsBloco = p.obs
     ? `<div class="line"></div><div class="obs-box">⚠ OBS: ${p.obs.toUpperCase()} ⚠</div>`
@@ -1272,7 +1276,7 @@ function cupomCozinha(p){
     <div class="row"><span class="big">${p.num||'#'+p.id}</span><span>${p.horaStr||''}</span></div>
     <div class="row"><span class="b">${p.tipo==='delivery'?'🛵 DELIVERY':'🏃 RETIRADA'}</span><span>${p.nome}</span></div>
     <div class="line"></div>
-    ${p.itens.map(i=>`<div style="margin:3px 0">• ${i}</div>`).join('')}
+    ${p.itens.map(i=>`<div style="margin:3px 0">• ${destacaRemocao(i)}</div>`).join('')}
     ${obsBloco}
     <script>window.onload=function(){window.print();setTimeout(()=>window.close(),1500)};<\/script>
   </body></html>`;

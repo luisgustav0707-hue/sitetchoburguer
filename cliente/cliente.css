@@ -53,13 +53,13 @@
 
 /* BOTÃO WHATSAPP FLUTUANTE */
 .wpp-float{
-  position:fixed;bottom:24px;left:16px;z-index:150;
-  display:flex;align-items:center;gap:8px;
+  position:fixed;bottom:20px;left:16px;z-index:150;
+  display:flex;align-items:center;justify-content:center;
+  width:52px;height:52px;
   background:#25d366;color:#000;
-  font-family:'Barlow',sans-serif;font-weight:700;font-size:.85rem;
-  padding:11px 18px 11px 14px;border-radius:50px;
+  border-radius:50%;
   box-shadow:0 4px 16px rgba(37,211,102,.45);
-  text-decoration:none;letter-spacing:.3px;
+  text-decoration:none;
   transition:transform .2s,box-shadow .2s;
 }
 .wpp-float:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(37,211,102,.6)}

@@ -1741,13 +1741,11 @@ function renderFinalizadosHoje(lista){
       <div style="font-size:.78rem;font-weight:700;margin-bottom:2px">${p.nome}</div>
       ${p.bairro?`<div style="font-size:.66rem;color:var(--muted)">📍 ${p.bairro}</div>`:''}
       <div style="font-size:.67rem;color:var(--muted);margin:3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(p.itens||[]).join(' · ')}</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
-        <div style="font-weight:700;color:${cor};font-size:.82rem">R$${p.total||0}</div>
-        <div style="display:flex;gap:4px">
-          <button class="btn-editar-card" onclick="reimprimirPedido('${p._id}')">🖨️ Cupom</button>
-          <button class="btn-editar-card" onclick="abrirModalEditar('${p._id}')">✏️ Editar</button>
-          <button class="btn-editar-card" onclick="excluirPedido('${p._id}')" style="color:#e74c3c">🗑️ Excluir</button>
-        </div>
+      <div style="font-weight:700;color:${cor};font-size:.82rem;margin-top:5px">R$${p.total||0}</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">
+        <button class="btn-editar-card" onclick="reimprimirPedido('${p._id}')">🖨️ Cupom</button>
+        <button class="btn-editar-card" onclick="abrirModalEditar('${p._id}')">✏️ Editar</button>
+        <button class="btn-editar-card" onclick="excluirPedido('${p._id}')" style="color:#e74c3c">🗑️ Excluir</button>
       </div>
     </div>`;
   }).join('');

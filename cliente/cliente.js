@@ -898,11 +898,16 @@ function atualizarRastreamento(status, tipo){
 
 function montarItensTexto(){
   const lista=[];
+  const comboItem=[...COMBO].find(c=>c.id==='cmb');
+  const comboPreco=(comboItem&&comboItem.preco)||15;
   Object.entries(cartBurguers).forEach(([id,insts])=>{
     const b=BURGUERS.find(x=>x.id===id);if(!b)return;
     insts.forEach((inst,i)=>{
-      const det=[inst.ponto?inst.ponto.nome:'',inst.sache&&inst.sache.id!=='sn'?'sachê '+inst.sache.nome:'',inst.combo?`combo (${inst.combo})`:'',inst.removidos.length?'sem '+inst.removidos.join(', '):'',inst.adicionais.length?inst.adicionais.map(a=>'+'+a.nome).join(', '):''].filter(Boolean).join(' • ');
-      lista.push(`${b.nome}${det?' ('+det+')':''} — R$${b.preco+inst.precoExtra}`);
+      // Combo sai como item PRÓPRIO (com o "•"), não dentro do hambúrguer.
+      const det=[inst.ponto?inst.ponto.nome:'',inst.sache&&inst.sache.id!=='sn'?'sachê '+inst.sache.nome:'',inst.removidos.length?'sem '+inst.removidos.join(', '):'',inst.adicionais.length?inst.adicionais.map(a=>'+'+a.nome).join(', '):''].filter(Boolean).join(' • ');
+      const precoBurguer=b.preco+inst.precoExtra-(inst.combo?comboPreco:0);
+      lista.push(`${b.nome}${det?' ('+det+')':''} — R$${precoBurguer}`);
+      if(inst.combo) lista.push(`Combo Batata + Refri (${inst.combo}) — R$${comboPreco}`);
     });
   });
   [...EXTRAS,...COMBO].forEach(e=>{

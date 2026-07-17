@@ -1263,7 +1263,7 @@ function abrirJanelaImpressao(html, largura=420){
 
 // Realça "sem <ingredientes>" (removidos) no cupom pra cozinha não errar.
 function destacaRemocao(item){
-  return String(item).replace(/\bsem\s+([^•)—]+)/gi, (m,p1)=>`<span class="rem">⚠ SEM ${p1.trim().toUpperCase()}</span>`);
+  return String(item).replace(/\bsem\s+([^•)—]+)/gi, (m,p1)=>`<span class="rem">⚠ NÃO ${p1.trim().toUpperCase()}</span>`);
 }
 function cupomCozinha(p){
   const obsBloco = p.obs

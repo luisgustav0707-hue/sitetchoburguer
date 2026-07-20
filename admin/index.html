@@ -804,8 +804,22 @@
         </div>
       </div>
       <div id="man-bairro-wrap">
+        <label class="edit-lbl">📮 CEP</label>
+        <div style="display:flex;gap:6px;margin-bottom:6px">
+          <input id="man-cep" class="edit-inp" type="text" placeholder="00000-000" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();buscarCepManual()}">
+          <button type="button" class="opc-btn" onclick="buscarCepManual()">🔍 Buscar</button>
+        </div>
+        <div id="man-cep-msg" style="font-size:.66rem;margin-bottom:4px"></div>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+          <div><label class="edit-lbl">Rua</label><input id="man-rua" class="edit-inp" type="text" placeholder="Rua / Av."></div>
+          <div><label class="edit-lbl">Número</label><input id="man-numero" class="edit-inp" type="text" placeholder="Nº"></div>
+        </div>
+        <label class="edit-lbl">Complemento</label>
+        <input id="man-comp" class="edit-inp" type="text" placeholder="Apto, bloco... (opcional)">
         <label class="edit-lbl">📍 Bairro</label>
         <select id="man-bairro" class="edit-inp" onchange="onManualBairro()"></select>
+        <label class="edit-lbl">Cidade</label>
+        <input id="man-cidade" class="edit-inp" type="text" placeholder="Cidade / UF">
       </div>
       <div>
         <label class="edit-lbl">💳 Pagamento</label>

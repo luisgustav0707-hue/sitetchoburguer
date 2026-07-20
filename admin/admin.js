@@ -1001,9 +1001,10 @@ function abrirModalManual(){
   manualPag='pix'; manualTipo='delivery';
   manualItens=[];
   cancelarCustManual();
-  ['man-nome','man-tel','man-frete','man-obs'].forEach(id=>{
+  ['man-nome','man-tel','man-frete','man-obs','man-cep','man-rua','man-numero','man-comp','man-cidade'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
+  const cepMsg=document.getElementById('man-cep-msg'); if(cepMsg) cepMsg.textContent='';
   renderItensManual();
   // Popula o select de bairros (sempre, pra refletir edições) a partir da lista atual
   const sel=document.getElementById('man-bairro');
@@ -1055,6 +1056,37 @@ function onManualBairro(){
   const b=getBairrosAdmin().find(x=>x.nome===nome);
   if(b) document.getElementById('man-frete').value=b.taxa;
   recalcManualTotal();
+}
+// Busca o endereço pelo CEP (ViaCEP) e preenche rua/cidade + tenta casar o bairro atendido — igual ao cliente
+async function buscarCepManual(){
+  const norm=s=>(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+  const cep=(document.getElementById('man-cep').value||'').replace(/\D/g,'');
+  const msg=document.getElementById('man-cep-msg');
+  if(cep.length!==8){ if(msg){ msg.style.color='#e74c3c'; msg.textContent='CEP inválido (precisa de 8 dígitos).'; } return; }
+  if(msg){ msg.style.color='var(--muted)'; msg.textContent='🔍 Buscando...'; }
+  try{
+    const d=await fetch(`https://viacep.com.br/ws/${cep}/json/`).then(r=>r.json());
+    if(d.erro){ if(msg){ msg.style.color='#e74c3c'; msg.textContent='CEP não encontrado.'; } return; }
+    if(d.logradouro) document.getElementById('man-rua').value=d.logradouro;
+    if(d.localidade) document.getElementById('man-cidade').value=`${d.localidade}${d.uf?' / '+d.uf:''}`;
+    // tenta casar o bairro do CEP com a lista de bairros atendidos
+    const bv=norm(d.bairro);
+    const sel=document.getElementById('man-bairro');
+    let casou=false;
+    if(bv && sel){
+      for(const opt of sel.options){
+        const ov=norm(opt.value);
+        if(ov===bv || ov.includes(bv) || bv.includes(ov)){ sel.value=opt.value; casou=true; break; }
+      }
+    }
+    onManualBairro(); // atualiza o frete conforme o bairro selecionado
+    if(msg){
+      if(casou){ msg.style.color='#27ae60'; msg.textContent=`✅ ${d.bairro} — bairro atendido.`; }
+      else if(d.bairro){ msg.style.color='#f39c12'; msg.textContent=`⚠️ Bairro "${d.bairro}" fora da lista — selecione manualmente.`; }
+      else { msg.style.color='#f39c12'; msg.textContent='⚠️ CEP sem bairro — selecione manualmente.'; }
+    }
+    document.getElementById('man-numero').focus();
+  }catch(e){ if(msg){ msg.style.color='#e74c3c'; msg.textContent='Erro ao consultar o CEP.'; } }
 }
 function subtotalManual(){ return manualItens.reduce((a,it)=>a+(parseFloat(it.preco)||0),0); }
 function recalcManualTotal(){
@@ -1189,6 +1221,15 @@ async function salvarPedidoManual(){
   const frete=manualTipo==='delivery'?(parseFloat(document.getElementById('man-frete').value)||0):0;
   const total=subtotal+frete;                              // total inclui o frete (igual aos pedidos do cliente)
   const bairro=manualTipo==='delivery'?document.getElementById('man-bairro').value:'';
+  // Endereço completo (igual ao cliente): "rua, número, complemento" + cidade
+  let endereco='', cidade='';
+  if(manualTipo==='delivery'){
+    const rua=(document.getElementById('man-rua').value||'').trim();
+    const numero=(document.getElementById('man-numero').value||'').trim();
+    const comp=(document.getElementById('man-comp').value||'').trim();
+    cidade=(document.getElementById('man-cidade').value||'').trim();
+    if(rua) endereco=`${rua}${numero?', '+numero:''}${comp?', '+comp:''}`;
+  }
 
   // ── Data do pedido ──
   // Hoje  → status 'novo' com data/hora atual (fluxo normal: kanban + impressão).
@@ -1222,7 +1263,7 @@ async function salvarPedidoManual(){
 
   const pedido={
     id:numOrdem, num:`#${String(numOrdem).padStart(3,'0')}`,
-    tipo:manualTipo, nome, tel, bairro,
+    tipo:manualTipo, nome, tel, bairro, endereco, cidade,
     pag:manualPag, frete, total, desconto:0, cupom:'',
     obs, itens, status:statusPedido, origem:'manual',
     hora:tsPedido,

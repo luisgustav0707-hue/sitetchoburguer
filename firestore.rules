@@ -1,0 +1,98 @@
+rules_version = '2';
+
+// ── Regras de segurança do Firestore — Tcho Burguer ──────────────────────────
+// Objetivo: o cliente (SEM login) só faz o necessário pra pedir; tudo que é
+// gestão exige um admin autenticado (Firebase Auth) cujo UID esteja em /admins.
+//
+// Como um admin é reconhecido: existe o documento  /admins/{seu_uid}
+// (crie no console: Authentication → pegue o UID → Firestore → coleção "admins"
+//  → documento com ID = UID). Sem esse doc, mesmo logado, não é admin.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Lista de admins: só o próprio admin lê; ninguém escreve pelo app
+    // (gerenciado manualmente no console).
+    match /admins/{uid} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ── Leitura pública (o cardápio precisa abrir sem login) ─────────────────
+    // Escrita só admin, com exceções cirúrgicas pro fluxo do cliente.
+
+    // config: cliente só pode mexer no doc `contador` e só no campo `ultimo`
+    // (número sequencial do pedido — mesma fonte do balcão). O resto (horários,
+    // marca, bairros, taxas...) é só admin.
+    match /config/{doc} {
+      allow read:  if true;
+      allow write: if isAdmin();
+      allow update: if doc == 'contador'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimo']);
+    }
+
+    // cardapio: cliente só pode baixar estoque (doc `estoque`, campo `data`).
+    // Preços/itens/disponibilidade: só admin.
+    match /cardapio/{doc} {
+      allow read:  if true;
+      allow write: if isAdmin();
+      allow update: if doc == 'estoque'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['data']);
+    }
+
+    match /fotos/{doc} { allow read: if true; allow write: if isAdmin(); }
+
+    // ── Cupons ───────────────────────────────────────────────────────────────
+    // Cliente lê (pra validar) e só pode incrementar o contador de uso.
+    // Criar/editar/apagar cupom: só admin.
+    match /cupons/{doc} {
+      allow read:   if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usosFeitos']);
+    }
+
+    // ── Pedidos ──────────────────────────────────────────────────────────────
+    // Cliente CRIA o pedido e lê APENAS o próprio doc (pelo ID aleatório que só
+    // ele tem). Não pode listar todos, editar nem apagar — isso é do admin.
+    match /pedidos/{id} {
+      allow create: if true;
+      allow get:    if true;
+      allow list, update, delete: if isAdmin();
+    }
+
+    // ── Clientes (CRM) ───────────────────────────────────────────────────────
+    // O cliente cria/atualiza o próprio cadastro ao pedir (upsertCliente usa uma
+    // transação que LÊ o doc pelo telefone → precisa de `get`). Listar a base
+    // inteira (`list`) e apagar: só admin.
+    // OBS de privacidade: `get` deixa quem souber o telefone consultar aquele
+    // cadastro. Endurecimento futuro (Fase 2): mover a agregação pra uma Cloud
+    // Function e fechar clientes 100% (só admin). Ver runbook.
+    match /clientes/{id} {
+      allow get:    if true;
+      allow create, update: if true;
+      allow list, delete: if isAdmin();
+    }
+
+    // ── Só admin (gestão / operação interna) ─────────────────────────────────
+    match /mesas/{d}     { allow read, write: if isAdmin(); }
+    match /garcons/{d}   { allow read, write: if isAdmin(); }
+    match /usuarios/{d}  { allow read, write: if isAdmin(); }
+    match /campanhas/{d} { allow read, write: if isAdmin(); }
+    match /despesas/{d}  { allow read, write: if isAdmin(); }
+
+    // Analytics: o site do cliente escreve (contagem de visita / "online agora"),
+    // mas só o admin lê. São contadores, sem dado sensível.
+    match /stats/{d}     { allow read: if isAdmin(); allow write: if true; }
+    match /presenca/{d}  { allow read: if isAdmin(); allow write: if true; }
+
+    // Qualquer coleção não listada acima: negado por padrão.
+    match /{document=**} { allow read, write: if false; }
+  }
+}

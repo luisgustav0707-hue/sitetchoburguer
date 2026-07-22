@@ -1,8 +1,9 @@
-﻿// ── LOGIN ──────────────────────────────────────────────────────
-const CREDENCIAIS = { usuario:'tcho', senha:'Lgferreir@07' };   // admin mestre (fallback)
+﻿// ── LOGIN (Firebase Auth) ──────────────────────────────────────
+// A autenticação agora é feita pelo Firebase Auth (e-mail/senha). A senha NÃO
+// fica mais no código. Só é admin quem está logado E tem o doc /admins/{uid}
+// no Firestore (as regras exigem isso). Ver firestore.rules.
 
-// Perfis e quais abas cada um enxerga. NOTA (Fase 5): auth simples via
-// localStorage/Firestore, sem hash/backend — deixado pronto pra evoluir.
+// Perfis e quais abas cada um enxerga.
 const PERFIL_ABAS={
   admin:   ['cozinha','salao','pedidos','config','crm','cardapio','financeiro'],
   gerente: ['cozinha','salao','pedidos','crm','cardapio','financeiro'],
@@ -15,31 +16,37 @@ function getUsuariosLS(){ try{ return JSON.parse(localStorage.getItem('tcho_usua
 function getGarconsLS(){ try{ return JSON.parse(localStorage.getItem('tcho_garcons')||'[]'); }catch(e){ return []; } }
 function perfilAtual(){ try{ return (JSON.parse(localStorage.getItem('tcho_sessao')||'null')||{}).perfil||'admin'; }catch(e){ return 'admin'; } }
 
+let _appIniciado=false;
+// Mostra o painel. Só chamado depois do Firebase confirmar o login (onAuthStateChanged).
 function entrarApp(perfil,nome){
-  localStorage.setItem('tcho_admin_logado','true');
   localStorage.setItem('tcho_sessao',JSON.stringify({perfil,nome}));
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').classList.add('show');
-  iniciarApp();
+  if(!_appIniciado){ _appIniciado=true; iniciarApp(); }
+}
+function mostrarLogin(){
+  document.getElementById('app').classList.remove('show');
+  const ls=document.getElementById('login-screen'); if(ls) ls.style.display='';
 }
 function fazerLogin(){
-  const u=document.getElementById('login-user').value.trim();
-  const p=document.getElementById('login-pass').value;
-  if(u===CREDENCIAIS.usuario && p===CREDENCIAIS.senha){ entrarApp('admin','Administrador'); return; }
-  const us=getUsuariosLS().find(x=>(x.login||'').toLowerCase()===u.toLowerCase() && x.senha===p && x.ativo!==false);
-  if(us){ entrarApp(us.perfil||'caixa', us.nome||us.login); return; }
-  document.getElementById('login-err').textContent='Usuário ou senha incorretos';
-  document.getElementById('login-pass').value='';
+  const email=document.getElementById('login-user').value.trim();
+  const senha=document.getElementById('login-pass').value;
+  const err=document.getElementById('login-err');
+  const btn=document.getElementById('login-btn');
+  if(!email || !senha){ err.textContent='Preencha e-mail e senha'; return; }
+  err.textContent='Entrando...'; if(btn) btn.disabled=true;
+  firebase.auth().signInWithEmailAndPassword(email,senha)
+    .then(()=>{ err.textContent=''; })   // onAuthStateChanged cuida de abrir o painel
+    .catch(e=>{
+      console.error('Login:', e.code);
+      const cred = ['auth/invalid-credential','auth/wrong-password','auth/user-not-found','auth/invalid-email'].includes(e.code);
+      err.textContent = cred ? 'E-mail ou senha incorretos'
+                       : (e.code==='auth/too-many-requests' ? 'Muitas tentativas. Aguarde um pouco.'
+                       : 'Erro ao entrar. Tente de novo.');
+      document.getElementById('login-pass').value='';
+    })
+    .finally(()=>{ if(btn) btn.disabled=false; });
 }
-function fazerLoginPin(){
-  const pin=(document.getElementById('login-pin').value||'').replace(/\D/g,'');
-  const g=getGarconsLS().find(x=>x.pin && x.pin===pin && x.ativo!==false);
-  if(g){ entrarApp('garcom', g.nome||'Garçom'); return; }
-  document.getElementById('login-err').textContent='PIN inválido';
-  document.getElementById('login-pin').value='';
-}
-function mostrarLoginPin(){ document.getElementById('login-form-senha').style.display='none'; document.getElementById('login-form-pin').style.display='block'; document.getElementById('login-err').textContent=''; document.getElementById('login-pin').focus(); }
-function mostrarLoginSenha(){ document.getElementById('login-form-pin').style.display='none'; document.getElementById('login-form-senha').style.display='block'; document.getElementById('login-err').textContent=''; }
 
 // Mostra só as abas permitidas ao perfil logado (+ Salão só com modalidade Mesa).
 function aplicarAcesso(){
@@ -73,26 +80,22 @@ function toggleSenha(){
   inp.focus();
 }
 function logout(){
-  // Remove o flag de login e cancela listeners antes de recarregar
-  localStorage.removeItem('tcho_admin_logado');
+  // Cancela listeners antes de sair
   localStorage.removeItem('tcho_sessao');
   if(unsubPedidos){ unsubPedidos(); unsubPedidos=null; }
   if(unsubConfig){ unsubConfig(); unsubConfig=null; }
   if(pollingLocalInterval){ clearInterval(pollingLocalInterval); pollingLocalInterval=null; }
-  // Recarrega a página: garante estado 100% limpo e código mais novo (volta pro login)
-  location.reload();
+  // Desloga do Firebase e recarrega (estado 100% limpo, volta pro login)
+  firebase.auth().signOut().catch(()=>{}).then(()=>location.reload());
 }
-// Auto-login se já estava logado antes.
-// IMPORTANTE: iniciarApp() é adiado com setTimeout porque este bloco roda no
-// topo do arquivo, antes das variáveis `let pedidos`, `unsubPedidos`, etc.
-// (declaradas mais abaixo) existirem. Chamar direto dava
-// "Cannot access 'pedidos' before initialization", o listener nunca ligava e o
-// painel ficava sem receber pedidos até deslogar/logar de novo manualmente.
-if(localStorage.getItem('tcho_admin_logado')==='true'){
-  document.getElementById('login-screen').style.display='none';
-  document.getElementById('app').classList.add('show');
-  setTimeout(iniciarApp, 0);   // roda só depois do arquivo terminar de carregar
-}
+
+// Bootstrap: o Firebase decide se já há sessão válida. onAuthStateChanged é
+// assíncrono, então roda depois do arquivo terminar de carregar — as variáveis
+// (`pedidos`, `unsubPedidos`, ...) já existem quando iniciarApp() é chamado.
+firebase.auth().onAuthStateChanged(function(user){
+  if(user){ entrarApp('admin','Administrador'); }
+  else { mostrarLogin(); }
+});
 try{ aplicarMarca(); }catch(e){}   // nome/logo/cores personalizados (white label) já no login
 
 // ── NAVEGAÇÃO ──────────────────────────────────────────────────
@@ -4004,7 +4007,7 @@ function agendarReconexaoPedidos(){
   if(reconnectPedidosTimer) return;             // já tem uma reconexão a caminho
   reconnectPedidosTimer = setTimeout(()=>{
     reconnectPedidosTimer = null;
-    if(localStorage.getItem('tcho_admin_logado')==='true' && typeof db!=='undefined'){
+    if(firebase.auth().currentUser && typeof db!=='undefined'){
       iniciarListenerPedidos();
     }
   }, 3000);
@@ -4015,7 +4018,7 @@ function registrarHandlersConexao(){
   if(handlersConexaoRegistrados) return;
   handlersConexaoRegistrados = true;
   const reconectar = ()=>{
-    if(localStorage.getItem('tcho_admin_logado')==='true' && typeof db!=='undefined'){
+    if(firebase.auth().currentUser && typeof db!=='undefined'){
       iniciarListenerPedidos();
     }
   };

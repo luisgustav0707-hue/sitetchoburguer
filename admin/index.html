@@ -24,18 +24,12 @@
     <div class="login-title">TCHO BURGUER</div>
     <div class="login-sub">Painel Administrativo</div>
     <div id="login-form-senha">
-      <input class="login-input" type="text" id="login-user" placeholder="Usuário" autocomplete="username">
+      <input class="login-input" type="email" id="login-user" placeholder="E-mail" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
       <div style="position:relative;margin-bottom:10px">
         <input class="login-input" type="password" id="login-pass" placeholder="Senha" autocomplete="current-password" style="margin-bottom:0;padding-right:46px" onkeydown="if(event.key==='Enter')fazerLogin()">
         <button type="button" id="btn-ver-senha" onclick="toggleSenha()" title="Mostrar senha" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.05rem;line-height:1;padding:6px">👁️</button>
       </div>
-      <button class="login-btn" onclick="fazerLogin()">ENTRAR</button>
-      <div onclick="mostrarLoginPin()" style="margin-top:12px;font-size:.78rem;color:var(--orange);cursor:pointer">🧑‍🍳 Sou garçom — entrar com PIN</div>
-    </div>
-    <div id="login-form-pin" style="display:none">
-      <input class="login-input" type="password" inputmode="numeric" maxlength="4" id="login-pin" placeholder="PIN (4 dígitos)" style="text-align:center;letter-spacing:6px;margin-bottom:10px" onkeydown="if(event.key==='Enter')fazerLoginPin()">
-      <button class="login-btn" onclick="fazerLoginPin()">ENTRAR</button>
-      <div onclick="mostrarLoginSenha()" style="margin-top:12px;font-size:.78rem;color:var(--muted);cursor:pointer">← Voltar (usuário e senha)</div>
+      <button class="login-btn" id="login-btn" onclick="fazerLogin()">ENTRAR</button>
     </div>
     <div class="login-err" id="login-err"></div>
   </div>
@@ -885,6 +879,7 @@
 <!-- SCRIPTS -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <!-- Carrega os scripts locais sempre na versão mais recente (anti-cache automático).
      O ?v= muda a cada carregamento, então o navegador nunca usa um arquivo antigo. -->
 <script>

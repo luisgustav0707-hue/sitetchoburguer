@@ -65,7 +65,7 @@
     <div class="nav-tab" id="nav-salao" style="display:none" onclick="showPage('salao')">🍽️ Salão</div>
     <div class="nav-tab" onclick="showPage('pedidos')">📋 Pedidos</div>
     <div class="nav-tab" onclick="showPage('config')">⚙️ Config</div>
-    <div class="nav-tab" onclick="showPage('crm')">👥 CRM</div>
+    <div class="nav-tab" onclick="showPage('crm')">👥 Marketing</div>
     <div class="nav-tab" onclick="showPage('cardapio')">🍔 Cardápio</div>
     <div class="nav-tab" onclick="showPage('financeiro')">💰 Financeiro</div>
   </div>
@@ -497,7 +497,8 @@
    <div class="cfg-wrap">
     <div class="cfg-side">
       <div class="cfg-side-grp">CRM</div>
-      <button class="cfg-side-item active" data-crm="clientes"   onclick="showCrm('clientes')">🧑‍🤝‍🧑 Clientes</button>
+      <button class="cfg-side-item active" data-crm="crm"        onclick="showCrm('crm')">👥 CRM</button>
+      <button class="cfg-side-item"        data-crm="clientes"   onclick="showCrm('clientes')">🧑‍🤝‍🧑 Clientes</button>
       <button class="cfg-side-item"        data-crm="dashboard"  onclick="showCrm('dashboard')">📊 Dashboard</button>
       <div class="cfg-side-grp">Marketing</div>
       <button class="cfg-side-item"        data-crm="campanhas"   onclick="showCrm('campanhas')">📣 Campanhas</button>
@@ -507,8 +508,15 @@
     </div>
     <div class="cfg-content" id="crm-content">
 
+    <!-- CRM (visão geral) -->
+    <div class="cfg-panel active" id="crm-crm">
+      <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px">Visão geral dos seus clientes e do relacionamento.</div>
+      <div class="fin-cards" id="crm-over-cards"></div>
+      <div id="crm-over-atalhos" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px"></div>
+    </div>
+
     <!-- CLIENTES -->
-    <div class="cfg-panel active" id="crm-clientes">
+    <div class="cfg-panel" id="crm-clientes">
       <div id="crm-filtros" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
       <div id="crm-clientes-lista"></div>
     </div>

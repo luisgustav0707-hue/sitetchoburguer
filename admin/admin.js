@@ -2980,11 +2980,12 @@ let crmClientes=[];        // cache dos clientes carregados do Firestore
 let crmFiltro='todos';
 
 function carregarCRM(){
-  showCrm('clientes');
+  showCrm('crm');
   const el=document.getElementById('crm-clientes-lista');
   if(el) el.innerHTML='<div style="color:var(--muted);font-size:.78rem;padding:10px 0">🔍 Carregando clientes...</div>';
   db.collection('clientes').get().then(snap=>{
     crmClientes=snap.docs.map(d=>({_id:d.id,...d.data()}));
+    renderCrmOverview();
     renderClientesCRM();
     renderDashCRM();
   }).catch(e=>{
@@ -3010,6 +3011,7 @@ function showCrm(t){
   document.querySelectorAll('#page-crm .cfg-panel').forEach(p=>p.classList.remove('active'));
   const pg=document.getElementById('crm-'+t)||document.getElementById('inner-'+t);
   if(pg) pg.classList.add('active');
+  if(t==='crm')         renderCrmOverview();
   if(t==='clientes')    renderClientesCRM();
   if(t==='dashboard')   renderDashCRM();
   if(t==='campanhas')   carregarCampanhas();
@@ -3093,6 +3095,31 @@ function renderDashCRM(){
     card('—','Recuperados','var(--muted)')+
     card(cuponsGerados,'Cupons gerados')+
     card(cuponsUsados,'Cupons usados','#27ae60');
+}
+
+// Visão geral do CRM: KPIs principais + atalhos para as demais telas.
+function renderCrmOverview(){
+  const el=document.getElementById('crm-over-cards');
+  if(el){
+    const r=n=>'R$'+Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+    const total=crmClientes.length;
+    const ativos=crmClientes.filter(c=>{const d=crmDiasDesde(c.dataUltimaCompra);return d!=null&&d<=30;}).length;
+    const inativos15=crmClientes.filter(c=>{const d=crmDiasDesde(c.dataUltimaCompra);return d!=null&&d>=15;}).length;
+    const vip=crmClientes.filter(c=>classificarCliente(c).label==='VIP').length;
+    const faturado=crmClientes.reduce((a,c)=>a+(c.valorTotalGasto||0),0);
+    const card=(n,l,cor)=>`<div class="fin-card"><div class="fin-card-n" style="color:${cor||'var(--orange)'}">${n}</div><div class="fin-card-l">${l}</div></div>`;
+    el.innerHTML=
+      card(total,'Total de clientes')+
+      card(ativos,'Ativos (30d)','#27ae60')+
+      card(inativos15,'Parados 15d+','#f39c12')+
+      card(vip,'Clientes VIP','#9b59b6')+
+      card(r(faturado),'Faturado (clientes)');
+  }
+  const at=document.getElementById('crm-over-atalhos');
+  if(at){
+    const btn=(t,txt)=>`<button class="btn-criar" style="background:var(--card);border:1px solid #3a3530;color:var(--cream)" onclick="showCrm('${t}')">${txt}</button>`;
+    at.innerHTML=btn('clientes','🧑‍🤝‍🧑 Ver clientes')+btn('dashboard','📊 Dashboard')+btn('campanhas','📣 Campanhas')+btn('cupons','🎟️ Cupons');
+  }
 }
 
 // ── CRM Campanhas (Fase 2) ────────────────────────────────────

@@ -1563,6 +1563,8 @@ function acharPedido(id){
 
 let editItens = [];      // [{nome, preco}]
 let editDesconto = 0;
+let editCustProd = null;  // produto em personalização no modal de edição
+let editCustIdx = -1;     // índice do item sendo personalizado (-1 = novo item)
 
 function abrirModalEditar(id){
   const p=acharPedido(id);
@@ -1583,6 +1585,7 @@ function abrirModalEditar(id){
   document.getElementById('edit-endereco-bloco').style.display = p.tipo==='delivery' ? 'block' : 'none';
   // Itens (parseados pra permitir soma automática)
   editItens=(p.itens||[]).map(parseItemTexto);
+  cancelarCustEdit();
   renderItensEdit();
   selEditPag(editandoPag);
   document.getElementById('modal-editar').style.display='flex';
@@ -1597,8 +1600,8 @@ function parseItemTexto(s){
 
 // Lista de produtos do cardápio (base + custom) para o seletor
 function listaProdutosEdit(){
-  const base=PRODS.map(p=>({nome:p.n,preco:p.p}));
-  const cust=getProdsCustom().map(p=>({nome:p.n||p.nome,preco:p.p!==undefined?p.p:p.preco}));
+  const base=PRODS.map(p=>({nome:p.n,preco:p.p,cat:p.cat,id:p.id,opcoes:p.opcoes||null}));
+  const cust=getProdsCustom().map(p=>({nome:p.n||p.nome,preco:(p.p!==undefined?p.p:p.preco),cat:'x',id:null,opcoes:null}));
   return [...base,...cust];
 }
 
@@ -1609,6 +1612,7 @@ function renderItensEdit(){
       <input class="edit-inp" style="flex:1;font-size:.74rem;padding:7px 9px" value="${(it.nome||'').replace(/"/g,'&quot;')}" onchange="updItemNome(${i},this.value)">
       <span style="color:var(--muted);font-size:.7rem">R$</span>
       <input class="edit-inp" type="number" min="0" step="1" style="width:66px;font-size:.74rem;padding:7px 6px" value="${it.preco||0}" oninput="updItemPreco(${i},this.value)">
+      <button type="button" onclick="editarCustItem(${i})" title="Personalizar (ponto, adicionais, tirar...)" style="background:var(--surface);color:var(--orange);border:1px solid var(--orange);border-radius:6px;width:30px;height:32px;cursor:pointer;flex:0 0 auto">✎</button>
       <button type="button" onclick="removerItemEdit(${i})" title="Remover" style="background:#3a1010;color:#e74c3c;border:none;border-radius:6px;width:30px;height:32px;cursor:pointer;flex:0 0 auto">✕</button>
     </div>`).join('') || '<div style="font-size:.7rem;color:var(--muted)">Nenhum item — adicione abaixo</div>';
   const sel=document.getElementById('edit-add-prod');
@@ -1625,13 +1629,116 @@ function addItemEdit(){
   if(isNaN(idx)) return;
   const prod=listaProdutosEdit()[idx];
   if(!prod) return;
-  editItens.push({nome:prod.nome, preco:prod.preco});
   sel.value='';
-  renderItensEdit();
+  // Hambúrguer ou item com sabor → abre personalização (igual ao cliente/manual).
+  // Demais (batata, água) → adiciona direto.
+  if(prod.cat==='b' || (prod.opcoes && prod.opcoes.length)){
+    const ing = prod.cat==='b' ? (TCHO.burguers.find(b=>b.id===prod.id)?.ing || []) : [];
+    abrirCustEdit(prod, ing, null, -1);
+  } else {
+    editItens.push({nome:prod.nome, preco:prod.preco});
+    renderItensEdit();
+  }
 }
 function removerItemEdit(i){ editItens.splice(i,1); renderItensEdit(); }
 function updItemNome(i,v){ if(editItens[i]) editItens[i].nome=v; }
 function updItemPreco(i,v){ if(editItens[i]){ editItens[i].preco=parseFloat(v)||0; recalcEditTotal(); } }
+
+// ── Personalização de item no modal de EDIÇÃO (reaproveita a lógica do manual) ──
+// Separa "Nome (detalhes)" → { base, det }
+function parseNomeDet(nome){
+  let base=String(nome||'').trim(), det='';
+  const m=base.match(/^(.*?)\s*\(([^()]*)\)\s*$/);
+  if(m){ base=m[1].trim(); det=m[2].trim(); }
+  return {base, det};
+}
+// Interpreta os detalhes "ponto • sachê X • sem Y • +Z" pra pré-marcar as opções
+function parseDetItem(det){
+  const out={ponto:'', sache:'', removidos:[], adicionais:[], opcao:''};
+  if(!det) return out;
+  det.split('•').map(x=>x.trim()).filter(Boolean).forEach(part=>{
+    if(/^sachê\s+/i.test(part)) out.sache=part.replace(/^sachê\s+/i,'').trim();
+    else if(/^sem\s+/i.test(part)) out.removidos=part.replace(/^sem\s+/i,'').split(',').map(x=>x.trim()).filter(Boolean);
+    else if(/^\+/.test(part)) out.adicionais=part.split(',').map(x=>x.trim().replace(/^\+/,'').trim()).filter(Boolean);
+    else if(TCHO.pontos.some(p=>p.nome===part)) out.ponto=part;
+    else if(!out.opcao) out.opcao=part; // sabor
+  });
+  return out;
+}
+// Clique no ✎ de um item existente: acha o produto base e abre o painel pré-preenchido
+function editarCustItem(i){
+  const it=editItens[i]; if(!it) return;
+  const {base,det}=parseNomeDet(it.nome||'');
+  const prod=listaProdutosEdit().find(p=>(p.nome||'').toLowerCase()===base.toLowerCase());
+  if(!prod || !(prod.cat==='b' || (prod.opcoes && prod.opcoes.length))){
+    showToast('✏️ Item sem personalização — edite pelo campo de texto','tok-err'); return;
+  }
+  const ing = prod.cat==='b' ? (TCHO.burguers.find(b=>b.id===prod.id)?.ing || []) : [];
+  abrirCustEdit(prod, ing, parseDetItem(det), i);
+}
+// Monta o painel de personalização (pré-marca a partir de `pre`, se houver)
+function abrirCustEdit(prod, ing, pre, idx){
+  editCustProd={...prod, ing:ing||[]}; editCustIdx=(idx===undefined?-1:idx);
+  const el=document.getElementById('edit-cust'); if(!el) return;
+  const isB = prod.cat==='b';
+  const esc=s=>String(s).replace(/"/g,'&quot;');
+  const sel=(a,b)=>a===b?' selected':'';
+  const titulo = editCustIdx>=0 ? 'Editar item' : 'Novo item';
+  let h=`<div style="font-weight:700;color:var(--orange);font-size:.8rem;margin-bottom:8px">${titulo}: ${prod.nome} — R$${prod.preco}</div>`;
+  if(prod.opcoes && prod.opcoes.length){
+    h+=`<label class="edit-lbl">🥤 Sabor</label><select id="ec-opcao" class="edit-inp" style="font-size:.74rem;margin:4px 0 8px">${prod.opcoes.map(o=>`<option${sel(o,pre&&pre.opcao)}>${o}</option>`).join('')}</select>`;
+  }
+  if(isB){
+    h+=`<label class="edit-lbl">🔥 Ponto</label><select id="ec-ponto" class="edit-inp" style="font-size:.74rem;margin:4px 0 8px">${TCHO.pontos.map(p=>`<option${sel(p.nome,pre&&pre.ponto)}>${p.nome}</option>`).join('')}</select>`;
+    h+=`<label class="edit-lbl">🥫 Sachê</label><select id="ec-sache" class="edit-inp" style="font-size:.74rem;margin:4px 0 8px">${TCHO.saches.map(s=>`<option${sel(s.nome,pre&&pre.sache)}>${s.nome}</option>`).join('')}</select>`;
+    if((ing||[]).length){
+      h+=`<label class="edit-lbl">➖ Tirar ingrediente</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px">${ing.map(i=>`<label style="font-size:.72rem;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" class="ec-rem" value="${esc(i)}"${pre&&pre.removidos.includes(i)?' checked':''}> ${i}</label>`).join('')}</div>`;
+    }
+    const adic=getAdicionaisAdmin();
+    if(adic.length){
+      h+=`<label class="edit-lbl">➕ Adicionais</label><div style="display:flex;flex-direction:column;gap:4px;margin:4px 0 8px">${adic.map(a=>`<label style="font-size:.72rem;display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" class="ec-adic" value="${esc(a.nome)}" data-preco="${a.preco}"${pre&&pre.adicionais.includes(a.nome)?' checked':''} onchange="recalcCustEdit()"> ${a.nome} <span style="color:var(--muted)">+R$${a.preco}</span></label>`).join('')}</div>`;
+    }
+  }
+  h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+      <span style="font-size:.72rem;color:var(--muted)">Item: <b id="ec-preco" style="color:var(--text)">R$${prod.preco}</b></span>
+      <div style="display:flex;gap:6px">
+        <button type="button" onclick="cancelarCustEdit()" style="padding:6px 10px;background:var(--surface);color:var(--muted);border:1px solid #3a3530;border-radius:6px;font-size:.72rem;cursor:pointer">Cancelar</button>
+        <button type="button" onclick="confirmarCustEdit()" style="padding:6px 12px;background:var(--orange);color:#000;border:none;border-radius:6px;font-weight:700;font-size:.72rem;cursor:pointer">✓ ${editCustIdx>=0?'Salvar item':'Adicionar item'}</button>
+      </div>
+    </div>`;
+  el.innerHTML=h; el.style.display='block';
+  recalcCustEdit();
+  el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function recalcCustEdit(){
+  if(!editCustProd) return;
+  let preco=editCustProd.preco;
+  document.querySelectorAll('#edit-cust .ec-adic:checked').forEach(c=>preco+=parseFloat(c.dataset.preco)||0);
+  const el=document.getElementById('ec-preco'); if(el) el.textContent='R$'+preco;
+}
+function confirmarCustEdit(){
+  if(!editCustProd) return;
+  const p=editCustProd;
+  let preco=p.preco;
+  const det=[];
+  const opc=document.getElementById('ec-opcao'); if(opc && opc.value) det.push(opc.value);
+  const pt=document.getElementById('ec-ponto'); if(pt && pt.value) det.push(pt.value);
+  const sc=document.getElementById('ec-sache'); if(sc && sc.value && sc.value!=='Não quero') det.push('sachê '+sc.value);
+  const rem=[...document.querySelectorAll('#edit-cust .ec-rem:checked')].map(c=>c.value);
+  if(rem.length) det.push('sem '+rem.join(', '));
+  const adic=[...document.querySelectorAll('#edit-cust .ec-adic:checked')];
+  adic.forEach(c=>preco+=parseFloat(c.dataset.preco)||0);
+  if(adic.length) det.push(adic.map(c=>'+'+c.value).join(', '));
+  const item={ nome: det.length ? `${p.nome} (${det.join(' • ')})` : p.nome, preco };
+  if(editCustIdx>=0 && editItens[editCustIdx]) editItens[editCustIdx]=item;
+  else editItens.push(item);
+  cancelarCustEdit();
+  renderItensEdit();
+}
+function cancelarCustEdit(){
+  editCustProd=null; editCustIdx=-1;
+  const el=document.getElementById('edit-cust'); if(el){ el.style.display='none'; el.innerHTML=''; }
+}
 
 function selEditPag(pag){
   editandoPag=pag;
@@ -1654,6 +1761,7 @@ function recalcEditTotal(){
 
 function fecharModalEditar(){
   document.getElementById('modal-editar').style.display='none';
+  cancelarCustEdit();
   editandoPedidoId=null;editandoPag=null;editItens=[];editDesconto=0;
 }
 

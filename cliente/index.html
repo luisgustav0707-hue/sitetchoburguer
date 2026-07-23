@@ -20,18 +20,18 @@
 <!-- LOJA FECHADA -->
 <div class="loja-fechada" id="loja-fechada">
   <div class="fechada-box">
-    <div class="fechada-icon">🔒</div>
-    <div class="fechada-title">FECHADO</div>
-    <div class="fechada-msg">
-      No momento não estamos aceitando pedidos.<br><br>
-      <strong style="color:var(--cream)">Horário de funcionamento:</strong><br>
-      Quinta a Domingo • 19h às 23h
+    <div class="fechada-badge">🔒</div>
+    <div class="fechada-title">Estamos fechados</div>
+    <div class="fechada-msg">No momento não estamos aceitando pedidos.</div>
+    <div class="fechada-horario">
+      <span class="fh-label">Horário de funcionamento</span>
+      <span class="fh-valor">Quinta a Domingo · 19h às 23h</span>
     </div>
-    <a class="whatsapp-btn" href="https://wa.me/5531983094152" target="_blank">
-      💬 Falar no WhatsApp
-    </a>
-    <button class="ver-cardapio-btn" onclick="verCardapioFechado()">👀 Ver o cardápio</button>
-    <div class="fechada-hint">Você pode olhar o cardápio, mas só dá pra pedir no horário de funcionamento.</div>
+    <div class="fechada-acoes">
+      <button class="fechada-btn primary" onclick="verCardapioFechado()"><span class="fb-ico">👀</span> Ver o cardápio</button>
+      <a class="fechada-btn wpp" href="https://wa.me/5531983094152" target="_blank"><span class="fb-ico">💬</span> Falar no WhatsApp</a>
+    </div>
+    <div class="fechada-hint">Dá pra olhar o cardápio à vontade — pedidos só no horário de funcionamento.</div>
   </div>
 </div>
 

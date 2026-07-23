@@ -271,16 +271,26 @@ select option{background:var(--card)}
 .err-msg{display:none;color:#e74c3c;font-size:.68rem;margin-top:5px}
 
 /* LOJA FECHADA */
-.loja-fechada{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:999;align-items:center;justify-content:center;text-align:center;padding:20px}
-.loja-fechada.show{display:flex}
-.fechada-box{background:#1a1510;border:2px solid var(--orange);border-radius:16px;padding:32px 24px;max-width:380px}
-.fechada-icon{font-size:4rem;margin-bottom:12px}
-.fechada-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--orange);letter-spacing:3px;margin-bottom:8px}
-.fechada-msg{font-size:.88rem;color:var(--muted);line-height:1.6}
-.whatsapp-btn{display:inline-flex;align-items:center;gap:8px;margin-top:16px;background:#25d366;color:#000;font-weight:700;font-size:.85rem;padding:10px 20px;border-radius:30px;text-decoration:none;letter-spacing:1px}
-.ver-cardapio-btn{display:block;width:100%;margin-top:12px;background:none;border:2px solid var(--orange);color:var(--orange);font-family:'Barlow',sans-serif;font-weight:700;font-size:.85rem;padding:10px 20px;border-radius:30px;cursor:pointer;letter-spacing:.5px;transition:all .2s}
-.ver-cardapio-btn:hover{background:var(--orange);color:#000}
-.fechada-hint{font-size:.72rem;color:var(--muted);margin-top:12px;line-height:1.5}
+.loja-fechada{display:none;position:fixed;inset:0;background:rgba(10,8,6,.82);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);z-index:999;align-items:center;justify-content:center;text-align:center;padding:20px}
+.loja-fechada.show{display:flex;animation:fechadaFade .28s ease}
+@keyframes fechadaFade{from{opacity:0}to{opacity:1}}
+.fechada-box{position:relative;background:linear-gradient(180deg,#221e19,#171310);border:1px solid rgba(245,130,10,.22);border-radius:22px;padding:34px 26px 26px;max-width:360px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.55);animation:fechadaPop .38s cubic-bezier(.2,.85,.3,1.05)}
+@keyframes fechadaPop{from{transform:translateY(14px) scale(.96);opacity:0}to{transform:none;opacity:1}}
+.fechada-badge{width:72px;height:72px;margin:0 auto 18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;background:radial-gradient(circle at 50% 38%,rgba(245,130,10,.24),rgba(245,130,10,.05));border:1px solid rgba(245,130,10,.32);box-shadow:0 0 0 6px rgba(245,130,10,.05)}
+.fechada-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:1.5px;color:var(--cream);margin-bottom:7px}
+.fechada-msg{font-size:.86rem;color:var(--muted);line-height:1.55;margin-bottom:18px}
+.fechada-horario{background:rgba(0,0,0,.28);border:1px solid #2f2a24;border-radius:12px;padding:11px 14px;margin-bottom:22px}
+.fh-label{display:block;font-size:.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--orange);font-weight:700;margin-bottom:3px}
+.fh-valor{display:block;font-size:.9rem;color:var(--cream);font-weight:600}
+.fechada-acoes{display:flex;flex-direction:column;gap:10px}
+.fechada-btn{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;box-sizing:border-box;padding:13px;border-radius:12px;font-family:'Barlow',sans-serif;font-weight:700;font-size:.9rem;letter-spacing:.2px;cursor:pointer;text-decoration:none;border:none;transition:transform .14s,box-shadow .2s,background .2s}
+.fechada-btn .fb-ico{font-size:1.05rem;line-height:1}
+.fechada-btn:active{transform:scale(.98)}
+.fechada-btn.primary{background:linear-gradient(135deg,var(--orange),var(--orange2));color:#1a1005;box-shadow:0 8px 22px rgba(245,130,10,.32)}
+.fechada-btn.primary:hover{box-shadow:0 11px 28px rgba(245,130,10,.46)}
+.fechada-btn.wpp{background:transparent;color:#25d366;border:1.5px solid rgba(37,211,102,.5)}
+.fechada-btn.wpp:hover{background:rgba(37,211,102,.12)}
+.fechada-hint{font-size:.72rem;color:var(--muted);margin-top:16px;line-height:1.5;opacity:.85}
 
 /* BANNER "ACOMPANHAR PEDIDO" — pulso pra chamar atenção */
 @keyframes pulseAcompanhar{

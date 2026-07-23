@@ -35,7 +35,10 @@ function fazerLogin(){
   const btn=document.getElementById('login-btn');
   if(!email || !senha){ err.textContent='Preencha e-mail e senha'; return; }
   err.textContent='Entrando...'; if(btn) btn.disabled=true;
-  firebase.auth().signInWithEmailAndPassword(email,senha)
+  // Persistência de SESSÃO: a sessão vive só enquanto o navegador está aberto.
+  // Fechou o navegador → precisa logar de novo (mais seguro que ficar logado).
+  firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
+    .then(()=> firebase.auth().signInWithEmailAndPassword(email,senha))
     .then(()=>{ err.textContent=''; })   // onAuthStateChanged cuida de abrir o painel
     .catch(e=>{
       console.error('Login:', e.code);

@@ -83,6 +83,7 @@ const COMBO_SUCO_EXTRA=2;
 // ── LOJA ABERTA/FECHADA + CONFIG ──────────────────────────────
 let prazoEntrega = { min: 30, max: 45 };
 let lojaAbertaState = true;   // estado atual da loja (usado pra bloquear pedidos)
+let verCardapioFechadoState = false;   // cliente optou por só olhar o cardápio com a loja fechada
 
 function atualizarPrazoBadge(){
   const el = document.getElementById('prazo-texto');
@@ -105,7 +106,17 @@ function aplicarEstadoLoja(data){
     aberta = data.lojaAberta !== false;
   }
   lojaAbertaState = aberta;
-  document.getElementById('loja-fechada').classList.toggle('show', !aberta);
+  if(aberta) verCardapioFechadoState = false;   // reabriu → volta ao normal
+  // Mostra o aviso de fechado, a menos que o cliente tenha escolhido só olhar o cardápio.
+  document.getElementById('loja-fechada').classList.toggle('show', !aberta && !verCardapioFechadoState);
+}
+
+// Cliente clicou em "Ver o cardápio" na tela de fechado: esconde o aviso pra
+// ele navegar. Pedir continua bloqueado (ver finalizarPedido).
+function verCardapioFechado(){
+  verCardapioFechadoState = true;
+  document.getElementById('loja-fechada').classList.remove('show');
+  window.scrollTo(0,0);
 }
 
 function verificarLoja(){
@@ -710,6 +721,7 @@ function linkWhatsAppPedido(pedido){
 async function finalizarPedido(){
   // Bloqueio: loja fechada não aceita pedido
   if(!lojaAbertaState){
+    verCardapioFechadoState = false;   // traz o aviso de volta (e mantém)
     document.getElementById('loja-fechada').classList.add('show');
     alert('😔 A loja está fechada no momento. Não é possível finalizar o pedido.');
     return;

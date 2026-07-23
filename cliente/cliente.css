@@ -278,6 +278,9 @@ select option{background:var(--card)}
 .fechada-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;color:var(--orange);letter-spacing:3px;margin-bottom:8px}
 .fechada-msg{font-size:.88rem;color:var(--muted);line-height:1.6}
 .whatsapp-btn{display:inline-flex;align-items:center;gap:8px;margin-top:16px;background:#25d366;color:#000;font-weight:700;font-size:.85rem;padding:10px 20px;border-radius:30px;text-decoration:none;letter-spacing:1px}
+.ver-cardapio-btn{display:block;width:100%;margin-top:12px;background:none;border:2px solid var(--orange);color:var(--orange);font-family:'Barlow',sans-serif;font-weight:700;font-size:.85rem;padding:10px 20px;border-radius:30px;cursor:pointer;letter-spacing:.5px;transition:all .2s}
+.ver-cardapio-btn:hover{background:var(--orange);color:#000}
+.fechada-hint{font-size:.72rem;color:var(--muted);margin-top:12px;line-height:1.5}
 
 /* BANNER "ACOMPANHAR PEDIDO" — pulso pra chamar atenção */
 @keyframes pulseAcompanhar{

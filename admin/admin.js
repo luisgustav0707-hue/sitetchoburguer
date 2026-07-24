@@ -1814,7 +1814,10 @@ const KB_VAZIO={novo:'Aguardando pedidos...',prep:'Nada em preparo',pronto:'Nenh
 function getKanbanStages(){
   let s=null; try{ s=JSON.parse(localStorage.getItem('tcho_kanban_stages')||'null'); }catch(e){}
   if(Array.isArray(s)&&s.length){
-    const out=s.map(x=>({id:x.id,e:x.e||'⬜',t:x.t||x.id,on:x.on!==false,base:KB_BASE.some(b=>b.id===x.id)}));
+    // As 4 etapas base (novo/prep/pronto/entrega) são o fluxo padrão do pedido e
+    // NÃO podem ficar desligadas — se uma some, o pedido "pula" etapas e some do
+    // quadro. Por isso forçamos on:true nelas (só as etapas custom podem desligar).
+    const out=s.map(x=>{ const isBase=KB_BASE.some(b=>b.id===x.id); return {id:x.id,e:x.e||'⬜',t:x.t||x.id,on:isBase?true:(x.on!==false),base:isBase}; });
     KB_BASE.forEach((b,i)=>{ if(!out.find(x=>x.id===b.id)) out.splice(i,0,{...b,on:true,base:true}); });  // garante as 4 base
     return out;
   }
@@ -1851,7 +1854,9 @@ function renderKbLinhas(){
     <div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid #2a2520">
       <input class="edit-inp" style="width:44px;text-align:center;flex-shrink:0" value="${(s.e||'').replace(/"/g,'&quot;')}" onchange="editKbStage(${i},'e',this.value)">
       <input class="edit-inp" style="flex:1;min-width:0" value="${(s.t||'').replace(/"/g,'&quot;')}" onchange="editKbStage(${i},'t',this.value)">
-      <label class="toggle-wrap" style="flex-shrink:0"><input type="checkbox" ${s.on!==false?'checked':''} onchange="editKbStage(${i},'on',this.checked)"><span class="slider"></span></label>
+      ${s.base
+        ? `<label class="toggle-wrap" style="flex-shrink:0;opacity:.45;cursor:not-allowed" title="Etapa do fluxo padrão — sempre ativa"><input type="checkbox" checked disabled><span class="slider"></span></label>`
+        : `<label class="toggle-wrap" style="flex-shrink:0"><input type="checkbox" ${s.on!==false?'checked':''} onchange="editKbStage(${i},'on',this.checked)"><span class="slider"></span></label>`}
       ${s.base?'<span style="width:28px;flex-shrink:0"></span>':`<button type="button" onclick="removerKbStage(${i})" title="Remover etapa" style="background:#3a1010;color:#e74c3c;border:none;border-radius:6px;width:28px;height:28px;cursor:pointer;flex-shrink:0">✕</button>`}
     </div>`).join('');
 }

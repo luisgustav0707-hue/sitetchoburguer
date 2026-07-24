@@ -286,7 +286,7 @@
       <div id="kb-linhas"></div>
       <button type="button" onclick="addColunaKanban()" style="width:100%;margin-top:8px;padding:8px;background:var(--card);color:var(--orange);border:1px dashed var(--orange);border-radius:8px;font-weight:700;cursor:pointer">➕ Adicionar etapa</button>
       <div class="toggle-row" style="margin-top:10px;border-top:1px solid #2a2520;padding-top:10px"><div class="toggle-info"><div class="toggle-label">✅ Finalizados de hoje</div></div><label class="toggle-wrap"><input type="checkbox" id="cfg-kb-finalizados" checked onchange="salvarKanbanCfg()"><span class="slider"></span></label></div>
-      <div style="font-size:.62rem;color:#f39c12;margin-top:10px">⚠️ Etapas novas viram status do pedido. As 4 padrão (Novos, Preparo, Prontos, Entrega) não podem ser removidas — só renomeadas/desligadas.</div>
+      <div style="font-size:.62rem;color:#f39c12;margin-top:10px">⚠️ Etapas novas viram status do pedido. As 4 padrão (Novos, Preparo, Prontos, Entrega) fazem parte do fluxo e ficam sempre ativas — dá pra renomear, mas não remover nem desligar (senão o pedido pula etapas e some do quadro).</div>
     </div>
 
     <!-- ══════ NFC-e (Nota Fiscal) ══════ -->

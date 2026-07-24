@@ -10,6 +10,7 @@
 const admin = require('firebase-admin');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 const logger = require('firebase-functions/logger');
 const wa = require('./services/whatsappService');
 
@@ -89,3 +90,52 @@ exports.gerarCupomCliente = onCall({ region: REGION }, async (request) => {
   });
   return { codigo, validade };
 });
+
+// ── 4) Push de novo pedido ─────────────────────────────────────
+// Dispara quando um pedido é criado e manda notificação push pra todos os
+// aparelhos cadastrados em `push_tokens` (o admin ativa pelo botão 📱).
+// Falhar aqui NÃO afeta o pedido — é 100% adicional.
+exports.notificarNovoPedido = onDocumentCreated(
+  { document: 'pedidos/{id}', region: REGION },
+  async (event) => {
+    const snap = event.data;
+    if(!snap) return;
+    const p = snap.data() || {};
+    if(p.status && p.status !== 'novo') return;   // só avisa pedido novo
+
+    const tokSnap = await db.collection('push_tokens').get();
+    const tokens = tokSnap.docs.map((d) => d.id).filter(Boolean);
+    if(!tokens.length){ logger.info('notificarNovoPedido: sem tokens cadastrados'); return; }
+
+    const tipo = p.tipo === 'delivery' ? '🛵 Delivery'
+      : p.tipo === 'mesa' ? `🍽️ Mesa ${p.mesaNumero || ''}`.trim()
+      : '🏃 Retirada';
+    const title = `🔔 Novo pedido ${p.num || ''}`.trim();
+    const body = `${p.nome || 'Cliente'} · ${tipo} · R$${p.total != null ? p.total : '?'}`;
+
+    const message = {
+      tokens,
+      notification: { title, body },
+      data: { url: '/admin/index.html', pedidoId: String(event.params.id) },
+      webpush: {
+        headers: { Urgency: 'high' },
+        fcmOptions: { link: 'https://tchoburguer.com/admin/index.html' },
+      },
+    };
+
+    const resp = await admin.messaging().sendEachForMulticast(message);
+    logger.info(`notificarNovoPedido: ${resp.successCount}/${tokens.length} enviados`);
+
+    // Remove tokens que não valem mais (aparelho desinstalou / expirou).
+    const limpar = [];
+    resp.responses.forEach((r, i) => {
+      if(!r.success){
+        const code = (r.error && r.error.code) || '';
+        if(code.includes('registration-token-not-registered') || code.includes('invalid-argument')){
+          limpar.push(db.collection('push_tokens').doc(tokens[i]).delete().catch(() => {}));
+        }
+      }
+    });
+    if(limpar.length) await Promise.all(limpar);
+  }
+);

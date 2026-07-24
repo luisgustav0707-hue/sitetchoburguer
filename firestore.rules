@@ -87,6 +87,10 @@ service cloud.firestore {
     match /campanhas/{d} { allow read, write: if isAdmin(); }
     match /despesas/{d}  { allow read, write: if isAdmin(); }
 
+    // Tokens de push do admin (aparelhos que recebem notificação de pedido).
+    // Só o admin logado cadastra o próprio; a Cloud Function lê via Admin SDK.
+    match /push_tokens/{t} { allow read, write: if isAdmin(); }
+
     // Analytics: o site do cliente escreve (contagem de visita / "online agora"),
     // mas só o admin lê. São contadores, sem dado sensível.
     match /stats/{d}     { allow read: if isAdmin(); allow write: if true; }

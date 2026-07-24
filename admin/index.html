@@ -11,6 +11,11 @@
 <link rel="icon" href="../logo/logo.png?v=2" type="image/png">
 <link rel="apple-touch-icon" href="../logo/logo.png">
 <meta name="theme-color" content="#f5820a">
+<!-- PWA: permite instalar o admin como app e receber notificações push -->
+<link rel="manifest" href="/admin/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tcho Admin">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;600;700&family=Barlow+Condensed:wght@700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../shared/global.css">
 <link rel="stylesheet" href="admin.css">
@@ -89,6 +94,9 @@
               <span id="som-icone">🔔</span><span id="som-txt">Ativado</span>
             </button>
             <button onclick="tocarNotificacao()" title="Testar som" style="background:#1a1510;border:1.5px solid #3a3530;color:var(--muted);border-radius:8px;padding:6px 9px;font-size:.82rem;cursor:pointer;transition:all .2s" onmouseover="this.style.borderColor='var(--orange)'" onmouseout="this.style.borderColor='#3a3530'">🔊</button>
+            <button id="btn-push" onclick="ativarPushCelular()" title="Receber pedidos no celular (push)" style="display:flex;align-items:center;gap:6px;background:#1a1510;border:1.5px solid #3a3530;color:var(--muted);border-radius:8px;padding:6px 10px;font-weight:700;font-size:.72rem;cursor:pointer;transition:all .2s">
+              <span>📱</span><span id="push-txt">Ativar push</span>
+            </button>
           </div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
@@ -880,12 +888,13 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
 <!-- Carrega os scripts locais sempre na versão mais recente (anti-cache automático).
      O ?v= muda a cada carregamento, então o navegador nunca usa um arquivo antigo. -->
 <script>
 (function(){
   var v = Date.now();
-  ['../shared/dados.js','../shared/firebase.js','../shared/crm.js','admin.js'].forEach(function(src){
+  ['../shared/dados.js','../shared/firebase.js','../shared/crm.js','admin.js','push.js'].forEach(function(src){
     document.write('<scr'+'ipt src="'+src+'?v='+v+'"><\/scr'+'ipt>');
   });
 })();

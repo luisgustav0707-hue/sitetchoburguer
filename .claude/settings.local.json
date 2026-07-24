@@ -111,7 +111,20 @@
       "PowerShell($ps = Get-Process gh -ErrorAction SilentlyContinue; if \\($ps\\) { $ps | ForEach-Object { Write-Output \\(\"gh.exe PID \" + $_.Id + \" - encerrando\"\\); Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } } else { Write-Output \"nenhum processo gh.exe rodando\" })",
       "Bash(git fetch *)",
       "Bash(Select-Object -Last 5)",
-      "PowerShell(winget upgrade *)"
+      "PowerShell(winget upgrade *)",
+      "Bash(git checkout *)",
+      "Bash(npm install *)",
+      "Bash(firebase --version)",
+      "Bash(firebase login:list)",
+      "Bash(firebase projects:list)",
+      "Bash(echo \"=== EXIT $? ===\")",
+      "Bash(firebase logout *)",
+      "Bash(firebase login *)",
+      "Bash(firebase deploy *)",
+      "Bash(git merge *)",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' __TRACKED_VAR__/admin/index.html)",
+      "Bash(firebase auth:export /tmp/tcho_users.json --project tcho-burguer-app)",
+      "Bash(java -version)"
     ]
   }
 }

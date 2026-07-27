@@ -124,7 +124,9 @@
       "Bash(git merge *)",
       "Bash(curl -s -o /dev/null -w '%{http_code}' __TRACKED_VAR__/admin/index.html)",
       "Bash(firebase auth:export /tmp/tcho_users.json --project tcho-burguer-app)",
-      "Bash(java -version)"
+      "Bash(java -version)",
+      "Bash(firebase functions:log --only notificarNovoPedido --project tcho-burguer-app)",
+      "Bash(grep -v \"'\\\\${\")"
     ]
   }
 }

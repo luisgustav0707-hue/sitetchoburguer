@@ -283,6 +283,27 @@ input:checked+.slider:before{transform:translateX(22px);background:#000}
   .cfg-side{flex:none;width:100%;flex-direction:row;flex-wrap:wrap;position:static}
   .cfg-side-grp{width:100%;padding:6px 4px 2px}
   .cfg-side-item{width:auto;flex:1 1 auto;text-align:center;font-size:.72rem;padding:7px 10px}
+
+  /* ── Cozinha no celular ── */
+  /* Topo: contadores em cima, controles embaixo — nada cortado */
+  #user-badge{display:none}
+  .coz-top{flex-direction:column;align-items:stretch}
+  .coz-ctrls{width:100%;justify-content:center;flex-wrap:wrap;gap:12px}
+  .stats-grid{gap:5px}
+  .stat-card{padding:9px 4px}
+
+  /* Kanban: uma coluna por vez com deslize lateral (não espreme mais) */
+  .kanban{
+    grid-template-columns:none !important;
+    grid-auto-flow:column;
+    grid-auto-columns:90%;
+    overflow-x:auto;
+    scroll-snap-type:x mandatory;
+    -webkit-overflow-scrolling:touch;
+    gap:10px;
+    padding:0 2px 10px;
+  }
+  .kanban>*{scroll-snap-align:start}
 }
 
 /* AUTO BANNER */

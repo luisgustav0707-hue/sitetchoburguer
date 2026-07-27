@@ -1557,10 +1557,35 @@ function renderCard(p){
     <div class="card-itens">${p.itens.join(' · ')}</div>
     ${p.obs?`<div class="card-obs">⚠ ${p.obs}</div>`:''}
     <div class="card-ftr"><div class="card-total">R$${p.total}</div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:.68rem;color:var(--muted)" title="Horário do pedido">🕐 ${horaPedido(p)}</span><div class="timer ${cls}">⏱ ${tt(m)}</div></div></div>
-    <div class="card-btns">${btns}<button class="btn-editar-card" onclick="reimprimirPedido('${fid}')" title="Imprimir cupom">🖨️</button><button class="btn-editar-card" onclick="abrirModalEditar('${fid}')" title="Editar pedido">✏️</button><button class="btn-editar-card" onclick="excluirPedido('${fid}')" title="Excluir pedido" style="color:#e74c3c">🗑️</button></div>
+    <div class="card-btns">${btns}${temTelValido(p)?`<button class="btn-editar-card" onclick="avisarCliente('${fid}')" title="Avisar cliente no WhatsApp" style="color:#25d366;border-color:#1a5a33">💬</button>`:''}<button class="btn-editar-card" onclick="reimprimirPedido('${fid}')" title="Imprimir cupom">🖨️</button><button class="btn-editar-card" onclick="abrirModalEditar('${fid}')" title="Editar pedido">✏️</button><button class="btn-editar-card" onclick="excluirPedido('${fid}')" title="Excluir pedido" style="color:#e74c3c">🗑️</button></div>
     ${dragHint}
   </div>`;
 }
+
+// ── AVISAR CLIENTE NO WHATSAPP ─────────────────────────────────
+// Monta a mensagem conforme a etapa atual do pedido.
+function msgStatusCliente(p){
+  const nome = (p.nome||'').trim().split(' ')[0] || 'tudo bem';
+  const num = p.num || ('#'+p.id);
+  switch(p.status){
+    case 'novo':
+    case 'prep':   return `Olá ${nome}! 🍔 Recebemos seu pedido ${num} e já estamos preparando. Qualquer coisa é só chamar!`;
+    case 'pronto': return p.tipo==='delivery'
+      ? `Olá ${nome}! ✅ Seu pedido ${num} está pronto e logo sai para entrega. 🛵`
+      : `Olá ${nome}! ✅ Seu pedido ${num} está pronto para retirada! 🍔`;
+    case 'entrega':return `Olá ${nome}! 🛵 Seu pedido ${num} *saiu para entrega* e já está a caminho. Bom apetite! 😋`;
+    case 'finalizado': return `Olá ${nome}! 🙏 Obrigado pela preferência! Esperamos que tenha gostado. Volte sempre! 🍔`;
+    default:       return `Olá ${nome}! Sobre o seu pedido ${num}...`;
+  }
+}
+// Abre o WhatsApp do cliente com a mensagem pronta (você toca em enviar).
+function avisarCliente(id){
+  const p = acharPedido(id); if(!p) return;
+  const tel = (p.tel||'').replace(/\D/g,'');
+  if(tel.length < 10){ showToast('Cliente sem telefone válido','tok-err'); return; }
+  window.open(`https://wa.me/55${tel}?text=${encodeURIComponent(msgStatusCliente(p))}`, '_blank');
+}
+function temTelValido(p){ return (p.tel||'').replace(/\D/g,'').length >= 10; }
 
 // ── EDITAR PEDIDO ──────────────────────────────────────────────
 let editandoPedidoId = null;

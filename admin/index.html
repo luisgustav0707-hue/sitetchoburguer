@@ -17,8 +17,16 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Tcho Admin">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;600;700&family=Barlow+Condensed:wght@700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../shared/global.css">
-<link rel="stylesheet" href="admin.css">
+<!-- CSS com anti-cache automático (o ?v= muda a cada carregamento, então o
+     navegador/app nunca reaproveita um estilo antigo). -->
+<script>
+(function(){
+  var v = Date.now();
+  ['../shared/global.css','admin.css'].forEach(function(href){
+    document.write('<link rel="stylesheet" href="'+href+'?v='+v+'">');
+  });
+})();
+</script>
 </head>
 <body>
 

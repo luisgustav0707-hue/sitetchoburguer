@@ -1291,7 +1291,7 @@ async function salvarPedidoManual(){
     if(statusPedido==='novo'){
       pedidos.push(p);totalHoje++;
       atualizarBadgeNovos();
-      if(autoAceitar)setTimeout(()=>moverStatus(p._id,'prep',true),600);
+      if(autoAceitar)setTimeout(()=>moverStatus(p._id,proximaEtapaAtiva(p),true),600);
       else renderAll();
     }
     showToast(msg,'tok-ok');
@@ -1440,7 +1440,7 @@ function moverStatus(id,novoStatus,auto=false){
     }
   }catch(e){}
   // Só imprime ao aceitar se ainda NÃO foi impresso (evita 2ª via ao mover pra preparando)
-  if(novoStatus==='prep' && statusAnterior==='novo' && !auto && !p.impresso) setTimeout(()=>imprimirPedido(p),200);
+  if(statusAnterior==='novo' && novoStatus!=='cancelado' && !auto && !p.impresso) setTimeout(()=>imprimirPedido(p),200);
   if(novoStatus==='finalizado') setTimeout(()=>mostrarCardFinalizado({...p}),200);
   atualizarBadgeNovos();
   renderAll();
@@ -1537,13 +1537,20 @@ function renderCard(p){
   const pb=p.impresso?`<span class="badge-print">🖨</span>`:'';
   const fid=p._id;
   let btns='';
-  if(p.status==='novo'){btns=autoAceitar?`<span style="font-size:.6rem;color:#f39c12">⚡ aceite automático</span>`:`<button class="btn-k bk-aceitar" onclick="moverStatus('${fid}','prep')">✓ ACEITAR + 🖨️</button><button class="btn-k bk-cancel" onclick="cancelar('${fid}')">×</button>`;}
-  else if(p.status==='prep'){btns=`<button class="btn-k bk-pronto" onclick="moverStatus('${fid}','pronto')">PRONTO ✓</button>`;}
-  else if(p.status==='pronto'){btns=p.tipo==='delivery'?`<button class="btn-k bk-entrega" onclick="moverStatus('${fid}','entrega')">SAIU 🛵</button>`:`<button class="btn-k bk-final" onclick="moverStatus('${fid}','finalizado')">RETIRADO ✓</button>`;}
-  else if(p.status==='entrega'){btns=`<button class="btn-k bk-final" onclick="moverStatus('${fid}','finalizado')">ENTREGUE ✓</button>`;}
-  else{btns=`<button class="btn-k bk-final" onclick="moverStatus('${fid}','finalizado')">FINALIZAR ✓</button>`;}  // etapa customizada
-  const nextLabel={novo:'Em preparo →',prep:'Pronto →',pronto:p.tipo==='delivery'?'Entrega →':'',entrega:''}[p.status];
-  const dragHint=nextLabel?`<div class="drag-hint">↔ Arraste para ${nextLabel}</div>`:'';
+  // Próxima etapa ATIVA (pula as desligadas). Ver proximaEtapaAtiva().
+  const prox=proximaEtapaAtiva(p);
+  const infoProx=getKanbanStages().find(s=>s.id===prox);
+  const nomeProx=infoProx?`${infoProx.e} ${infoProx.t}`:'Finalizar';
+  if(p.status==='novo'){
+    btns=autoAceitar?`<span style="font-size:.6rem;color:#f39c12">⚡ aceite automático</span>`
+      :`<button class="btn-k bk-aceitar" onclick="moverStatus('${fid}','${prox}')">✓ ACEITAR + 🖨️</button><button class="btn-k bk-cancel" onclick="cancelar('${fid}')">×</button>`;
+  } else if(prox==='finalizado'){
+    const lbl=p.tipo==='delivery'?'ENTREGUE ✓':(p.status==='pronto'?'RETIRADO ✓':'FINALIZAR ✓');
+    btns=`<button class="btn-k bk-final" onclick="moverStatus('${fid}','finalizado')">${lbl}</button>`;
+  } else {
+    btns=`<button class="btn-k bk-pronto" onclick="moverStatus('${fid}','${prox}')">${nomeProx} →</button>`;
+  }
+  const dragHint=(prox!=='finalizado')?`<div class="drag-hint">↔ Arraste para ${nomeProx}</div>`:'';
   return`<div class="card" id="card-${fid}" draggable="true" ondragstart="onDragStart(event,'${fid}','${p.status}')" ondragend="onDragEnd()">
     <div class="card-hdr"><span class="card-num">${p.num||('#'+p.id)}${pb}</span>${tipoEl}</div>
     <div class="card-cli">${p.nome}${p.bairro?` · ${p.bairro}`:''}</div>
@@ -1814,11 +1821,11 @@ const KB_VAZIO={novo:'Aguardando pedidos...',prep:'Nada em preparo',pronto:'Nenh
 function getKanbanStages(){
   let s=null; try{ s=JSON.parse(localStorage.getItem('tcho_kanban_stages')||'null'); }catch(e){}
   if(Array.isArray(s)&&s.length){
-    // As 4 etapas base (novo/prep/pronto/entrega) são o fluxo padrão do pedido e
-    // NÃO podem ficar desligadas — se uma some, o pedido "pula" etapas e some do
-    // quadro. Por isso forçamos on:true nelas (só as etapas custom podem desligar).
-    const out=s.map(x=>{ const isBase=KB_BASE.some(b=>b.id===x.id); return {id:x.id,e:x.e||'⬜',t:x.t||x.id,on:isBase?true:(x.on!==false),base:isBase}; });
-    KB_BASE.forEach((b,i)=>{ if(!out.find(x=>x.id===b.id)) out.splice(i,0,{...b,on:true,base:true}); });  // garante as 4 base
+    // Qualquer etapa pode ser ligada/desligada. Ao avançar um pedido, as etapas
+    // desligadas são PULADAS (ver proximaEtapaAtiva) — o pedido nunca cai numa
+    // coluna que não existe.
+    const out=s.map(x=>({id:x.id,e:x.e||'⬜',t:x.t||x.id,on:x.on!==false,base:KB_BASE.some(b=>b.id===x.id)}));
+    KB_BASE.forEach((b,i)=>{ if(!out.find(x=>x.id===b.id)) out.splice(i,0,{...b,on:true,base:true}); });  // garante as 4 base existem
     return out;
   }
   return KB_BASE.map(b=>({...b,on:true,base:true}));
@@ -1833,6 +1840,16 @@ function getKanbanCfg(){   // só o toggle de "finalizados de hoje"
 }
 // Ordem dos status ativos (usado no drag e na query do listener)
 function statusCols(){ const a=getKanbanStages().filter(s=>s.on).map(s=>s.id); return a.length?a:['novo','prep','pronto','entrega']; }
+
+// Próxima etapa ATIVA do pedido, pulando as desligadas. Retirada/mesa não
+// passam por "entrega". Se já está na última etapa ativa → 'finalizado'.
+function proximaEtapaAtiva(p){
+  const ativos=getKanbanStages().filter(s=>s.on).map(s=>s.id);
+  const fluxo=ativos.filter(id=>!(id==='entrega' && p.tipo!=='delivery'));
+  const i=fluxo.indexOf(p.status);
+  if(i===-1 || i>=fluxo.length-1) return 'finalizado';
+  return fluxo[i+1];
+}
 
 // Monta as colunas do kanban a partir das etapas ativas
 function renderKanbanCols(){
@@ -1854,9 +1871,7 @@ function renderKbLinhas(){
     <div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid #2a2520">
       <input class="edit-inp" style="width:44px;text-align:center;flex-shrink:0" value="${(s.e||'').replace(/"/g,'&quot;')}" onchange="editKbStage(${i},'e',this.value)">
       <input class="edit-inp" style="flex:1;min-width:0" value="${(s.t||'').replace(/"/g,'&quot;')}" onchange="editKbStage(${i},'t',this.value)">
-      ${s.base
-        ? `<label class="toggle-wrap" style="flex-shrink:0;opacity:.45;cursor:not-allowed" title="Etapa do fluxo padrão — sempre ativa"><input type="checkbox" checked disabled><span class="slider"></span></label>`
-        : `<label class="toggle-wrap" style="flex-shrink:0"><input type="checkbox" ${s.on!==false?'checked':''} onchange="editKbStage(${i},'on',this.checked)"><span class="slider"></span></label>`}
+      <label class="toggle-wrap" style="flex-shrink:0" title="Ligar/desligar esta etapa"><input type="checkbox" ${s.on!==false?'checked':''} onchange="editKbStage(${i},'on',this.checked)"><span class="slider"></span></label>
       ${s.base?'<span style="width:28px;flex-shrink:0"></span>':`<button type="button" onclick="removerKbStage(${i})" title="Remover etapa" style="background:#3a1010;color:#e74c3c;border:none;border-radius:6px;width:28px;height:28px;cursor:pointer;flex-shrink:0">✕</button>`}
     </div>`).join('');
 }
@@ -3937,7 +3952,7 @@ function receberPedidoLocal(p){
   tocarNotificacao();
   showToast(`🔔 Novo pedido ${p.num||'#'+p.id} — ${p.nome}`,'tok-info');
   atualizarBadgeNovos();
-  if(autoAceitar) setTimeout(()=>moverStatus('local-'+p.id,'prep',true),600);
+  if(autoAceitar) setTimeout(()=>moverStatus('local-'+p.id,proximaEtapaAtiva(p),true),600);
   renderAll();
   renderHistorico();
 }
@@ -3980,7 +3995,7 @@ function iniciarListenerPedidos(){
               showToast(`🔔 Novo pedido ${p.num||'#'+p.id} — ${p.nome}`,'tok-info');
               atualizarBadgeNovos();
               imprimirPedido(p);
-              if(autoAceitar)setTimeout(()=>moverStatus(p._id,'prep',true),600);
+              if(autoAceitar)setTimeout(()=>moverStatus(p._id,proximaEtapaAtiva(p),true),600);
             } else {
               atualizarBadgeNovos();
             }

@@ -5,7 +5,7 @@
 //
 // A chave VAPID vem do Firebase Console → Configurações do projeto →
 // Cloud Messaging → "Certificados push da Web" → Gerar par de chaves.
-const VAPID_KEY = 'COLE_AQUI_A_CHAVE_VAPID';
+const VAPID_KEY = 'BPL3u_ADN0fVeFFRrpXkIUAwi3xejXE3QoxGbZdTPAB2uJumsf9x3CkgQhdSxJbWwHce9bgYEfSNF0T1GWRnEVU';
 
 function pushSuportado(){
   return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;

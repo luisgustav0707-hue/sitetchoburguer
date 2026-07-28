@@ -163,7 +163,7 @@ function carregarAcessos(){
       if(k.startsWith(mesK)) mes+=v;
     });
     const set=(id,val)=>{const el=document.getElementById(id); if(el) el.textContent=val;};
-    set('ac-hoje',hoje); set('ac-semana',semana); set('ac-mes',mes); set('ac-total',d.total||0);
+    set('ac-hoje',hoje); set('ac-semana',semana); set('ac-mes',mes); set('ac-total',d.total||0); set('ac-hoje-coz',hoje);
   }).catch(()=>{});
 }
 function iniciarPresencaAdmin(){
@@ -173,6 +173,7 @@ function iniciarPresencaAdmin(){
   // Firestore. Aqui lemos uma vez por minuto e só com a aba em primeiro plano.
   const ler=()=>{
     if(document.hidden) return;
+    carregarAcessos();   // mantém o "hoje" do indicador da Cozinha atualizado
     db.collection('presenca').get().then(snap=>{
       const agora=Date.now(); let online=0;
       snap.forEach(doc=>{
@@ -181,7 +182,7 @@ function iniciarPresencaAdmin(){
         if(idade<120000) online++;                             // ativo nos últimos ~2min (heartbeat de 90s)
         else if(idade>600000) doc.ref.delete().catch(()=>{});  // limpa presença abandonada (>10min)
       });
-      const el=document.getElementById('ac-online'); if(el) el.textContent=online;
+      ['ac-online','ac-online-coz'].forEach(id=>{const el=document.getElementById(id); if(el) el.textContent=online;});
     }).catch(()=>{});
   };
   ler();
@@ -4193,6 +4194,7 @@ function registrarHandlersConexao(){
 function iniciarApp(){
   renderAll();
   atualizarBotaoSom();
+  carregarAcessos(); iniciarPresencaAdmin();   // alimenta o indicador de acessos na Cozinha
   aplicarAcesso();                 // esconde abas conforme o perfil logado
   carregarGarcons();               // cacheia garçons (tcho_garcons) p/ login por PIN
   carregarUsuarios();              // cacheia usuários p/ login por senha

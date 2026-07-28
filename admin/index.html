@@ -111,6 +111,13 @@
           <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:700">Adicionar</div>
           <button onclick="abrirModalManual()" style="background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;padding:6px 12px;font-weight:700;font-size:.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:1px">Pedido manual</button>
         </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+          <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:700">Acessos</div>
+          <button onclick="showPage('config');showConfig('acessos')" title="Ver acessos do site" style="display:flex;align-items:center;gap:8px;background:#0d1a0d;border:1.5px solid #1a8f4c;border-radius:8px;padding:6px 11px;cursor:pointer">
+            <span style="display:flex;align-items:center;gap:5px;font-size:.74rem;font-weight:700;color:#27ae60"><span style="width:8px;height:8px;border-radius:50%;background:#27ae60;box-shadow:0 0 6px #27ae60;flex-shrink:0"></span><span id="ac-online-coz">0</span> online</span>
+            <span style="font-size:.68rem;color:var(--muted);white-space:nowrap">· <span id="ac-hoje-coz">0</span> hoje</span>
+          </button>
+        </div>
       </div>
     </div>
     <div class="kanban" id="kanban"></div>

@@ -515,6 +515,7 @@
       <button class="cfg-side-item"        data-crm="cupons"      onclick="showCrm('cupons')">🎟️ Cupons</button>
       <button class="cfg-side-item"        data-crm="fidelidade"  onclick="showCrm('fidelidade')">🎁 Fidelidade</button>
       <button class="cfg-side-item"        data-crm="recuperacao" onclick="showCrm('recuperacao')">💌 Recuperação</button>
+      <button class="cfg-side-item"        data-crm="mensagens"   onclick="showCrm('mensagens')">💬 Mensagens</button>
     </div>
     <div class="cfg-content" id="crm-content">
 
@@ -535,6 +536,17 @@
     <div class="cfg-panel" id="crm-dashboard">
       <div class="fin-cards" id="crm-dash-cards"></div>
       <div style="font-size:.66rem;color:var(--muted);margin-top:8px">Clientes ativos = compraram nos últimos 30 dias. "Recuperados" será medido quando as campanhas (Fase 2) estiverem ativas.</div>
+    </div>
+
+    <!-- MENSAGENS (modelos por etapa do Kanban) -->
+    <div class="cfg-panel" id="crm-mensagens">
+      <div style="font-size:.8rem;color:var(--muted);margin-bottom:6px">Modelos de mensagem do WhatsApp por etapa do pedido. Ao tocar no botão de WhatsApp de um pedido, o modelo da etapa aparece pronto — e você pode editar antes de enviar.</div>
+      <div style="font-size:.68rem;color:var(--muted);background:var(--card);border:1px solid #2a2520;border-radius:8px;padding:8px 10px;margin-bottom:12px">
+        Variáveis que você pode usar: <b style="color:var(--orange)">{nome}</b> {num} {total} {tipo} {bairro} — elas são trocadas pelos dados do pedido na hora.
+      </div>
+      <div id="msg-templates"></div>
+      <button class="btn-primary" style="margin-top:12px" onclick="salvarMsgTemplates()">💾 Salvar modelos</button>
+      <div id="msg-templates-status" style="font-size:.72rem;color:#27ae60;margin-top:8px;min-height:16px"></div>
     </div>
 
     <!-- CAMPANHAS -->

@@ -1562,30 +1562,87 @@ function renderCard(p){
   </div>`;
 }
 
-// ── AVISAR CLIENTE NO WHATSAPP ─────────────────────────────────
-// Monta a mensagem conforme a etapa atual do pedido.
-function msgStatusCliente(p){
-  const nome = (p.nome||'').trim().split(' ')[0] || 'tudo bem';
-  const num = p.num || ('#'+p.id);
-  switch(p.status){
-    case 'novo':
-    case 'prep':   return `Olá ${nome}! 🍔 Recebemos seu pedido ${num} e já estamos preparando. Qualquer coisa é só chamar!`;
-    case 'pronto': return p.tipo==='delivery'
-      ? `Olá ${nome}! ✅ Seu pedido ${num} está pronto e logo sai para entrega. 🛵`
-      : `Olá ${nome}! ✅ Seu pedido ${num} está pronto para retirada! 🍔`;
-    case 'entrega':return `Olá ${nome}! 🛵 Seu pedido ${num} *saiu para entrega* e já está a caminho. Bom apetite! 😋`;
-    case 'finalizado': return `Olá ${nome}! 🙏 Obrigado pela preferência! Esperamos que tenha gostado. Volte sempre! 🍔`;
-    default:       return `Olá ${nome}! Sobre o seu pedido ${num}...`;
-  }
+// ── AVISAR CLIENTE NO WHATSAPP (modelos por etapa, editáveis) ───
+// Modelos padrão por etapa. O dono edita em Marketing → Mensagens.
+const MSG_DEFAULTS = {
+  novo:      'Olá {nome}! 🍔 Recebemos seu pedido {num} e já vamos preparar. Qualquer coisa é só chamar!',
+  prep:      'Olá {nome}! 👨‍🍳 Seu pedido {num} está em preparo. Já já fica pronto!',
+  pronto:    'Olá {nome}! ✅ Seu pedido {num} está pronto!',
+  entrega:   'Olá {nome}! 🛵 Seu pedido {num} *saiu para entrega* e já está a caminho. Bom apetite! 😋',
+  finalizado:'Olá {nome}! 🙏 Obrigado pela preferência! Volte sempre! 🍔',
+};
+function getMsgTemplates(){
+  let s=null; try{ s=JSON.parse(localStorage.getItem('tcho_msg_templates')||'null'); }catch(e){}
+  return Object.assign({}, MSG_DEFAULTS, s||{});
 }
-// Abre o WhatsApp do cliente com a mensagem pronta (você toca em enviar).
+// Troca as variáveis {nome} {num} {total} {tipo} {bairro} pelos dados do pedido.
+function fillTemplate(tpl, p){
+  const nome=(p.nome||'').trim().split(' ')[0]||'tudo bem';
+  return String(tpl||'')
+    .replace(/\{nome\}/gi, nome)
+    .replace(/\{num\}/gi, p.num||('#'+p.id))
+    .replace(/\{total\}/gi, 'R$'+(p.total!=null?p.total:'?'))
+    .replace(/\{tipo\}/gi, p.tipo==='delivery'?'Delivery':(p.tipo==='mesa'?'Mesa':'Retirada'))
+    .replace(/\{bairro\}/gi, p.bairro||'');
+}
+function msgStatusCliente(p){
+  const tpls=getMsgTemplates();
+  const tpl=tpls[p.status]!==undefined?tpls[p.status]:(tpls.finalizado||'Olá {nome}! Sobre o seu pedido {num}...');
+  return fillTemplate(tpl, p);
+}
+function temTelValido(p){ return (p.tel||'').replace(/\D/g,'').length >= 10; }
+
+// Clique no WhatsApp do card → abre modal com a msg da etapa pra revisar/editar antes de enviar.
 function avisarCliente(id){
   const p = acharPedido(id); if(!p) return;
   const tel = (p.tel||'').replace(/\D/g,'');
   if(tel.length < 10){ showToast('Cliente sem telefone válido','tok-err'); return; }
-  window.open(`https://wa.me/55${tel}?text=${encodeURIComponent(msgStatusCliente(p))}`, '_blank');
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const ov=document.createElement('div');
+  ov.id='modal-whats';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML=`<div style="background:var(--surface);border:1px solid #2a2520;border-radius:14px;padding:18px;max-width:430px;width:100%">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.15rem;letter-spacing:1px;color:#25d366;margin-bottom:3px">Avisar cliente no WhatsApp</div>
+      <div style="font-size:.74rem;color:var(--muted);margin-bottom:10px">${esc(p.nome||'')} · ${p.num||('#'+p.id)} — revise/edite e envie</div>
+      <textarea id="whats-msg" class="edit-inp" rows="5" style="resize:vertical;line-height:1.5">${esc(msgStatusCliente(p))}</textarea>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button onclick="fecharModalWhats()" style="flex:1;padding:11px;background:var(--card);border:1px solid #3a3530;color:var(--muted);border-radius:8px;font-weight:700;cursor:pointer;font-family:'Barlow',sans-serif">Cancelar</button>
+        <button onclick="enviarWhats('${tel}')" style="flex:2;padding:11px;background:#25d366;color:#000;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-family:'Barlow',sans-serif">Enviar no WhatsApp →</button>
+      </div>
+    </div>`;
+  ov.addEventListener('click', e=>{ if(e.target===ov) fecharModalWhats(); });
+  document.body.appendChild(ov);
+  const ta=document.getElementById('whats-msg'); if(ta) ta.focus();
 }
-function temTelValido(p){ return (p.tel||'').replace(/\D/g,'').length >= 10; }
+function fecharModalWhats(){ const m=document.getElementById('modal-whats'); if(m) m.remove(); }
+function enviarWhats(tel){
+  const ta=document.getElementById('whats-msg');
+  const txt=ta?ta.value:'';
+  fecharModalWhats();
+  window.open(`https://wa.me/55${tel}?text=${encodeURIComponent(txt)}`, '_blank');
+}
+
+// ── Marketing → Mensagens: editar os modelos por etapa ──────────
+function renderMsgTemplates(){
+  const el=document.getElementById('msg-templates'); if(!el) return;
+  const tpls=getMsgTemplates();
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const stages=getKanbanStages().filter(s=>s.on).map(s=>({id:s.id,e:s.e,t:s.t}));
+  stages.push({id:'finalizado',e:'✅',t:'Finalizado'});
+  el.innerHTML=stages.map(s=>`
+    <div style="margin-bottom:12px">
+      <label class="edit-lbl">${s.e} ${s.t}</label>
+      <textarea class="edit-inp" data-stage="${s.id}" rows="2" style="resize:vertical;line-height:1.5">${esc(tpls[s.id]!==undefined?tpls[s.id]:'')}</textarea>
+    </div>`).join('');
+}
+function salvarMsgTemplates(){
+  const obj={};
+  document.querySelectorAll('#msg-templates textarea[data-stage]').forEach(t=>{ obj[t.dataset.stage]=t.value; });
+  localStorage.setItem('tcho_msg_templates', JSON.stringify(obj));
+  db.collection('config').doc('operacao').set({msgTemplates:obj},{merge:true}).catch(console.error);
+  const st=document.getElementById('msg-templates-status'); if(st){ st.textContent='✅ Modelos salvos! Já valem no botão de WhatsApp dos pedidos.'; setTimeout(()=>{ if(st) st.textContent=''; },3000); }
+  showToast('💬 Modelos de mensagem salvos','tok-ok');
+}
 
 // ── EDITAR PEDIDO ──────────────────────────────────────────────
 let editandoPedidoId = null;
@@ -3068,6 +3125,7 @@ function showCrm(t){
   if(t==='campanhas')   carregarCampanhas();
   if(t==='cupons')      renderCupons();
   if(t==='recuperacao') initRecuperacao();
+  if(t==='mensagens')   renderMsgTemplates();
 }
 
 const CRM_FILTROS=[
@@ -4112,6 +4170,7 @@ function iniciarApp(){
     if(cfg.horarios){ cfgHorarios=cfg.horarios; localStorage.setItem('tcho_horarios',JSON.stringify(cfg.horarios)); if(document.getElementById('hor-dias')) carregarHorarios(); }
     if(cfg.kanbanStages){ localStorage.setItem('tcho_kanban_stages',JSON.stringify(cfg.kanbanStages)); }
     if(cfg.kanban){ localStorage.setItem('tcho_kanban',JSON.stringify(cfg.kanban)); }
+    if(cfg.msgTemplates){ localStorage.setItem('tcho_msg_templates',JSON.stringify(cfg.msgTemplates)); if(document.getElementById('msg-templates')&&document.getElementById('crm-mensagens').classList.contains('active')) renderMsgTemplates(); }
     if(cfg.kanbanStages||cfg.kanban){ renderAll(); if(document.getElementById('kb-linhas')) carregarKanbanCfg(); }
     if(document.getElementById('cfg-auto-horario'))
       document.getElementById('cfg-auto-horario').checked=cfg.autoHorario!==false;

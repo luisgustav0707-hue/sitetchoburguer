@@ -1512,6 +1512,64 @@ function onDragOver(event,status){event.preventDefault();if(!dragId||!canDrop(dr
 function onDragLeave(event,status){const col=document.getElementById('col-'+status);if(!col.contains(event.relatedTarget))col.classList.remove('drag-over');}
 function onDrop(event,toStatus){event.preventDefault();document.getElementById('col-'+toStatus).classList.remove('drag-over');if(!dragId||!canDrop(dragSrc,toStatus))return;moverStatus(dragId,toStatus);}
 
+// ── ARRASTAR COM O DEDO (touch) ────────────────────────────────
+// O drag-and-drop do HTML5 só funciona com mouse. Aqui replicamos pra toque:
+// SEGURA o card ~300ms (long-press) e arrasta. Um toque rápido/deslize continua
+// rolando entre as colunas (não conflita). Reaproveita canDrop() e moverStatus().
+(function(){
+  let tId=null, tSrc=null, tClone=null, tCardW=0, tDragging=false, tTimer=null, tStartX=0, tStartY=0;
+  const acharCard=el=>{ while(el && el!==document.body){ if(el.classList && el.classList.contains('card')) return el; el=el.parentElement; } return null; };
+  const colUnder=(x,y)=>{ let n=document.elementFromPoint(x,y); while(n && n!==document.body){ if(n.classList && n.classList.contains('col')) return n; n=n.parentElement; } return null; };
+  const limpar=()=>{ if(tTimer){clearTimeout(tTimer);tTimer=null;} if(tClone){tClone.remove();tClone=null;} document.querySelectorAll('.card.dragging').forEach(c=>c.classList.remove('dragging')); document.querySelectorAll('.col.drag-over').forEach(c=>c.classList.remove('drag-over')); tId=null;tSrc=null;tDragging=false; };
+
+  document.addEventListener('touchstart', function(e){
+    const kb=document.getElementById('kanban'); if(!kb) return;
+    const card=acharCard(e.target); if(!card || !kb.contains(card)) return;
+    if(e.target.closest('button, a, textarea, input, svg')) return;   // não arrasta ao tocar num botão
+    const t=e.touches[0];
+    const id=(card.id||'').replace('card-','');
+    const ped=acharPedido(id); if(!ped) return;
+    tId=id; tSrc=ped.status; tStartX=t.clientX; tStartY=t.clientY; tCardW=card.offsetWidth; tDragging=false;
+    tTimer=setTimeout(()=>{                                           // long-press → entra em modo arrasto
+      tDragging=true; tTimer=null;
+      card.classList.add('dragging');
+      tClone=card.cloneNode(true);
+      tClone.style.cssText='position:fixed;pointer-events:none;z-index:9999;opacity:.92;width:'+tCardW+'px;left:0;top:0;transform:translate('+(tStartX-tCardW/2)+'px,'+(tStartY-24)+'px);box-shadow:0 12px 34px rgba(0,0,0,.65);rotate:2deg';
+      document.body.appendChild(tClone);
+      try{ if(navigator.vibrate) navigator.vibrate(25); }catch(_){}
+    }, 300);
+  }, {passive:true});
+
+  document.addEventListener('touchmove', function(e){
+    if(!tId) return;
+    const t=e.touches[0];
+    if(!tDragging){
+      // moveu antes do long-press → é rolagem, cancela o arrasto
+      if(Math.abs(t.clientX-tStartX)>10 || Math.abs(t.clientY-tStartY)>10){ if(tTimer){clearTimeout(tTimer);tTimer=null;} tId=null; }
+      return;
+    }
+    e.preventDefault();                                              // arrastando → trava a rolagem
+    tClone.style.transform='translate('+(t.clientX-tCardW/2)+'px,'+(t.clientY-24)+'px)';
+    // auto-rola o kanban ao chegar perto das bordas (colunas ficam acessíveis)
+    const kb=document.getElementById('kanban'); if(kb){ const r=kb.getBoundingClientRect(); if(t.clientX>r.right-42) kb.scrollLeft+=14; else if(t.clientX<r.left+42) kb.scrollLeft-=14; }
+    document.querySelectorAll('.col.drag-over').forEach(c=>c.classList.remove('drag-over'));
+    const col=colUnder(t.clientX,t.clientY);
+    if(col){ const to=(col.id||'').replace('col-',''); if(canDrop(tSrc,to)) col.classList.add('drag-over'); }
+  }, {passive:false});
+
+  const soltar=function(e){
+    if(!tId){ limpar(); return; }
+    const dragging=tDragging;
+    const t=e.changedTouches&&e.changedTouches[0];
+    const col=(dragging&&t)?colUnder(t.clientX,t.clientY):null;
+    const id=tId, src=tSrc;
+    limpar();
+    if(dragging && col){ const to=(col.id||'').replace('col-',''); if(canDrop(src,to)) moverStatus(id,to); }
+  };
+  document.addEventListener('touchend', soltar);
+  document.addEventListener('touchcancel', soltar);
+})();
+
 // ── RENDER CARDS ───────────────────────────────────────────────
 function getMin(h){return Math.floor((new Date()-h)/60000);}
 function tc(m,s){if(s==='novo')return m<3?'tok':m<6?'twarn':'tlate';if(s==='prep')return m<15?'tok':m<25?'twarn':'tlate';if(s==='entrega')return m<30?'tok':m<50?'twarn':'tlate';return'tok';}

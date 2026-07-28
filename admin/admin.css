@@ -81,7 +81,7 @@ body{background:var(--bg);color:var(--cream);font-family:'Barlow',sans-serif;fon
 .col-entrega .col-title{color:#3498db}.col-entrega .col-hdr{background:#08101a;border-bottom-color:#0d2040}
 
 /* CARDS KANBAN */
-.card{background:var(--card);border-radius:8px;padding:9px 10px;margin-bottom:6px;border:1px solid #2a2520;cursor:grab;transition:all .2s}
+.card{background:var(--card);border-radius:8px;padding:9px 10px;margin-bottom:6px;border:1px solid #2a2520;cursor:grab;transition:all .2s;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .card:hover{border-color:var(--orange);transform:translateY(-1px)}
 .card:active{cursor:grabbing}
 .card.dragging{opacity:.4;transform:scale(.97)}

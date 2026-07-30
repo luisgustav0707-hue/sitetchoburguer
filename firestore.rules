@@ -91,6 +91,9 @@ service cloud.firestore {
     // Só o admin logado cadastra o próprio; a Cloud Function lê via Admin SDK.
     match /push_tokens/{t} { allow read, write: if isAdmin(); }
 
+    // Log de envios do WhatsApp (a Cloud Function grava via Admin SDK).
+    match /whatsapp_logs/{d} { allow read, write: if isAdmin(); }
+
     // Analytics: o site do cliente escreve (contagem de visita / "online agora"),
     // mas só o admin lê. São contadores, sem dado sensível.
     match /stats/{d}     { allow read: if isAdmin(); allow write: if true; }

@@ -1,17 +1,17 @@
 // ═══════════════════════════════════════════════════════════════
-// whatsappService — camada de envio pela API OFICIAL do WhatsApp
-// Business (Meta Cloud API / Graph API). NÃO usa WhatsApp Web nem
-// métodos não oficiais. Roda no servidor (Cloud Functions), pois o
-// token é secreto e não pode ficar no front-end.
+// whatsappService — envio pela API OFICIAL do WhatsApp Business
+// (Meta Cloud API / Graph API). NÃO usa WhatsApp Web nem métodos
+// não oficiais. Roda no servidor (Cloud Functions) porque o token
+// é secreto e não pode ficar no front-end.
 // ───────────────────────────────────────────────────────────────
-// Configurar depois (variáveis de ambiente / secrets do Functions):
-//   WHATSAPP_TOKEN     -> token de acesso do app Meta (permanente)
+// Secrets/vars de ambiente (Functions):
+//   WHATSAPP_TOKEN     -> token permanente do app Meta (System User)
 //   WHATSAPP_PHONE_ID  -> Phone Number ID do número no WhatsApp Business
-//   WHATSAPP_API_VER   -> versão da Graph API (padrão v21.0)
+//   WHATSAPP_API_VER   -> versão da Graph API (padrão v21.0; atual v25.0)
 //
-// Enquanto não estiver configurado, sendMessage() NÃO envia nada —
-// só registra e retorna {enviado:false, motivo:'nao-configurado'}.
-// Assim o scaffold pode ir pro ar sem quebrar nada.
+// Sem credenciais, os envios NÃO acontecem — retornam
+// {enviado:false, motivo:'nao-configurado'} pra não quebrar nada.
+// Docs: https://developers.facebook.com/docs/whatsapp/cloud-api
 // ═══════════════════════════════════════════════════════════════
 
 const API_VER = process.env.WHATSAPP_API_VER || 'v21.0';
@@ -28,24 +28,9 @@ function normalizarTelefone(phone){
   return t;
 }
 
-// Envia uma mensagem de texto simples. Retorna {enviado, id?, motivo?}.
-// OBS: mensagens fora da janela de 24h exigem TEMPLATE aprovado na Meta
-// (ver sendTemplate abaixo, a implementar quando houver template).
-async function sendMessage(phone, message){
-  const to = normalizarTelefone(phone);
-  if(!to) return { enviado:false, motivo:'telefone-invalido' };
-  if(!message) return { enviado:false, motivo:'mensagem-vazia' };
-  if(!estaConfigurado()){
-    console.log('[whatsappService] API não configurada — não enviado para', to);
-    return { enviado:false, motivo:'nao-configurado' };
-  }
+// POST único pra Graph API (reaproveitado por texto e template).
+async function postToMeta(body){
   const url = `https://graph.facebook.com/${API_VER}/${process.env.WHATSAPP_PHONE_ID}/messages`;
-  const body = {
-    messaging_product: 'whatsapp',
-    to,
-    type: 'text',
-    text: { body: message },
-  };
   try{
     const resp = await fetch(url, {
       method: 'POST',
@@ -57,7 +42,7 @@ async function sendMessage(phone, message){
     });
     const data = await resp.json().catch(() => ({}));
     if(!resp.ok){
-      console.error('[whatsappService] erro Meta API:', resp.status, data);
+      console.error('[whatsappService] erro Meta API:', resp.status, JSON.stringify(data).slice(0, 500));
       return { enviado:false, motivo:'erro-api', status:resp.status, data };
     }
     return { enviado:true, id: data && data.messages && data.messages[0] && data.messages[0].id };
@@ -67,10 +52,56 @@ async function sendMessage(phone, message){
   }
 }
 
-// A IMPLEMENTAR quando houver template aprovado na Meta (mensagens
-// proativas fora da janela de 24h). Deixado documentado de propósito.
-async function sendTemplate(/* phone, templateName, idioma, componentes */){
-  throw new Error('sendTemplate ainda não implementado — criar quando o template for aprovado na Meta.');
+// Mensagem de TEXTO simples. Só funciona DENTRO da janela de 24h
+// (depois que o cliente te mandou msg). Fora dela, use sendTemplate.
+async function sendMessage(phone, message){
+  const to = normalizarTelefone(phone);
+  if(!to) return { enviado:false, motivo:'telefone-invalido' };
+  if(!message) return { enviado:false, motivo:'mensagem-vazia' };
+  if(!estaConfigurado()){
+    console.log('[whatsappService] API não configurada — texto não enviado para', to);
+    return { enviado:false, motivo:'nao-configurado' };
+  }
+  return postToMeta({
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to,
+    type: 'text',
+    text: { body: message },
+  });
+}
+
+// Mensagem de TEMPLATE aprovado na Meta — é o que permite avisar o
+// cliente PROATIVAMENTE (ex.: "seu pedido saiu para entrega"), fora
+// da janela de 24h.
+//   phone        -> telefone do cliente
+//   templateName -> nome EXATO do template aprovado (ex.: 'pedido_saiu_entrega')
+//   langCode     -> idioma do template (ex.: 'pt_BR')
+//   bodyParams   -> array de strings que preenchem {{1}}, {{2}}, ... na ordem
+async function sendTemplate(phone, templateName, langCode, bodyParams){
+  const to = normalizarTelefone(phone);
+  if(!to) return { enviado:false, motivo:'telefone-invalido' };
+  if(!templateName) return { enviado:false, motivo:'template-vazio' };
+  if(!estaConfigurado()){
+    console.log('[whatsappService] API não configurada — template não enviado para', to);
+    return { enviado:false, motivo:'nao-configurado' };
+  }
+  const components = [];
+  if(Array.isArray(bodyParams) && bodyParams.length){
+    components.push({
+      type: 'body',
+      parameters: bodyParams.map(v => ({ type: 'text', text: String(v == null ? '' : v) })),
+    });
+  }
+  const template = { name: templateName, language: { code: langCode || 'pt_BR' } };
+  if(components.length) template.components = components;
+  return postToMeta({
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to,
+    type: 'template',
+    template,
+  });
 }
 
 module.exports = { sendMessage, sendTemplate, normalizarTelefone, estaConfigurado };

@@ -1703,6 +1703,55 @@ function salvarMsgTemplates(){
   showToast('💬 Modelos de mensagem salvos','tok-ok');
 }
 
+// ── Marketing → Mensagens: AUTOMAÇÃO pela API oficial ──────────
+// Config de qual etapa dispara qual template aprovado na Meta.
+// Salvo em config/operacao.whatsAuto; a Cloud Function whatsappStatusPedido usa.
+function getWhatsAuto(){
+  let s=null; try{ s=JSON.parse(localStorage.getItem('tcho_whats_auto')||'null'); }catch(e){}
+  return s || { ativo:false, stages:{} };
+}
+function renderWhatsAuto(){
+  const el=document.getElementById('wa-auto-stages'); if(!el) return;
+  const wa=getWhatsAuto();
+  const chkAtivo=document.getElementById('wa-auto-ativo'); if(chkAtivo) chkAtivo.checked=!!wa.ativo;
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+  const stages=getKanbanStages().filter(s=>s.on).map(s=>({id:s.id,e:s.e,t:s.t}));
+  stages.push({id:'finalizado',e:'✅',t:'Finalizado'});
+  el.innerHTML=stages.map(s=>{
+    const c=(wa.stages&&wa.stages[s.id])||{};
+    return `<div style="background:var(--card);border:1px solid #2a2520;border-radius:8px;padding:10px;margin-bottom:8px">
+      <label style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:.82rem;margin-bottom:8px;cursor:pointer">
+        <input type="checkbox" class="wa-st-on" data-st="${s.id}" ${c.template?'checked':''}> ${s.e} ${s.t}
+      </label>
+      <label class="edit-lbl">Nome do template aprovado</label>
+      <input class="edit-inp wa-st-tpl" data-st="${s.id}" value="${esc(c.template||'')}" placeholder="ex.: pedido_saiu_entrega" style="margin-bottom:6px">
+      <div style="display:flex;gap:6px">
+        <div style="flex:1;min-width:0"><label class="edit-lbl">Idioma</label><input class="edit-inp wa-st-lang" data-st="${s.id}" value="${esc(c.lang||'pt_BR')}"></div>
+        <div style="flex:2;min-width:0"><label class="edit-lbl">Variáveis ({{1}},{{2}}…)</label><input class="edit-inp wa-st-params" data-st="${s.id}" value="${esc((c.params||['nome','num']).join(', '))}" placeholder="nome, num"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function salvarWhatsAuto(){
+  const ativo=!!(document.getElementById('wa-auto-ativo')||{}).checked;
+  const stages={};
+  document.querySelectorAll('#wa-auto-stages .wa-st-on').forEach(chk=>{
+    if(!chk.checked) return;
+    const st=chk.dataset.st;
+    const q=sel=>document.querySelector(sel+'[data-st="'+st+'"]');
+    const tpl=(q('.wa-st-tpl')||{}).value ? q('.wa-st-tpl').value.trim() : '';
+    if(!tpl) return;
+    const lang=((q('.wa-st-lang')||{}).value||'pt_BR').trim()||'pt_BR';
+    const params=((q('.wa-st-params')||{}).value||'').split(',').map(x=>x.trim()).filter(Boolean);
+    stages[st]={template:tpl, lang, params};
+  });
+  const obj={ativo, stages};
+  localStorage.setItem('tcho_whats_auto', JSON.stringify(obj));
+  db.collection('config').doc('operacao').set({whatsAuto:obj},{merge:true}).catch(console.error);
+  const st=document.getElementById('wa-auto-status'); if(st){ st.textContent='✅ Automação salva! (precisa da API oficial configurada no servidor)'; setTimeout(()=>{ if(st) st.textContent=''; },3500); }
+  showToast('🤖 Automação do WhatsApp salva','tok-ok');
+}
+
 // ── EDITAR PEDIDO ──────────────────────────────────────────────
 let editandoPedidoId = null;
 let editandoPag = null;
@@ -3184,7 +3233,7 @@ function showCrm(t){
   if(t==='campanhas')   carregarCampanhas();
   if(t==='cupons')      renderCupons();
   if(t==='recuperacao') initRecuperacao();
-  if(t==='mensagens')   renderMsgTemplates();
+  if(t==='mensagens'){  renderMsgTemplates(); renderWhatsAuto(); }
 }
 
 const CRM_FILTROS=[
@@ -4231,6 +4280,7 @@ function iniciarApp(){
     if(cfg.kanbanStages){ localStorage.setItem('tcho_kanban_stages',JSON.stringify(cfg.kanbanStages)); }
     if(cfg.kanban){ localStorage.setItem('tcho_kanban',JSON.stringify(cfg.kanban)); }
     if(cfg.msgTemplates){ localStorage.setItem('tcho_msg_templates',JSON.stringify(cfg.msgTemplates)); if(document.getElementById('msg-templates')&&document.getElementById('crm-mensagens').classList.contains('active')) renderMsgTemplates(); }
+    if(cfg.whatsAuto){ localStorage.setItem('tcho_whats_auto',JSON.stringify(cfg.whatsAuto)); if(document.getElementById('wa-auto-stages')&&document.getElementById('crm-mensagens').classList.contains('active')) renderWhatsAuto(); }
     if(cfg.kanbanStages||cfg.kanban){ renderAll(); if(document.getElementById('kb-linhas')) carregarKanbanCfg(); }
     if(document.getElementById('cfg-auto-horario'))
       document.getElementById('cfg-auto-horario').checked=cfg.autoHorario!==false;

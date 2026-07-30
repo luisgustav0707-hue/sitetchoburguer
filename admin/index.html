@@ -554,6 +554,22 @@
       <div id="msg-templates"></div>
       <button class="btn-primary" style="margin-top:12px" onclick="salvarMsgTemplates()">💾 Salvar modelos</button>
       <div id="msg-templates-status" style="font-size:.72rem;color:#27ae60;margin-top:8px;min-height:16px"></div>
+
+      <!-- ENVIO AUTOMÁTICO PELA API OFICIAL -->
+      <div style="border-top:1px solid #2a2520;margin-top:22px;padding-top:16px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:1px;color:var(--orange)">🤖 Envio automático (API oficial)</div>
+        <div style="font-size:.7rem;color:var(--muted);margin:4px 0 10px">Envia sozinho (sem toque) quando o pedido muda de etapa. Exige a <b>API oficial do WhatsApp</b> configurada no servidor e <b>templates aprovados na Meta</b> — ver <code>WHATSAPP-INTEGRACAO.md</code>.</div>
+        <div class="toggle-row" style="margin-bottom:12px">
+          <div class="toggle-info"><div class="toggle-label">Ativar envio automático</div><div class="toggle-sub" style="font-size:.66rem;color:var(--muted)">Só funciona depois de configurar as credenciais da Meta no servidor.</div></div>
+          <label class="toggle-wrap"><input type="checkbox" id="wa-auto-ativo"><span class="slider"></span></label>
+        </div>
+        <div style="font-size:.66rem;color:var(--muted);background:var(--card);border:1px solid #2a2520;border-radius:8px;padding:8px 10px;margin-bottom:10px">
+          Marque a etapa, ponha o <b>nome exato do template aprovado</b> e as <b>variáveis</b> na ordem ({{1}}, {{2}}…). Variáveis disponíveis: <b style="color:var(--orange)">nome</b> num total tipo bairro endereco loja.
+        </div>
+        <div id="wa-auto-stages"></div>
+        <button class="btn-primary" style="margin-top:12px" onclick="salvarWhatsAuto()">💾 Salvar automação</button>
+        <div id="wa-auto-status" style="font-size:.72rem;color:#27ae60;margin-top:8px;min-height:16px"></div>
+      </div>
     </div>
 
     <!-- CAMPANHAS -->

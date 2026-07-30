@@ -10,9 +10,12 @@
 const admin = require('firebase-admin');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const logger = require('firebase-functions/logger');
 const wa = require('./services/whatsappService');
+
+// Secrets da API oficial do WhatsApp (Meta Cloud API).
+const WA_SECRETS = ['WHATSAPP_TOKEN', 'WHATSAPP_PHONE_ID'];
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -61,7 +64,7 @@ exports.verificarClientesInativos = onSchedule(
 
 // ── 2) Disparo de campanha via API oficial (chamado pelo admin) ─
 // data: { destinatarios: [{ telefone, mensagem }] }
-exports.enviarCampanha = onCall({ region: REGION }, async (request) => {
+exports.enviarCampanha = onCall({ region: REGION, secrets: WA_SECRETS }, async (request) => {
   const destinatarios = request.data && request.data.destinatarios;
   if(!Array.isArray(destinatarios) || !destinatarios.length){
     throw new HttpsError('invalid-argument', 'Informe destinatarios: [{telefone, mensagem}]');
@@ -137,5 +140,56 @@ exports.notificarNovoPedido = onDocumentCreated(
       }
     });
     if(limpar.length) await Promise.all(limpar);
+  }
+);
+
+// ── 5) WhatsApp automático ao mudar a etapa do pedido ──────────
+// Dispara quando o `status` de um pedido MUDA e envia um TEMPLATE
+// aprovado na Meta para o cliente (ex.: "saiu para entrega").
+// Config em config/operacao.whatsAuto:
+//   { ativo:true, stages:{ entrega:{template:'pedido_saiu_entrega', lang:'pt_BR', params:['nome','num']}, ... } }
+// Os `params` são preenchidos na ordem ({{1}},{{2}}...) a partir do pedido.
+function resolverParamWpp(key, p){
+  const nome = String(p.nome || '').trim().split(' ')[0] || 'cliente';
+  switch(key){
+    case 'nome':         return nome;
+    case 'nomeCompleto': return p.nome || '';
+    case 'num':          return p.num || ('#' + (p.id || ''));
+    case 'total':        return 'R$' + (p.total != null ? p.total : '');
+    case 'tipo':         return p.tipo === 'delivery' ? 'Delivery' : (p.tipo === 'mesa' ? 'Mesa' : 'Retirada');
+    case 'bairro':       return p.bairro || '';
+    case 'endereco':     return p.endereco || '';
+    case 'loja':         return 'Tcho Burguer';
+    default:             return '';
+  }
+}
+
+exports.whatsappStatusPedido = onDocumentUpdated(
+  { document: 'pedidos/{id}', region: REGION, secrets: WA_SECRETS },
+  async (event) => {
+    if(!event.data) return;
+    const before = event.data.before.data() || {};
+    const after  = event.data.after.data() || {};
+    const novo = after.status;
+    if(before.status === novo) return;            // só quando o status muda de fato
+    if(!after.tel) return;                          // sem telefone → nada a enviar
+
+    const cfgDoc = await db.collection('config').doc('operacao').get();
+    const wc = (cfgDoc.exists && cfgDoc.data().whatsAuto) || {};
+    if(!wc.ativo) return;                           // automação desligada
+    const sc = wc.stages && wc.stages[novo];
+    if(!sc || !sc.template) return;                // etapa sem template configurado
+
+    const params = (sc.params || []).map(k => resolverParamWpp(k, after));
+    const r = await wa.sendTemplate(after.tel, sc.template, sc.lang || 'pt_BR', params);
+    logger.info(`whatsappStatusPedido: pedido ${event.params.id} → ${novo} → ${r.enviado ? 'ENVIADO' : 'nao-enviado ('+(r.motivo||'?')+')'}`);
+
+    // Log pra auditoria/depuração (não bloqueia se falhar).
+    db.collection('whatsapp_logs').add({
+      pedidoId: event.params.id, status: novo,
+      tel: wa.normalizarTelefone(after.tel), template: sc.template,
+      enviado: !!r.enviado, motivo: r.motivo || null, wamid: r.id || null,
+      em: admin.firestore.FieldValue.serverTimestamp(),
+    }).catch(() => {});
   }
 );

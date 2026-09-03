@@ -683,7 +683,7 @@ function addRodadaItem(){
   const prod=listaProdutosManual()[idx]; if(!prod) return;
   const qtd=parseInt(document.getElementById('cmd-qtd').value)||1;
   const obs=(document.getElementById('cmd-obs').value||'').trim();
-  rodadaItens.push({nome:prod.nome,preco:prod.preco,qtd,obs});
+  rodadaItens.push({nome:prod.nome,preco:prod.preco,qtd,obs,id:prod.id});
   renderComanda();
 }
 function removerRodadaItem(i){ rodadaItens.splice(i,1); renderComanda(); }
@@ -706,6 +706,11 @@ async function enviarRodada(){
     impresso:false, criadoEm:firebase.firestore.FieldValue.serverTimestamp(),
   };
   db.collection('pedidos').add(pedido).catch(console.error);   // cai no MESMO Kanban + imprime (listener existente)
+  // Baixa de estoque da rodada (só modo Qtd). O fechamento do caixa NÃO desconta,
+  // pra não contar em dobro — os itens já foram descontados aqui, na rodada.
+  const consumoRodada={};
+  rodadaItens.forEach(it=>{ if(it.id) consumoRodada[it.id]=(consumoRodada[it.id]||0)+(it.qtd||1); });
+  baixarEstoquePorConsumo(consumoRodada);
   const novaItens=[...((m.sessao&&m.sessao.itens)||[]), ...rodadaItens];
   db.collection('mesas').doc(m._id).set({sessao:{...(m.sessao||{}),itens:novaItens}},{merge:true}).catch(console.error);
   if(m.sessao) m.sessao.itens=novaItens;
@@ -1126,7 +1131,7 @@ function renderItensManual(){
 // personalização (hambúrguer) ou o seletor de sabor (bebida/combo).
 function listaProdutosManual(){
   const base=PRODS.map(p=>({nome:p.n,preco:p.p,cat:p.cat,id:p.id,opcoes:p.opcoes||null}));
-  const cust=getProdsCustom().map(p=>({nome:p.n||p.nome,preco:(p.p!==undefined?p.p:p.preco),cat:'x',id:null,opcoes:null}));
+  const cust=getProdsCustom().map(p=>({nome:p.n||p.nome,preco:(p.p!==undefined?p.p:p.preco),cat:'x',id:p.id,opcoes:null}));
   return [...base,...cust];
 }
 
@@ -1143,7 +1148,7 @@ function addItemManual(){
     const ing = prod.cat==='b' ? (TCHO.burguers.find(b=>b.id===prod.id)?.ing || []) : [];
     abrirCustManual(prod, ing);
   } else {
-    manualItens.push({nome:prod.nome, preco:prod.preco});
+    manualItens.push({nome:prod.nome, preco:prod.preco, id:prod.id});
     renderItensManual();
   }
 }
@@ -1200,7 +1205,7 @@ function confirmarCustManual(){
   adic.forEach(c=>preco+=parseFloat(c.dataset.preco)||0);
   if(adic.length) det.push(adic.map(c=>'+'+c.value).join(', '));
   const nome=det.length ? `${p.nome} (${det.join(' • ')})` : p.nome;
-  manualItens.push({nome, preco});
+  manualItens.push({nome, preco, id:p.id});
   cancelarCustManual();
   renderItensManual();
 }
@@ -1278,6 +1283,14 @@ async function salvarPedidoManual(){
     impresso:statusPedido==='finalizado',                  // passado não imprime
     criadoEm:tsPedido,
   };
+
+  // Baixa de estoque só para venda de AGORA (status 'novo'). Pedido retroativo
+  // (finalizado numa data passada) é só registro histórico e não mexe no estoque atual.
+  if(statusPedido==='novo'){
+    const consumo={};
+    manualItens.forEach(it=>{ if(it.id) consumo[it.id]=(consumo[it.id]||0)+1; });
+    baixarEstoquePorConsumo(consumo);
+  }
 
   fecharModalManual();
   const msg = statusPedido==='finalizado'
@@ -1755,7 +1768,7 @@ function parseItemTexto(s){
 // Lista de produtos do cardápio (base + custom) para o seletor
 function listaProdutosEdit(){
   const base=PRODS.map(p=>({nome:p.n,preco:p.p,cat:p.cat,id:p.id,opcoes:p.opcoes||null}));
-  const cust=getProdsCustom().map(p=>({nome:p.n||p.nome,preco:(p.p!==undefined?p.p:p.preco),cat:'x',id:null,opcoes:null}));
+  const cust=getProdsCustom().map(p=>({nome:p.n||p.nome,preco:(p.p!==undefined?p.p:p.preco),cat:'x',id:p.id,opcoes:null}));
   return [...base,...cust];
 }
 
@@ -2184,6 +2197,26 @@ function salvarEstoque(id){
   const ref=db.collection('cardapio').doc('estoque');
   if(id) ref.set({data:{[id]:est[id]}},{merge:true}).catch(console.error);
   else   ref.set({data:est},{merge:true}).catch(console.error);
+}
+
+// Baixa de estoque das vendas feitas no painel (balcão/mesa). Igual à do cliente:
+// só desconta produtos em MODO QUANTIDADE. consumo = { idProduto: unidades }.
+// Usa transação pra ler o valor atual do Firestore e não sobrescrever outras vendas.
+function baixarEstoquePorConsumo(consumo){
+  const ids=Object.keys(consumo||{}).filter(Boolean);
+  if(!ids.length) return;
+  const ref=db.collection('cardapio').doc('estoque');
+  db.runTransaction(async t=>{
+    const snap=await t.get(ref);
+    if(!snap.exists) return;
+    const data=snap.data().data||{};
+    let mudou=false;
+    ids.forEach(id=>{
+      const e=data[id];
+      if(e && e.modo==='qtd'){ e.qtd=Math.max(0,(e.qtd||0)-consumo[id]); mudou=true; }
+    });
+    if(mudou) t.set(ref,{data},{merge:true});
+  }).catch(e=>console.error('baixa de estoque (painel):',e));
 }
 
 // ── FOTOS DOS PRODUTOS ─────────────────────────────────────────
@@ -2957,6 +2990,112 @@ function salvarNovoBairro(){
 }
 
 function renderCardapio(){renderLista('b','lista-burguers');renderLista('e','lista-extras');renderLista('c','lista-combo');renderCatTitles();renderCustomCats();renderNovaCatArea();renderAdicionais();}
+
+// ── POPUPS NA TELA DO CLIENTE (Marketing) ───────────────────────────
+// Dois popups independentes: "novidade" (novo produto) e "promo" (promoção).
+// Cada um aparece 1x por pessoa; ao salvar/relançar (novo `v`), reaparece pra todos.
+let novidadeCfg=JSON.parse(localStorage.getItem('tcho_novidade')||'null');
+let promoCfg=JSON.parse(localStorage.getItem('tcho_promo')||'null');
+// Lista de produtos (base + custom) para os seletores.
+function listaProdutosNovidade(){
+  const base=PRODS.map(p=>({id:p.id,nome:p.n}));
+  const cust=getProdsCustom().map(p=>({id:p.id,nome:p.n||p.nome}));
+  return [...base,...cust];
+}
+// ── Popup NOVOS PRODUTOS ──
+function renderNovidade(){
+  const c=document.getElementById('novidade-config'); if(!c) return;
+  const cfg=novidadeCfg||{};
+  const prods=listaProdutosNovidade();
+  const ativo=!!cfg.ativo;
+  const sel=cfg.produtoId||'';
+  const nomeSel=prods.find(p=>p.id===sel)?.nome||'';
+  c.innerHTML=`
+    <div style="background:var(--card);border:1px solid #2a2520;border-radius:10px;padding:14px">
+      <div style="font-size:.72rem;color:var(--muted);margin-bottom:12px;line-height:1.5">Popup com a <b>foto + nome + preço</b> do produto. Aparece <b>uma vez por pessoa</b>; ao salvar/relançar, reaparece pra todo mundo.</div>
+      <label class="edit-lbl">Produto em destaque</label>
+      <select id="nov-prod" class="edit-inp" style="width:100%;box-sizing:border-box;margin:4px 0 10px">
+        <option value="">— escolha um produto —</option>
+        ${prods.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${p.nome}</option>`).join('')}
+      </select>
+      <label class="edit-lbl">Frase (opcional)</label>
+      <textarea id="nov-texto" class="edit-inp" rows="2" style="width:100%;box-sizing:border-box;margin:4px 0 12px;resize:vertical" placeholder="Ex.: Chegou o novo X-Tudo, experimente!">${(cfg.texto||'').replace(/</g,'&lt;')}</textarea>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn-criar" onclick="salvarNovidade()">${ativo?'🔄 Atualizar / relançar':'📣 Ativar popup'}</button>
+        ${ativo?`<button class="btn-editar-card" onclick="desativarNovidade()">🚫 Desativar</button>`:''}
+        <span style="font-size:.72rem;color:${ativo?'#27ae60':'var(--muted)'}">${ativo?('✅ Ativo'+(nomeSel?' — '+nomeSel:'')):'Desligado'}</span>
+      </div>
+    </div>`;
+}
+function salvarNovidade(){
+  const produtoId=document.getElementById('nov-prod').value;
+  if(!produtoId){ showToast('⚠️ Escolha um produto','tok-err'); return; }
+  const texto=(document.getElementById('nov-texto').value||'').trim();
+  novidadeCfg={ativo:true, produtoId, texto, v:Date.now()};   // v novo = reaparece pra todos
+  localStorage.setItem('tcho_novidade',JSON.stringify(novidadeCfg));
+  salvarCardapioFS('novidade', novidadeCfg);
+  renderNovidade();
+  showToast('📣 Popup de novidade ativado!','tok-ok');
+}
+function desativarNovidade(){
+  novidadeCfg={...(novidadeCfg||{}), ativo:false};
+  localStorage.setItem('tcho_novidade',JSON.stringify(novidadeCfg));
+  salvarCardapioFS('novidade', novidadeCfg);
+  renderNovidade();
+  showToast('🚫 Popup de novidade desativado','tok-info');
+}
+// ── Popup PROMOÇÃO ──
+function renderPromo(){
+  const c=document.getElementById('promo-config'); if(!c) return;
+  const cfg=promoCfg||{};
+  const prods=listaProdutosNovidade();
+  const ativo=!!cfg.ativo;
+  const sel=cfg.produtoId||'';
+  c.innerHTML=`
+    <div style="background:var(--card);border:1px solid #2a2520;border-radius:10px;padding:14px">
+      <div style="font-size:.72rem;color:var(--muted);margin-bottom:12px;line-height:1.5">Quando <b>ativa</b>, cria a seção <b>"🔥 Promoções"</b> no cardápio do cliente (pra ele comprar) e mostra um popup de aviso. Aparece <b>uma vez por pessoa</b>; ao salvar/relançar, reaparece pra todos. Os produtos normais do cardápio <b>não são alterados</b>.</div>
+      <label class="edit-lbl">Título</label>
+      <input id="promo-titulo" class="edit-inp" type="text" style="width:100%;box-sizing:border-box;margin:4px 0 10px" placeholder="Ex.: Terça em dobro! 🔥" value="${(cfg.titulo||'').replace(/"/g,'&quot;')}">
+      <label class="edit-lbl">Frase / descrição</label>
+      <textarea id="promo-texto" class="edit-inp" rows="2" style="width:100%;box-sizing:border-box;margin:4px 0 10px;resize:vertical" placeholder="Ex.: X-Bacon com preço especial só hoje!">${(cfg.texto||'').replace(/</g,'&lt;')}</textarea>
+      <label class="edit-lbl">Produto (opcional — mostra a foto e o preço original riscado)</label>
+      <select id="promo-prod" class="edit-inp" style="width:100%;box-sizing:border-box;margin:4px 0 10px">
+        <option value="">— nenhum —</option>
+        ${prods.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${p.nome}</option>`).join('')}
+      </select>
+      <label class="edit-lbl">Preço promocional (R$) — deixe vazio p/ usar o preço normal do produto</label>
+      <input id="promo-preco" class="edit-inp" type="number" min="0" step="0.5" style="width:100%;box-sizing:border-box;margin:4px 0 10px" placeholder="Ex.: 25" value="${cfg.precoPromo!==undefined&&cfg.precoPromo!==null?cfg.precoPromo:''}">
+      <label class="edit-lbl">Cupom (opcional)</label>
+      <input id="promo-cupom" class="edit-inp" type="text" style="width:100%;box-sizing:border-box;margin:4px 0 12px;text-transform:uppercase" placeholder="Ex.: TERCA2" value="${(cfg.cupom||'').replace(/"/g,'&quot;')}">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn-criar" onclick="salvarPromo()">${ativo?'🔄 Atualizar / relançar':'🔥 Ativar promoção'}</button>
+        ${ativo?`<button class="btn-editar-card" onclick="desativarPromo()">🚫 Desativar</button>`:''}
+        <span style="font-size:.72rem;color:${ativo?'#27ae60':'var(--muted)'}">${ativo?'✅ Ativa':'Desligada'}</span>
+      </div>
+    </div>`;
+}
+function salvarPromo(){
+  const titulo=(document.getElementById('promo-titulo').value||'').trim();
+  const texto=(document.getElementById('promo-texto').value||'').trim();
+  if(!titulo && !texto){ showToast('⚠️ Escreva ao menos um título ou frase','tok-err'); return; }
+  const produtoId=document.getElementById('promo-prod').value||'';
+  const precoRaw=(document.getElementById('promo-preco').value||'').trim();
+  const precoPromo = precoRaw!=='' ? Number(precoRaw) : null;
+  if(!produtoId && precoPromo===null){ showToast('⚠️ Escolha um produto ou defina um preço promocional','tok-err'); return; }
+  const cupom=(document.getElementById('promo-cupom').value||'').trim().toUpperCase();
+  promoCfg={ativo:true, titulo, texto, produtoId, precoPromo, cupom, v:Date.now()};
+  localStorage.setItem('tcho_promo',JSON.stringify(promoCfg));
+  salvarCardapioFS('promo', promoCfg);
+  renderPromo();
+  showToast('🔥 Popup de promoção ativado!','tok-ok');
+}
+function desativarPromo(){
+  promoCfg={...(promoCfg||{}), ativo:false};
+  localStorage.setItem('tcho_promo',JSON.stringify(promoCfg));
+  salvarCardapioFS('promo', promoCfg);
+  renderPromo();
+  showToast('🚫 Popup de promoção desativado','tok-info');
+}
 function toggleAtivo(id,val){
   est[id].ativo=val;
   if(id.startsWith('cp_')){const arr=getProdsCustom(),idx=arr.findIndex(x=>x.id===id);if(idx!==-1){arr[idx].ativo=val;saveProdsCustom(arr);}}
@@ -3185,6 +3324,8 @@ function showCrm(t){
   if(t==='cupons')      renderCupons();
   if(t==='recuperacao') initRecuperacao();
   if(t==='mensagens')   renderMsgTemplates();
+  if(t==='novidade')    renderNovidade();
+  if(t==='promo')       renderPromo();
 }
 
 const CRM_FILTROS=[
@@ -4263,6 +4404,8 @@ function iniciarApp(){
       if(doc.id==='estoque'      && d.data ) localStorage.setItem('tcho_estoque',     JSON.stringify(d.data));
       if(doc.id==='bairros'      && d.lista) localStorage.setItem('tcho_bairros',     JSON.stringify(d.lista));
       if(doc.id==='cat_despesa'  && d.lista) localStorage.setItem('tcho_cat_despesa', JSON.stringify(d.lista));
+      if(doc.id==='novidade'                ){ novidadeCfg=d; localStorage.setItem('tcho_novidade', JSON.stringify(d)); }
+      if(doc.id==='promo'                   ){ promoCfg=d;    localStorage.setItem('tcho_promo',    JSON.stringify(d)); }
     });
     // Re-aplica edições aos produtos base em memória
     const edits=JSON.parse(localStorage.getItem('tcho_prods_edits')||'{}');

@@ -85,6 +85,8 @@
       <button class="br-fechar" onclick="fecharBannerRepetir()">✕</button>
     </div>
   </div>
+  <div class="section-title" id="cat-title-promocoes" style="display:none">🔥 Promoções</div>
+  <div id="menu-promocoes"></div>
   <div class="section-title" id="cat-title-burguers">Hamburguers</div>
   <div id="menu-burguers"></div>
   <div class="section-title" id="cat-title-extras">Porção & Bebidas</div>
@@ -246,6 +248,11 @@
 <!-- MODAL PERSONALIZAÇÃO -->
 <div id="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.87);z-index:200;align-items:center;justify-content:center">
   <div class="modal-box" id="modal-box"></div>
+</div>
+
+<!-- POPUP DE NOVIDADE (preenchido por JS; aparece 1x por pessoa) -->
+<div id="novidade-pop" class="novidade-overlay">
+  <div class="novidade-box" id="novidade-box"></div>
 </div>
 
 <!-- SCRIPTS -->

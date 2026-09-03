@@ -518,6 +518,8 @@
       <button class="cfg-side-item"        data-crm="clientes"   onclick="showCrm('clientes')">🧑‍🤝‍🧑 Clientes</button>
       <button class="cfg-side-item"        data-crm="dashboard"  onclick="showCrm('dashboard')">📊 Dashboard</button>
       <div class="cfg-side-grp">Marketing</div>
+      <button class="cfg-side-item"        data-crm="novidade"    onclick="showCrm('novidade')">🆕 Novos produtos</button>
+      <button class="cfg-side-item"        data-crm="promo"       onclick="showCrm('promo')">🔥 Promoção</button>
       <button class="cfg-side-item"        data-crm="campanhas"   onclick="showCrm('campanhas')">📣 Campanhas</button>
       <button class="cfg-side-item"        data-crm="cupons"      onclick="showCrm('cupons')">🎟️ Cupons</button>
       <button class="cfg-side-item"        data-crm="fidelidade"  onclick="showCrm('fidelidade')">🎁 Fidelidade</button>
@@ -597,6 +599,18 @@
 
       <div id="camp-resultado"></div>
       <div id="camp-lista"></div>
+    </div>
+
+    <!-- POPUP: NOVOS PRODUTOS -->
+    <div class="cfg-panel" id="crm-novidade">
+      <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px">Popup de <b>novo produto</b> que aparece pro cliente ao abrir o site (com a foto do produto).</div>
+      <div id="novidade-config"></div>
+    </div>
+
+    <!-- POPUP: PROMOÇÃO -->
+    <div class="cfg-panel" id="crm-promo">
+      <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px">Popup de <b>promoção</b> que aparece pro cliente ao abrir o site.</div>
+      <div id="promo-config"></div>
     </div>
     </div><!-- /crm-content -->
    </div><!-- /cfg-wrap -->

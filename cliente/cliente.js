@@ -30,6 +30,15 @@ const FOTOS = {
 const EXTRAS      = TCHO.extras.filter(e => e.id !== 'cmb');
 const COMBO       = TCHO.extras.filter(e => e.id === 'cmb');
 
+// Ids das bebidas que o combo do hambúrguer usa (pra checar estoque):
+// combo com refrigerante = Refrigerante Lata; combo com suco = Suco Lata.
+const COMBO_REFRI_ID = 'rla';
+const COMBO_SUCO_ID  = 'suc';
+
+// Itens de promoção (aparecem numa seção própria só quando o dono habilita a
+// promoção no Marketing). Não altera os produtos normais do cardápio.
+let PROMOCOES = [];
+
 // Carrega produtos custom do admin
 (function(){
   const prods=JSON.parse(localStorage.getItem('tcho_prods_custom')||'[]').filter(p=>p.ativo!==false);
@@ -159,7 +168,18 @@ function produtoDisponivel(id){
 // Usa transação pra ser seguro mesmo com vários clientes comprando ao mesmo tempo.
 function baixarEstoque(){
   const consumo={};
-  Object.entries(cartBurguers).forEach(([id,insts])=>{consumo[id]=(consumo[id]||0)+insts.length;});
+  Object.entries(cartBurguers).forEach(([id,insts])=>{
+    consumo[id]=(consumo[id]||0)+insts.length;
+    // Combo escolhido no hambúrguer também consome bebida + batata (ficam guardados
+    // na instância do hambúrguer, não no cartExtras) — por isso contamos aqui.
+    insts.forEach(inst=>{
+      if(inst.combo){
+        const bebId = inst.comboSuco ? COMBO_SUCO_ID : COMBO_REFRI_ID;
+        consumo[bebId]=(consumo[bebId]||0)+1;   // refrigerante (rla) ou suco (suc)
+        consumo['bat']=(consumo['bat']||0)+1;   // combo inclui batata frita
+      }
+    });
+  });
   Object.entries(cartExtras).forEach(([id,v])=>{consumo[id]=(consumo[id]||0)+(Array.isArray(v)?v.length:v);});
   if(!Object.keys(consumo).length) return;
   const ref=db.collection('cardapio').doc('estoque');
@@ -213,36 +233,55 @@ function getOpcoes(id){
 }
 
 function renderExtras(){
+  const comboTemRefri = produtoDisponivel(COMBO_REFRI_ID);  // Combo do cardápio depende do Refrigerante Lata
+  const comboAtivoAdmin = produtoDisponivel('cmb');          // combo ligado/desligado no admin
   const render=(arr,id)=>{
-    document.getElementById(id).innerHTML=arr.filter(e=>!e.customCat&&produtoDisponivel(e.id)).map(e=>{
+    const itens=arr.filter(e=>{
+      if(e.customCat) return false;
+      if(e.id==='cmb') return comboTemRefri;                 // combo só aparece se houver refrigerante em estoque
+      return produtoDisponivel(e.id);
+    });
+    document.getElementById(id).innerHTML=itens.map(e=>{
+      const travado = e.id==='cmb' && !comboAtivoAdmin;      // tem refri, mas combo desligado no admin → transparente/travado
       const opc=getOpcoes(e.id);
       const temOpc=opc.length>0;
       const escolhas=temOpc&&Array.isArray(cartExtras[e.id])?cartExtras[e.id]:[];
       const qty=temOpc?escolhas.length:(cartExtras[e.id]||0);
       const resumo=escolhas.map((s,i)=>`<div class="cart-item-resumo"><span>${s}</span><span class="rm" onclick="remSaborExtra('${e.id}',${i})">✕</span></div>`).join('');
       const fotoExtra=getFotoCliente(e.id);
-      return`<div class="extra-item ${qty>0?'has-items':''}">
+      return`<div class="extra-item ${qty>0?'has-items':''}"${travado?' style="opacity:.4;pointer-events:none;user-select:none"':''}>
         ${fotoExtra
           ? `<div class="extra-foto"><img src="${fotoExtra}" alt="${e.nome}" loading="lazy"></div>`
           : `<div class="extra-emoji">${e.emoji}</div>`
         }
         <div class="extra-body">
-          <div class="extra-name">${e.nome}</div>
+          <div class="extra-name">${e.nome}${travado?' <span class="opt-lbl">(indisponível)</span>':''}</div>
           ${e.desc?`<div class="extra-sub">${e.desc}</div>`:''}
           <div class="extra-price">R$${e.preco}</div>
           ${resumo?`<div class="cart-itens-list">${resumo}</div>`:''}
         </div>
         <div class="extra-controls">
-          <button class="eq-btn ${qty===0?'dim':''}" onclick="${qty>0?`chgExtra('${e.id}',-1)`:'void(0)'}">−</button>
+          ${travado
+            ? `<div class="eq-disp">🚫</div>`
+            : `<button class="eq-btn ${qty===0?'dim':''}" onclick="${qty>0?`chgExtra('${e.id}',-1)`:'void(0)'}">−</button>
           <div class="eq-disp">${qty}</div>
-          <button class="eq-btn" onclick="chgExtra('${e.id}',1)">+</button>
+          <button class="eq-btn" onclick="chgExtra('${e.id}',1)">+</button>`}
         </div>
       </div>`;
     }).join('');
   };
   render(EXTRAS,'menu-extras');
   render(COMBO,'menu-combo');
+  // Esconde o título de uma categoria quando ela fica sem nenhum item
+  // (ex.: bebidas desligadas deixam a seção "Combo" vazia).
+  const ocultarTituloSeVazio=(menuId,tituloId)=>{
+    const menu=document.getElementById(menuId), titulo=document.getElementById(tituloId);
+    if(menu&&titulo) titulo.style.display = menu.children.length ? '' : 'none';
+  };
+  ocultarTituloSeVazio('menu-extras','cat-title-extras');
+  ocultarTituloSeVazio('menu-combo','cat-title-combo');
   renderCustomCategorias();
+  if(typeof renderPromocoes==='function') renderPromocoes();
 }
 
 function chgExtra(id,d){
@@ -297,19 +336,38 @@ function escolherSabor(id,sabor){
 // ── MODAL PERSONALIZAÇÃO ───────────────────────────────────────
 function abrirModal(id){
   const b=BURGUERS.find(x=>x.id===id)||{emoji:'🍔',nome:'Hamburguer',preco:0,ing:[]};
-  modalId=id;pontoAtual=null;sacheAtual=null;removidosAtual=[];adicionaisAtual={};comboAtual=null;comboSaborAtual=null;comboBebidaAtual=null;
+  modalId=id;pontoAtual=null;sacheAtual=null;removidosAtual=[];adicionaisAtual={};comboBebidaAtual=null;comboSaborAtual=null;
   const comboItem=[...COMBO].find(c=>c.id==='cmb');
   const comboPreco=comboItem?.preco||15;
-  document.getElementById('modal-box').innerHTML=`
-    <div class="modal-header"><div><div class="modal-title">${b.emoji} ${b.nome}</div><div class="modal-price">R$${b.preco}</div></div><button class="modal-close" onclick="fecharModal()">✕</button></div>
-    <div class="modal-body">
-      <div class="person-section"><div class="person-label">🥩 Ponto da carne <span class="req">* obrigatório</span></div>
-        <div class="ponto-options">${PONTOS.map(p=>`<div class="ponto-btn" id="pnt-${p.id}" onclick="selPonto('${p.id}')"><span class="p-icon">${p.emoji}</span><span class="p-name">${p.nome}</span></div>`).join('')}</div>
-        <div id="err-ponto" class="err-msg">⚠ Selecione o ponto da carne</div></div>
+  // ── COMBO LÊ O ESTOQUE DE VERDADE ──────────────────────────────
+  // Refrigerante e Suco: cada um segue o estoque do seu produto.
+  const refriOK   = produtoDisponivel(COMBO_REFRI_ID);   // Refrigerante Lata em estoque?
+  const sucoOK    = produtoDisponivel(COMBO_SUCO_ID);     // Suco Lata em estoque?
+  const temBebida = refriOK || sucoOK;                    // tem alguma bebida pro combo?
+  const comboAtivo= produtoDisponivel('cmb');             // combo ligado no admin?
+  const comboLiberado = temBebida && comboAtivo;          // só libera se tem bebida E combo ligado
+  // Sem bebida (some) ou combo desligado (transparente): não é obrigatório escolher.
+  comboAtual = comboLiberado ? null : false;
+  // Botões de bebida — cada um só aparece se o produto estiver em estoque.
+  const btnRefri = refriOK ? `<div class="ponto-btn" id="cbeb-refri" onclick="selComboBebida('refri')"><span class="p-icon">🥤</span><span class="p-name">Refrigerante</span></div>` : '';
+  const btnSuco  = sucoOK  ? `<div class="ponto-btn" id="cbeb-suco" onclick="selComboBebida('suco')"><span class="p-icon">🧃</span><span class="p-name">Suco <strong style="color:var(--orange)">+R$${COMBO_SUCO_EXTRA}</strong></span></div>` : '';
+  // Monta a seção do combo conforme a disponibilidade:
+  let comboSection = '';
+  if(!temBebida){
+    comboSection = '';   // sem bebida nenhuma → combo some
+  } else if(!comboAtivo){
+    // tem bebida, mas o combo está desativado no admin → transparente e travado
+    comboSection = `
       <div class="modal-sep"></div>
-      <div class="person-section"><div class="person-label">🧴 Sachê <span class="req">* obrigatório</span></div>
-        <div class="sache-options">${SACHES.map(s=>`<div class="sache-btn" id="sch-${s.id}" onclick="selSache('${s.id}')"><span class="s-icon">${s.emoji}</span><span class="s-name">${s.nome}</span><span class="s-badge">grátis</span></div>`).join('')}</div>
-        <div id="err-sache" class="err-msg">⚠ Selecione sua preferência de sachê</div></div>
+      <div class="person-section" style="opacity:.4;pointer-events:none;user-select:none">
+        <div class="person-label">🍟🥤 Adicionar Combo? <span class="opt-lbl">(indisponível no momento)</span></div>
+        <div style="font-size:.7rem;color:var(--muted);margin-bottom:10px">Batata frita + Refrigerante lata &nbsp;<strong style="color:var(--orange)">+R$${comboPreco}</strong></div>
+        <div class="ponto-options">
+          <div class="ponto-btn"><span class="p-icon">🚫</span><span class="p-name">Indisponível</span></div>
+        </div></div>`;
+  } else {
+    // liberado → mostra Sim/Não e só as bebidas que tiverem em estoque
+    comboSection = `
       <div class="modal-sep"></div>
       <div class="person-section"><div class="person-label">🍟🥤 Adicionar Combo? <span class="req">* obrigatório</span></div>
         <div style="font-size:.7rem;color:var(--muted);margin-bottom:10px">Batata frita + Refrigerante lata &nbsp;<strong style="color:var(--orange)">+R$${comboPreco}</strong></div>
@@ -320,8 +378,8 @@ function abrirModal(id){
         <div id="combo-sabores" style="display:none;margin-top:10px">
           <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px">Qual bebida?</div>
           <div class="ponto-options" style="margin-bottom:10px">
-            <div class="ponto-btn" id="cbeb-refri" onclick="selComboBebida('refri')"><span class="p-icon">🥤</span><span class="p-name">Refrigerante</span></div>
-            <div class="ponto-btn" id="cbeb-suco" onclick="selComboBebida('suco')"><span class="p-icon">🧃</span><span class="p-name">Suco <strong style="color:var(--orange)">+R$${COMBO_SUCO_EXTRA}</strong></span></div>
+            ${btnRefri}
+            ${btnSuco}
           </div>
           <div id="combo-sabor-wrap" style="display:none">
             <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px" id="combo-sabor-titulo">Qual sabor?</div>
@@ -329,7 +387,19 @@ function abrirModal(id){
           </div>
           <div id="err-combo-sab" class="err-msg">⚠ Escolha a bebida e o sabor</div>
         </div>
-        <div id="err-combo" class="err-msg">⚠ Informe se deseja o combo</div></div>
+        <div id="err-combo" class="err-msg">⚠ Informe se deseja o combo</div></div>`;
+  }
+  document.getElementById('modal-box').innerHTML=`
+    <div class="modal-header"><div><div class="modal-title">${b.emoji} ${b.nome}</div><div class="modal-price">R$${b.preco}</div></div><button class="modal-close" onclick="fecharModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="person-section"><div class="person-label">🥩 Ponto da carne <span class="req">* obrigatório</span></div>
+        <div class="ponto-options">${PONTOS.map(p=>`<div class="ponto-btn" id="pnt-${p.id}" onclick="selPonto('${p.id}')"><span class="p-icon">${p.emoji}</span><span class="p-name">${p.nome}</span></div>`).join('')}</div>
+        <div id="err-ponto" class="err-msg">⚠ Selecione o ponto da carne</div></div>
+      <div class="modal-sep"></div>
+      <div class="person-section"><div class="person-label">🧴 Sachê <span class="req">* obrigatório</span></div>
+        <div class="sache-options">${SACHES.map(s=>`<div class="sache-btn" id="sch-${s.id}" onclick="selSache('${s.id}')"><span class="s-icon">${s.emoji}</span><span class="s-name">${s.nome}</span><span class="s-badge">grátis</span></div>`).join('')}</div>
+        <div id="err-sache" class="err-msg">⚠ Selecione sua preferência de sachê</div></div>
+      ${comboSection}
       <div class="modal-sep"></div>
       <div class="person-section"><div class="person-label">➖ Retirar ingredientes <span class="opt-lbl">(opcional)</span></div>
         <div class="ing-grid">${b.ing.map(i=>`<div class="ing-btn" id="ing-${i.replace(/[\s&]/g,'_')}" onclick="togIng('${i}')">${i}</div>`).join('')}</div></div>
@@ -342,7 +412,7 @@ function abrirModal(id){
   document.body.style.overflow='hidden';
 }
 
-function selPonto(id){pontoAtual=PONTOS.find(p=>p.id===id);document.querySelectorAll('.ponto-btn').forEach(e=>e.classList.remove('sel'));document.getElementById('pnt-'+id).classList.add('sel');document.getElementById('err-ponto').style.display='none';}
+function selPonto(id){pontoAtual=PONTOS.find(p=>p.id===id);document.querySelectorAll('[id^="pnt-"]').forEach(e=>e.classList.remove('sel'));document.getElementById('pnt-'+id).classList.add('sel');document.getElementById('err-ponto').style.display='none';}
 function selSache(id){sacheAtual=SACHES.find(s=>s.id===id);document.querySelectorAll('.sache-btn').forEach(e=>e.classList.remove('sel'));document.getElementById('sch-'+id).classList.add('sel');document.getElementById('err-sache').style.display='none';}
 function selCombo(sim,preco){
   comboAtual=sim;comboSaborAtual=null;comboBebidaAtual=null;
@@ -413,7 +483,7 @@ function remUlt(id){if(!cartBurguers[id]||!cartBurguers[id].length)return;cartBu
 function getSubtotal(){
   let t=0;
   Object.entries(cartBurguers).forEach(([id,insts])=>{const b=BURGUERS.find(x=>x.id===id);if(b)insts.forEach(i=>t+=b.preco+i.precoExtra);});
-  [...EXTRAS,...COMBO].forEach(e=>{
+  [...EXTRAS,...COMBO,...PROMOCOES].forEach(e=>{
     const q=cartExtras[e.id];
     if(q)t+=e.preco*(Array.isArray(q)?q.length:q);
   });
@@ -664,7 +734,7 @@ function renderResumo(){
       if(det.length)html+=`<div class="resumo-sub">${det.join(' • ')}</div>`;
     });
   });
-  [...EXTRAS,...COMBO].forEach(e=>{
+  [...EXTRAS,...COMBO,...PROMOCOES].forEach(e=>{
     const q=cartExtras[e.id];
     if(!q)return;
     if(Array.isArray(q)&&q.length>0){
@@ -947,7 +1017,7 @@ function montarItensTexto(){
       if(inst.combo) lista.push(`Combo Batata + ${inst.comboSuco?'Suco':'Refri'} (${inst.combo}) — R$${comboTotal}`);
     });
   });
-  [...EXTRAS,...COMBO].forEach(e=>{
+  [...EXTRAS,...COMBO,...PROMOCOES].forEach(e=>{
     const q=cartExtras[e.id];
     if(!q)return;
     if(Array.isArray(q)&&q.length>0){
@@ -1245,6 +1315,120 @@ db.collection('cardapio').doc('bairros').onSnapshot(doc=>{
     if(document.getElementById('bairros-lista')?.classList.contains('show')) renderListaBairros();
   }
 },()=>{});
+
+// ── POPUPS NA TELA (novidade / promoção) ────────────────────────────
+// O admin define em cardapio/novidade e cardapio/promo: { ativo, ..., v }.
+// Cada popup aparece 1x por pessoa (localStorage por tipo). Se o admin
+// relançar (novo `v`), volta a aparecer pra todo mundo. Mostra no máximo
+// UM popup por visita (promoção tem prioridade).
+function acharProduto(id){ return [...BURGUERS,...EXTRAS,...COMBO].find(p=>p.id===id)||null; }
+let _cfgNovidade=null, _cfgPromo=null, _popupAberto=false;
+function popupVisto(tipo,v){ return localStorage.getItem('tcho_'+tipo+'_vista')===String(v); }
+function tentarMostrarPopups(){
+  if(_popupAberto) return;
+  if(_cfgPromo    && _cfgPromo.ativo    && !popupVisto('promo',_cfgPromo.v))       { mostrarPopup(_cfgPromo,'promo'); return; }
+  if(_cfgNovidade && _cfgNovidade.ativo && !popupVisto('novidade',_cfgNovidade.v)) { mostrarPopup(_cfgNovidade,'novidade'); return; }
+}
+function mostrarPopup(cfg,tipo){
+  const prod = cfg.produtoId ? acharProduto(cfg.produtoId) : null;
+  if(cfg.produtoId && !prod) return;                       // produto ainda não carregou → tenta de novo depois
+  const isPromo = tipo==='promo';
+  const foto = cfg.produtoId ? getFotoCliente(cfg.produtoId) : null;
+  const badge = isPromo ? '🔥 Promoção' : '✨ Novidade';
+  const titulo = isPromo ? ((cfg.titulo||'').trim() || 'Promoção especial!') : (prod?prod.nome:'Novidade');
+  const texto = (cfg.texto||'').trim() || (isPromo ? 'Aproveite enquanto dura! 🔥' : 'Chegou coisa nova no Tcho Burguer! Corre pra experimentar 🔥');
+  const btnLabel = isPromo ? '🔥 Aproveitar' : '🍔 Quero experimentar';
+  const cupom = isPromo ? (cfg.cupom||'').trim().toUpperCase() : '';
+  const box=document.getElementById('novidade-box');
+  box.innerHTML=`
+    <button class="nov-close" onclick="fecharPopup()" aria-label="Fechar">✕</button>
+    ${foto ? `<img class="nov-foto" src="${foto}" alt="${titulo}">`
+           : `<div class="nov-foto-vazia">${isPromo?'🔥':(prod?.emoji||'🍔')}</div>`}
+    <div class="nov-badge${isPromo?' promo':''}">${badge}</div>
+    <div class="nov-nome">${titulo}</div>
+    ${(!isPromo && prod) ? `<div class="nov-preco">R$${prod.preco}</div>` : ''}
+    <div class="nov-texto">${texto}</div>
+    ${cupom ? `<div class="nov-cupom">Use o cupom <b>${cupom}</b></div>` : ''}
+    <button class="nov-btn" onclick="popupAcao('${cfg.produtoId||''}')">${btnLabel}</button>`;
+  document.getElementById('novidade-pop').classList.add('show');
+  _popupAberto=true;
+  localStorage.setItem('tcho_'+tipo+'_vista', String(cfg.v));   // marca visto já ao exibir → 1x por pessoa
+}
+function fecharPopup(){
+  document.getElementById('novidade-pop').classList.remove('show');
+  _popupAberto=false;
+}
+function popupAcao(id){
+  fecharPopup();
+  if(!id) return;
+  const el=document.getElementById('mi-'+id);
+  if(el){
+    el.scrollIntoView({behavior:'smooth',block:'center'});
+    el.classList.add('nov-destaque');
+    setTimeout(()=>el.classList.remove('nov-destaque'),3000);
+  }
+}
+// Reage aos popups definidos no admin. Espera ~1,2s pra dar tempo dos produtos
+// custom e das fotos carregarem antes de montar o popup.
+db.collection('cardapio').doc('novidade').onSnapshot(doc=>{
+  _cfgNovidade = doc.exists ? doc.data() : null;
+  setTimeout(tentarMostrarPopups, 1200);
+},()=>{});
+db.collection('cardapio').doc('promo').onSnapshot(doc=>{
+  _cfgPromo = doc.exists ? doc.data() : null;
+  atualizarPromocoes(_cfgPromo);            // liga/desliga a seção "Promoções" no cardápio
+  setTimeout(tentarMostrarPopups, 1200);
+},()=>{});
+
+// ── SEÇÃO "PROMOÇÕES" NO CARDÁPIO ───────────────────────────────────
+// Monta o item comprável da promoção (sem mexer nos produtos normais).
+// Só existe enquanto a promoção estiver ligada no Marketing.
+function atualizarPromocoes(cfg){
+  PROMOCOES=[];
+  if(cfg && cfg.ativo){
+    const prod = cfg.produtoId ? acharProduto(cfg.produtoId) : null;
+    const nome = (cfg.titulo||'').trim() || (prod?prod.nome:'Promoção');
+    const temPreco = cfg.precoPromo!==undefined && cfg.precoPromo!==null && String(cfg.precoPromo).trim()!=='';
+    const precoPromo = temPreco ? Number(cfg.precoPromo) : null;
+    const preco = precoPromo!==null && !isNaN(precoPromo) ? precoPromo : (prod?prod.preco:null);
+    if(preco!==null && !isNaN(preco)){     // só vira item comprável se houver um preço
+      PROMOCOES=[{
+        id:'promo_main', emoji:'🔥', nome, preco,
+        precoOriginal:(precoPromo!==null && prod)?prod.preco:null,
+        desc:(cfg.texto||'').trim(), fotoId:cfg.produtoId||null, opcoes:[]
+      }];
+    }
+  }
+  if(!PROMOCOES.length && cartExtras['promo_main']!==undefined) delete cartExtras['promo_main'];  // limpa do carrinho se saiu
+  renderPromocoes(); updateFloat();
+}
+function renderPromocoes(){
+  const cont=document.getElementById('menu-promocoes');
+  const titulo=document.getElementById('cat-title-promocoes');
+  if(!cont) return;
+  if(!PROMOCOES.length){ cont.innerHTML=''; if(titulo) titulo.style.display='none'; return; }
+  if(titulo) titulo.style.display='';
+  cont.innerHTML=PROMOCOES.map(e=>{
+    const qty=cartExtras[e.id]||0;
+    const foto=e.fotoId?getFotoCliente(e.fotoId):null;
+    const precoHtml = (e.precoOriginal && e.precoOriginal>e.preco)
+      ? `<span style="text-decoration:line-through;color:var(--muted);font-size:.8rem;margin-right:6px">R$${e.precoOriginal}</span><span style="color:#e74c3c;font-weight:800">R$${e.preco}</span>`
+      : `R$${e.preco}`;
+    return`<div class="extra-item ${qty>0?'has-items':''}">
+      ${foto ? `<div class="extra-foto"><img src="${foto}" alt="${e.nome}" loading="lazy"></div>` : `<div class="extra-emoji">${e.emoji}</div>`}
+      <div class="extra-body">
+        <div class="extra-name">${e.nome} <span class="promo-tag">🔥 PROMO</span></div>
+        ${e.desc?`<div class="extra-sub">${e.desc}</div>`:''}
+        <div class="extra-price">${precoHtml}</div>
+      </div>
+      <div class="extra-controls">
+        <button class="eq-btn ${qty===0?'dim':''}" onclick="${qty>0?`chgExtra('${e.id}',-1)`:'void(0)'}">−</button>
+        <div class="eq-disp">${qty}</div>
+        <button class="eq-btn" onclick="chgExtra('${e.id}',1)">+</button>
+      </div>
+    </div>`;
+  }).join('');
+}
 
 // ── CONTADOR DE ACESSOS (analytics simples, visível no admin) ──────
 (function(){

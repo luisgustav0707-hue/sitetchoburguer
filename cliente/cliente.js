@@ -429,8 +429,8 @@ function selCombo(sim,preco){
 // Renderiza a lista de sabores conforme a bebida.
 function selComboBebida(tipo){
   comboBebidaAtual=tipo;comboSaborAtual=null;
-  document.getElementById('cbeb-refri').classList.toggle('sel',tipo==='refri');
-  document.getElementById('cbeb-suco').classList.toggle('sel',tipo==='suco');
+  document.getElementById('cbeb-refri')?.classList.toggle('sel',tipo==='refri');
+  document.getElementById('cbeb-suco')?.classList.toggle('sel',tipo==='suco');
   const opcoes=tipo==='suco'?getOpcoes('suc'):getOpcoes('cmb');
   document.getElementById('combo-sabor-titulo').textContent=tipo==='suco'?'Qual suco?':'Qual refrigerante?';
   document.getElementById('combo-sabor-opts').innerHTML=opcoes.map(o=>`<div class="ponto-btn" id="csab-${o.replace(/[^a-zA-Z0-9]/g,'_')}" onclick="selComboSabor('${o.replace(/'/g,"\\'")}')"><span class="p-name" style="font-size:.8rem">${o}</span></div>`).join('');

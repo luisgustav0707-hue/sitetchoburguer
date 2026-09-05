@@ -1389,6 +1389,8 @@ function cupomEntrega(p){
     <div class="row big"><span>TOTAL:</span><span>R$${p.total}</span></div>
     ${qrBloco}
     <div class="c b" style="margin-top:8px">Obrigado! 😋</div>
+    <div class="line"></div>
+    <div class="c" style="font-size:10px">App de pedidos: PedidoEasy — pedidoeasy.com.br</div>
     <script>window.onload=function(){window.print();setTimeout(()=>window.close(),1500)};<\/script>
   </body></html>`;
 }

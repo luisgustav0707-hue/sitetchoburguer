@@ -320,3 +320,10 @@ select option{background:var(--card)}
 /* Destaque do item recém-lançado quando a pessoa clica em "Quero experimentar" */
 @keyframes novHighlight{0%,100%{box-shadow:0 0 0 0 rgba(245,130,10,0)}30%{box-shadow:0 0 0 3px rgba(245,130,10,.8)}}
 .menu-item.nov-destaque{animation:novHighlight 1.4s ease-out 2}
+
+/* RODAPÉ MINIMALISTA — assinatura discreta no canto esquerdo.
+   Fica no fluxo (não é fixo) e tem folga embaixo pra não cair atrás
+   do botão flutuante do WhatsApp, que é fixo no canto inferior esquerdo. */
+.rodape-app{max-width:680px;margin:0 auto;padding:0 14px 86px;text-align:left;font-size:.6rem;letter-spacing:.3px;color:#5c544c}
+.rodape-app a{color:#5c544c;text-decoration:none;border-bottom:1px solid #332e29}
+.rodape-app a:hover{color:var(--orange);border-bottom-color:var(--orange)}

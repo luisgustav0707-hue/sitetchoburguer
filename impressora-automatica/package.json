@@ -1,7 +1,7 @@
 {
   "name": "tcho-impressao",
   "productName": "Tcho Burguer Impressão",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "App de bandeja que imprime os cupons do Tcho Burguer sozinho assim que o pedido chega, sem depender do navegador aberto.",
   "main": "main.js",
   "private": true,

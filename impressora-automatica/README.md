@@ -74,6 +74,36 @@ de reputação.** A solução real é assinar o executável (Azure Trusted Signi
 hoje o caminho mais barato; desde 2023 a chave precisa ficar em hardware/HSM,
 não basta mais um `.pfx`). Até lá, o painel traz o passo a passo do que clicar.
 
+## O motor de impressão
+
+O app **não** usa `webContents.print` do Electron. Foi a primeira tentativa e
+não funciona com todo driver térmico: na Goldsky 80mm (driver POS-80) sai folha
+em branco, porque o driver só expõe papéis fixos (80x210, 80x297, 80x3276, todos
+com 71,9mm de área útil) e recusa o formulário de tamanho livre que o Chromium
+monta pra cortar o cupom na altura exata.
+
+O que funciona — e é o que o `servidor-impressao/server.js` sempre fez — é
+gravar o HTML num arquivo e abrir no **Chrome (ou Edge) com `--kiosk-printing`**.
+Três detalhes que não são óbvios:
+
+1. `--kiosk-printing` **não imprime sozinho**: ele só faz o `window.print()` da
+   página sair sem diálogo. Como o HTML da fila vem sem script (a Cloud Function
+   remove de propósito), é o app que injeta `window.print()` + `window.close()`.
+   Sem o `close()`, o Chrome acumula uma janela por pedido.
+2. `--user-data-dir` com perfil próprio é obrigatório: se o dono estiver com o
+   Chrome aberto, o comando vira só mais uma aba na janela dele e o
+   `--kiosk-printing` é ignorado — o diálogo de impressão volta a aparecer.
+3. `--window-position=-32000,-32000` mantém a janela fora da tela, pra não
+   piscar nada no balcão a cada pedido.
+
+Duas consequências, ambas aceitas de propósito:
+
+- **Sai sempre na impressora padrão do Windows.** Não há como escolher a
+  impressora pela linha de comando, então o menu da bandeja só liga/desliga cada
+  via e mostra qual é a padrão.
+- **O corte é o do driver**, não mais calculado pela altura do conteúdo. Medir a
+  altura só faz sentido com driver que aceita página de tamanho livre.
+
 ## Quando algo dá errado no PC da loja
 
 O app nasceu com diagnóstico porque, quando falha na casa do cliente, não sobra
@@ -110,9 +140,12 @@ Cada um destes já custou horas. Os comentários no código explicam o porquê �
 não desfaça achando que é código estranho:
 
 1. O Firebase vem dos `<script>` UMD em `engine.html`, **nunca** de `require()`.
-2. A altura do cupom é `document.body.getBoundingClientRect().height`, **nunca**
-   `documentElement.scrollHeight`.
+2. O `box-sizing:border-box` no CSS do cupom: sem ele o padding soma por fora e
+   `width:80mm; padding:3mm` vira 86mm numa página de 80mm — sai em duas folhas
+   em branco.
 3. Os ícones da bandeja são `.ico` e ficam em `icones/` com `asarUnpack`.
 4. `partition: 'persist:tcho-impressao'` é o que faz a sessão sobreviver ao
    reinício do PC.
-5. Entre uma via e outra, 1200ms — senão a fila do driver embaralha.
+5. Entre uma via e outra, 2s — senão a fila do driver embaralha.
+6. O `window.print()` injetado e o `--user-data-dir`: ver a seção do motor de
+   impressão acima antes de simplificar qualquer um dos dois.

@@ -8,6 +8,7 @@ const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell } = require(
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
+const { spawn } = require('child_process');
 
 // Segunda instância: em vez de morrer calada (o usuário clica no atalho e "não
 // acontece nada", e conclui que o app não abre), a instância que já está
@@ -108,90 +109,89 @@ function abrirPareamento() {
   pairWin.on('closed', () => { pairWin = null; });
 }
 
-// ── Impressão nativa (sem Chrome externo, sem diálogo) ──────────────
-// A térmica corta no FIM DA PÁGINA. Sem dizer qual é a página, o Chromium usa
-// o tamanho padrão do driver — normalmente um comprimento fixo — e o corte sai
-// no lugar errado: no meio do texto quando o cupom é maior que a página, ou
-// depois de um palmo de papel em branco quando é menor. Por isso medimos a
-// altura real do conteúdo e imprimimos numa página exatamente desse tamanho.
-const MICRONS_POR_PX = 25400 / 96;          // 1px CSS = 1/96 pol; 1 pol = 25400µm
-const MICRONS_POR_MM = 1000;
-
-function larguraPapelDoHtml(html) {
-  const m = /@page\{[^}]*size:\s*(\d+(?:\.\d+)?)mm/i.exec(html || '');
-  const mm = m ? Number(m[1]) : 80;
-  return (mm >= 40 && mm <= 120) ? mm : 80;
-}
-
-async function imprimirHTML(html, deviceName) {
-  const larguraMm = larguraPapelDoHtml(html);
-  const win = new BrowserWindow({
-    show: false,
-    // A janela precisa ter a largura do papel: a altura do conteúdo depende de
-    // onde o texto quebra, e isso depende da largura.
-    width: Math.round(larguraMm / 25.4 * 96) + 20,
-    height: 1200,
-  });
-  try {
-    // NÃO deixe essa rejeição derrubar a impressão. O cupom de entrega puxa
-    // duas imagens remotas (a logo e o QR da rota): basta a internet da loja
-    // oscilar pra o Chromium devolver ERR_FAILED e o cupom inteiro não sair —
-    // muito pior do que sair sem o QR. O texto já renderizou; seguimos.
-    await win.loadURL('data:text/html;charset=UTF-8,' + encodeURIComponent(html))
-      .catch((e) => log('cupom carregou com falha (imagem remota?), imprimindo assim mesmo:', (e && e.message) || e));
-    let alturaPx = 0;
-    try {
-      // ATENÇÃO: NÃO troque por documentElement.scrollHeight. Quando o conteúdo
-      // é menor que a janela, scrollHeight devolve a altura da JANELA — com a
-      // janela oculta de 1200px, a impressora cuspia dezenas de centímetros em
-      // branco antes de cortar. O que vale é a caixa do body.
-      alturaPx = await win.webContents.executeJavaScript(
-        'Math.ceil(document.body.getBoundingClientRect().height)');
-    } catch (e) { log('não consegui medir a altura do cupom:', e && e.message); }
-
-    const opts = { silent: true, printBackground: true, margins: { marginType: 'none' } };
-    if (deviceName) opts.deviceName = deviceName;
-    if (alturaPx > 0) {
-      opts.pageSize = {
-        width: Math.round(larguraMm * MICRONS_POR_MM),
-        height: Math.max(20000, Math.round(alturaPx * MICRONS_POR_PX)),
-      };
-      log(`imprimindo ${larguraMm}mm x ${(alturaPx * MICRONS_POR_PX / 1000).toFixed(0)}mm`
-        + (deviceName ? ` em "${deviceName}"` : ' na impressora padrão'));
-    }
-
-    return await new Promise((resolve) => {
-      win.webContents.print(opts, (ok, motivo) => {
-        if (!ok) log('falha ao imprimir:', motivo);
-        resolve(ok);
-      });
-    });
-  } finally {
-    setTimeout(() => { if (!win.isDestroyed()) win.destroy(); }, 800);
+// ── Impressão (Chrome/Edge em modo kiosk) ───────────────────────────
+// POR QUE NÃO webContents.print: é o caminho óbvio e foi o primeiro que tentei,
+// mas não funciona com todo driver térmico. Na Goldsky 80mm daqui (driver
+// POS-80) ele imprime folha em branco — o driver só expõe papéis fixos
+// (80x210, 80x297, 80x3276, todos com 71,9mm de área útil) e não aceita o
+// formulário de tamanho livre que o Chromium monta pra cortar o cupom na
+// altura exata do conteúdo.
+//
+// O que funciona é o que o servidor-impressao/server.js já fazia desde sempre:
+// gravar o HTML num arquivo e abrir no Chrome (ou Edge) com --kiosk-printing,
+// que imprime sem diálogo. O corte passa a ser o do driver, igual ao cupom que
+// sempre saiu pelo navegador.
+//
+// Consequência aceita: o kiosk imprime SEMPRE na impressora padrão do Windows
+// — não há como escolher a impressora pela linha de comando. Por isso o menu
+// da bandeja só oferece "padrão" ou "não imprimir esta via".
+function navegadorParaImpressao() {
+  const candidatos = [
+    process.env['PROGRAMFILES'] + '\Google\Chrome\Application\chrome.exe',
+    process.env['PROGRAMFILES(X86)'] + '\Google\Chrome\Application\chrome.exe',
+    (process.env['LOCALAPPDATA'] || '') + '\Google\Chrome\Application\chrome.exe',
+    // O Edge já vem no Windows 10/11 — é a garantia de que sempre há um.
+    process.env['PROGRAMFILES(X86)'] + '\Microsoft\Edge\Application\msedge.exe',
+    process.env['PROGRAMFILES'] + '\Microsoft\Edge\Application\msedge.exe',
+  ];
+  for (const c of candidatos) {
+    try { if (c && fs.existsSync(c)) return c; } catch (e) { /* caminho inválido */ }
   }
+  return null;
 }
 
-// Cada via sai na impressora escolhida pra sua finalidade. Sem escolha, cai na
-// padrão do Windows — que é o comportamento de quem só tem uma impressora.
-const NAO_IMPRIMIR = '__nenhuma__';
-function impressoraDe(tipo) {
-  const cfg = lerConfigLocal();
-  const mapa = cfg.impressoras || {};
-  const escolha = mapa[tipo];
-  if (escolha === NAO_IMPRIMIR) return NAO_IMPRIMIR;
-  return escolha || undefined;
+// O HTML da fila vem limpo, sem script (a Cloud Function o remove de propósito).
+// Quem dispara a impressão é o motor, e no kiosk quem dispara é a própria
+// página: --kiosk-printing só faz window.print() sair sem diálogo, ele não
+// imprime sozinho. O window.close() no fim é o que impede o Chrome de ir
+// acumulando janela a cada pedido.
+function htmlParaKiosk(html) {
+  const gatilho = '<script>window.onload=function(){window.print();'
+    + 'setTimeout(function(){window.close()},1500)}<' + '/script>';
+  return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, gatilho + '</body>') : html + gatilho;
+}
+
+function imprimirHTML(html, tipo) {
+  const navegador = navegadorParaImpressao();
+  if (!navegador) {
+    log('nenhum Chrome ou Edge encontrado — impossível imprimir');
+    return Promise.resolve(false);
+  }
+  const arquivo = path.join(app.getPath('temp'), `tcho-${tipo}-${Date.now()}.html`);
+  fs.writeFileSync(arquivo, htmlParaKiosk(html), 'utf8');
+
+  // Perfil próprio e fixo: sem isso, se o dono estiver com o Chrome aberto, o
+  // nosso comando vira só mais uma aba na janela dele — e aí o --kiosk-printing
+  // é ignorado, porque quem manda são as flags de quem abriu o Chrome primeiro.
+  const perfil = path.join(app.getPath('userData'), 'perfil-impressao');
+  const args = [
+    '--kiosk-printing', '--no-first-run', '--no-default-browser-check',
+    '--disable-extensions', `--user-data-dir=${perfil}`,
+    // Fora da tela: o operador não precisa ver uma janela piscando a cada pedido.
+    '--window-position=-32000,-32000', '--window-size=400,600',
+    arquivo,
+  ];
+  log(`imprimindo via ${path.basename(navegador)} (${tipo}, ${html.length} bytes)`);
+  const proc = spawn(navegador, args, { detached: true, stdio: 'ignore' });
+  proc.on('error', (e) => log('falha ao chamar o navegador:', e && e.message));
+  proc.unref();
+
+  // O arquivo temporário só pode sumir depois que o Chrome terminou de ler e
+  // imprimir; 20s é folga suficiente até pra impressora lenta.
+  setTimeout(() => fs.unlink(arquivo, () => {}), 20000);
+  return Promise.resolve(true);
 }
 
 ipcMain.on('imprimir', async (event, { id, pedidoId, vias }) => {
   try {
     let n = 0;
     for (const via of vias) {
-      const alvo = impressoraDe(via.tipo);
-      if (alvo === NAO_IMPRIMIR) continue;          // via desligada pelo dono
+      if (impressoraDe(via.tipo) === NAO_IMPRIMIR) continue;   // via desligada pelo dono
       // Mandar duas impressões coladas embaralha a fila do driver e as vias
-      // saem trocadas ou grudadas — 1,2s entre elas resolve.
-      if (n++ > 0) await new Promise((r) => setTimeout(r, 1200));
-      await imprimirHTML(via.html, alvo);
+      // saem trocadas ou grudadas — 2s entre elas resolve (é também o tempo
+      // que o servidor-impressao antigo usava entre cozinha e entrega).
+      if (n++ > 0) await new Promise((r) => setTimeout(r, 2000));
+      await imprimirHTML(via.html, via.tipo);
     }
   } catch (e) {
     log('erro ao imprimir', id, (e && e.message) || e);
@@ -312,37 +312,31 @@ async function atualizarTray() {
 
   // Um submenu por finalidade: dá pra mandar o pedido pra térmica da cozinha e
   // a conta da mesa pra impressora do caixa.
+  // Só liga/desliga: o kiosk do Chrome imprime sempre na impressora padrão do
+  // Windows e não aceita escolher pela linha de comando (ver o comentário em
+  // imprimirHTML). A lista serve pra mostrar ao dono QUAL é a padrão — é o que
+  // ele precisa saber pra trocar, e ele troca no Windows, não aqui.
+  const padrao = (impressoras.find((p) => p.isDefault) || {}).name || 'nenhuma configurada';
   const menuDaFinalidade = (tipo) => {
-    if (!impressoras.length) return [{ label: 'Nenhuma impressora encontrada', enabled: false }];
-    const bruto = mapa[tipo];
-    const escolhida = bruto === NAO_IMPRIMIR ? NAO_IMPRIMIR : (bruto || '');
+    const desligada = mapa[tipo] === NAO_IMPRIMIR;
     return [
+      { label: `Sai na padrão do Windows: ${padrao}`, enabled: false },
+      { type: 'separator' },
       {
-        label: 'Padrão do Windows',
+        label: 'Imprimir esta via',
         type: 'radio',
-        checked: !escolhida,
+        checked: !desligada,
         click: () => salvarConfigLocal({ impressoras: { ...mapa, [tipo]: '' } }),
       },
       {
         label: 'Não imprimir esta via',
         type: 'radio',
-        checked: escolhida === NAO_IMPRIMIR,
+        checked: desligada,
         click: () => salvarConfigLocal({ impressoras: { ...mapa, [tipo]: NAO_IMPRIMIR } }),
       },
-      { type: 'separator' },
-      ...impressoras.map((p) => ({
-        label: p.name + (p.isDefault ? ' (padrão)' : ''),
-        type: 'radio',
-        checked: escolhida === p.name,
-        click: () => salvarConfigLocal({ impressoras: { ...mapa, [tipo]: p.name } }),
-      })),
     ];
   };
-  const resumo = (tipo) => {
-    const n = mapa[tipo];
-    if (n === NAO_IMPRIMIR) return ' — desligada';
-    return n ? ` — ${n}` : ' — padrão';
-  };
+  const resumo = (tipo) => (mapa[tipo] === NAO_IMPRIMIR ? ' — desligada' : ' — ligada');
 
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: (conectado ? '✅ ' : '⭕ ') + status, enabled: false },

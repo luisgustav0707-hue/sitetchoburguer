@@ -28,7 +28,11 @@ const BASE_URL = 'https://tchoburguer.com';
 //     fim da página; sem essa sobra, a última linha do cupom fica presa dentro
 //     da impressora, antes da serrilha, e some.
 const AVANCO_MM = 15;
-const CSS_CUPOM_SRV = `*{margin:0;padding:0}`
+// `box-sizing:border-box` NÃO é enfeite: sem ele o padding do body soma POR FORA
+// da largura, e `width:80mm; padding:3mm` vira um corpo de 86mm numa página de
+// 80mm. O Chromium empurra o excedente pra uma segunda página e a térmica cospe
+// duas folhas em branco — foi exatamente o que aconteceu na Goldsky 80mm.
+const CSS_CUPOM_SRV = `*{margin:0;padding:0;box-sizing:border-box}`
   + `@page{margin:0;size:80mm auto}`
   + `body{font-family:Arial,Helvetica,sans-serif;font-size:14px;width:80mm;`
   + `padding:3mm;padding-bottom:calc(3mm + ${AVANCO_MM}mm)}`

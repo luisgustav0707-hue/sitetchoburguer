@@ -67,8 +67,6 @@ function cupomCozinhaSrv(p) {
     <div class="line"></div>
     ${itens.map((i) => `<div style="margin:3px 0">• ${destacaRemocao(i)}</div>`).join('')}
     ${blocoObs(p)}
-    <div class="line"></div>
-    <div class="c" style="font-size:10px">App de pedidos: PedidoEasy — pedidoeasy.com.br</div>
   </body></html>`;
 }
 

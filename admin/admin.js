@@ -1431,6 +1431,11 @@ function carregarManifestoApp(){
     if(!m) return;
     const mb=(m.tamanhoBytes/1024/1024).toFixed(0);
     el.textContent=`Versão ${m.versao} · ${mb} MB · publicado em ${m.publicadoEm}`;
+    // O instalador mora num GitHub Release, não no repositório (são 87 MB por
+    // versão, e o Pages só serve arquivo commitado). O botão pega a URL daqui
+    // pra não precisar editar HTML a cada versão nova.
+    const btn=document.getElementById('imp-download');
+    if(btn && m.url){ btn.href=m.url; btn.removeAttribute('download'); }
   }).catch(()=>{});
 }
 

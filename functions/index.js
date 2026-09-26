@@ -159,8 +159,17 @@ exports.notificarNovoPedido = onDocumentCreated(
 //  2) pareiarImpressora — o app manda o código SEM estar autenticado. A
 //     function cria um usuário do Auth dedicado A ESSE computador, com o
 //     claim perfil:'impressora' (é isso que o firestore.rules enxerga), e
-//     devolve um custom token. Cada PC tem identidade própria, revogável
+//     devolve as credenciais dele. Cada PC tem identidade própria, revogável
 //     individualmente sem derrubar os outros.
+//
+//     Por que e-mail/senha gerados e não createCustomToken: assinar um custom
+//     token exige a permissão iam.serviceAccounts.signBlob na conta de serviço
+//     das functions, que este projeto não tem — e conceder isso é um passo
+//     manual no IAM que quebra em toda máquina/projeto novo. O e-mail é
+//     sintético (domínio que não existe, ninguém recebe nada), a senha é
+//     aleatória de 32 bytes, trafega uma única vez no HTTPS da resposta e o
+//     app nunca a guarda: depois do login quem mantém a sessão é o IndexedDB
+//     do Firebase. Revogar continua sendo deleteUser(uid).
 //  3) enfileirarImpressao — trigger a cada pedido novo: se a loja estiver no
 //     modo "app" (config/operacao.impressaoModo), gera o HTML dos cupons no
 //     servidor e deixa em impressoes/{pedidoId}. O app só escuta essa fila e
@@ -207,24 +216,27 @@ exports.pareiarImpressora = onCall({ region: REGION }, async (request) => {
 
   const nome = String(nomeDispositivo || 'PC sem nome').slice(0, 60);
   const claims = { perfil: 'impressora' };
+  // Domínio inexistente de propósito: é uma identidade de máquina, não de
+  // pessoa — nenhum e-mail é enviado nem recebido aqui.
+  const email = `impressora-${crypto.randomBytes(8).toString('hex')}@impressora.tchoburguer.invalid`;
+  const senha = crypto.randomBytes(24).toString('base64url');
   let uid = null;
   try {
-    const user = await admin.auth().createUser({ displayName: `Impressora — ${nome}` });
+    const user = await admin.auth().createUser({
+      email, password: senha, displayName: `Impressora — ${nome}`,
+    });
     uid = user.uid;
     await admin.auth().setCustomUserClaims(uid, claims);
 
-    // O token vem ANTES de registrar o computador na lista do painel. Se ele
-    // falhar (createCustomToken exige a permissão iam.serviceAccounts.signBlob
-    // na conta de serviço das functions), o pareamento não aconteceu de fato —
-    // e um PC na lista que nunca vai imprimir é pior que nenhum, porque o dono
-    // acha que está tudo certo e só descobre quando o pedido não sai.
-    const customToken = await admin.auth().createCustomToken(uid, claims);
-
+    // Só registra o computador na lista do painel DEPOIS que a identidade
+    // existe de verdade. Um PC listado que nunca vai imprimir é pior que
+    // nenhum: o dono acha que está tudo certo e só descobre quando o pedido
+    // não sai.
     await db.collection('impressoras').doc(uid).set({
       nomeDispositivo: nome, pareadoEm: FieldValue.serverTimestamp(),
     });
     logger.info(`Impressora pareada: uid ${uid} (${nome})`);
-    return { customToken, lojaNome: 'Tcho Burguer' };
+    return { email, senha, lojaNome: 'Tcho Burguer' };
   } catch (e) {
     // Desfaz tudo e devolve o código pro dono: falhar no meio não pode custar
     // um código queimado nem deixar usuário órfão no Auth.
@@ -237,10 +249,10 @@ exports.pareiarImpressora = onCall({ region: REGION }, async (request) => {
     // Sem isto o app só recebia "internal", que não diz nada a ninguém.
     logger.error('pareiarImpressora falhou:', e);
     const detalhe = (e && e.message) || String(e);
-    if (/signBlob|insufficient-permission/i.test(detalhe)) {
+    if (/OPERATION_NOT_ALLOWED|operation-not-allowed/i.test(detalhe)) {
       throw new HttpsError('failed-precondition',
-        'O projeto ainda não autorizou as functions a gerar credenciais. '
-        + 'Dê o papel "Criador de token da conta de serviço" à conta de serviço das functions.');
+        'O login por e-mail/senha está desativado no Firebase Auth deste projeto — '
+        + 'é o mesmo método que o painel usa, ligue em Authentication → Sign-in method.');
     }
     throw new HttpsError('internal', 'Não foi possível parear: ' + detalhe);
   }

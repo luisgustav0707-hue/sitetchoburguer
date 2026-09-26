@@ -31,6 +31,9 @@ if (!fs.existsSync(dist)) {
 // dígito.
 const exes = fs.readdirSync(dist)
   .filter((f) => f.toLowerCase().endsWith('.exe'))
+  // Ignora a cópia da publicação anterior: ela também é .exe e, se um build
+  // falhar, seria a "mais recente" — republicaríamos a versão velha sem avisar.
+  .filter((f) => f !== NOME_PUBLICADO)
   .map((f) => ({ f, mtime: fs.statSync(path.join(dist, f)).mtimeMs }))
   .sort((a, b) => b.mtime - a.mtime);
 

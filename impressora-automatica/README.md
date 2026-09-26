@@ -89,6 +89,21 @@ rastro nenhum:
   por dentro" de "a internet não deixa falar com o servidor" — os dois davam
   exatamente a mesma tela de timeout.
 
+## Onde isto diverge da especificação
+
+A spec (`../docs/app-impressao-automatica.md`) descreve o pareamento com
+`createCustomToken`, que é como o PedidoEasy faz. No `tcho-burguer-app` isso não
+funciona: assinar um custom token exige a permissão `iam.serviceAccounts.signBlob`
+na conta de serviço das functions de 2ª geração, e concedê-la é um passo manual
+no IAM que não pegou nem depois de aplicado.
+
+Aqui a `pareiarImpressora` gera **e-mail e senha aleatórios por computador** e o
+app entra com `signInWithEmailAndPassword`. O resto é idêntico: um usuário do
+Auth por PC, claim `perfil:'impressora'`, revogação individual com `deleteUser`.
+O e-mail usa um domínio inexistente (`@impressora.tchoburguer.invalid`) — é
+identidade de máquina, ninguém recebe nada — e a senha trafega uma única vez na
+resposta HTTPS; o app não a guarda, quem mantém a sessão é o IndexedDB.
+
 ## Cuidados ao mexer
 
 Cada um destes já custou horas. Os comentários no código explicam o porquê —

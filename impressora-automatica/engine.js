@@ -42,10 +42,13 @@ function pararEscuta() {
 
 async function parear(codigo, nomeDispositivo) {
   const nome = (nomeDispositivo || os.hostname() || 'PC sem nome').slice(0, 60);
+  // A function devolve um e-mail/senha gerados só pra ESTE computador (ver o
+  // comentário dela em functions/index.js sobre por que não é custom token).
   const { data } = await chamar('pareiarImpressora')({ codigo, nomeDispositivo: nome });
-  // O custom token vira uma sessão normal do Firebase Auth — e como a janela
-  // usa uma partition persistente, ela sobrevive a reinícios do PC sozinha.
-  await auth.signInWithCustomToken(data.customToken);
+  // Sessão normal do Firebase Auth — e como a janela usa uma partition
+  // persistente, ela sobrevive a reinícios do PC sozinha. A senha não é
+  // guardada em lugar nenhum: quem lembra do login é o IndexedDB.
+  await auth.signInWithEmailAndPassword(data.email, data.senha);
   return data;
 }
 

@@ -1331,30 +1331,21 @@ async function salvarPedidoManual(){
 // Ver: functions/index.js, functions/cupons-srv.js, impressora-automatica/
 let IMPRESSAO_MODO_APP=false;
 let IMPRESSORAS_QTD=0;
-// Sobra de papel no fim do cupom: sem ela a última linha fica presa dentro da
-// impressora, antes da serrilha. Mesmo valor do AVANCO_MM de functions/cupons-srv.js.
-const AVANCO_CUPOM_MM=15;
 
 const REGIAO_FUNCTIONS='southamerica-east1';
 function chamarFunction(nome){ return firebase.app().functions(REGIAO_FUNCTIONS).httpsCallable(nome); }
 
-// O HTML dos cupons nasceu pra abrir numa janela do navegador, então traz
-// coisas que atrapalham quem imprime pelo app:
-//  • <script>window.print()</script> — dentro do app abriria o diálogo de
-//    impressão do Chromium e mandaria a via duas vezes.
-//  • @page{margin:3mm} — o app imprime numa página do tamanho exato do
-//    conteúdo; com margem, o cupom transborda pra uma segunda página que sai
-//    em branco. A margem vira padding do body, mais um avanço no fim pra
-//    última linha não ficar presa antes da serrilha.
+// O HTML das vias avulsas (reimpressão, conta da mesa) vai pra fila EXATAMENTE
+// como o navegador o monta — mesmo CSS, mesma largura, mesma margem. É essa
+// igualdade que garante que o cupom do app saia idêntico ao que já sai hoje
+// pela impressão manual.
+//
+// A única coisa removida é o <script>window.print()</script>: quem dispara a
+// impressão no app é o próprio app, que injeta o gatilho na hora de mandar pro
+// Chrome (ver htmlParaKiosk em impressora-automatica/main.js). Deixar os dois
+// é pedir pra alguém, um dia, caçar uma via duplicada.
 function prepararHtmlParaApp(html){
-  return String(html)
-    .replace(/<script[\s\S]*?<\/script>/gi,'')
-    .replace(/@page\{margin:3mm;size:80mm auto\}/i,'@page{margin:0;size:80mm auto}')
-    // Só acrescenta o avanço do papel. NÃO mexer na largura do body: o CSS do
-    // cupom usa max-width:280px com padding:10px, que já cabe nos 80mm. Tentar
-    // "melhorar" pra width:80mm+padding estoura a página (o padding soma por
-    // fora) e a térmica imprime duas folhas em branco.
-    .replace(/<\/style>/i,`body{padding-bottom:${AVANCO_CUPOM_MM}mm}</style>`);
+  return String(html).replace(/<script[\s\S]*?<\/script>/gi,'');
 }
 
 // Usada pelas impressões AVULSAS (reimprimir um pedido, conta da mesa). O

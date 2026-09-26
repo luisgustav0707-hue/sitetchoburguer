@@ -19,29 +19,16 @@
 // URL absoluta (no front ela é relativa a window.location).
 const BASE_URL = 'https://tchoburguer.com';
 
-// Mesmo CSS do admin, com DUAS diferenças obrigatórias pra impressão pelo app:
+// CSS IDÊNTICO ao CSS_CUPOM de admin/admin.js — copiado byte a byte, incluindo
+// o `@page{margin:3mm}` e o `max-width:280px`.
 //
-//  1) `@page{margin:0}` em vez de 3mm. Com margem, o Chromium encolhe a área
-//     útil e o conteúdo transborda pra uma segunda página — que sai como um
-//     pedaço de papel em branco depois do corte. A margem vira padding do body.
-//  2) `padding-bottom` com um avanço extra de 15mm. A térmica corta rente ao
-//     fim da página; sem essa sobra, a última linha do cupom fica presa dentro
-//     da impressora, antes da serrilha, e some.
-const AVANCO_MM = 15;
-// `box-sizing:border-box` NÃO é enfeite: sem ele o padding do body soma POR FORA
-// da largura, e `width:80mm; padding:3mm` vira um corpo de 86mm numa página de
-// 80mm. O Chromium empurra o excedente pra uma segunda página e a térmica cospe
-// duas folhas em branco — foi exatamente o que aconteceu na Goldsky 80mm.
-const CSS_CUPOM_SRV = `*{margin:0;padding:0;box-sizing:border-box}`
-  + `@page{margin:0;size:80mm auto}`
-  + `body{font-family:Arial,Helvetica,sans-serif;font-size:14px;width:80mm;`
-  + `padding:3mm;padding-bottom:calc(3mm + ${AVANCO_MM}mm)}`
-  + `.c{text-align:center}.b{font-weight:bold}`
-  + `.line{border-top:1px dashed #000;margin:7px 0}`
-  + `.row{display:flex;justify-content:space-between;margin:3px 0}`
-  + `.big{font-size:18px;font-weight:bold}`
-  + `.obs-box{border:2px solid #000;padding:5px 6px;margin:5px 0;font-weight:800;font-size:15px;text-align:center}`
-  + `.rem{display:inline-block;border:1.5px solid #000;border-radius:3px;padding:0 4px;font-weight:800}`;
+// Não "melhore" isto. Eu tentei: troquei por margin:0 + width:80mm + padding:3mm
+// + avanço de 15mm no fim, seguindo a receita que funciona em outra impressora.
+// Na Goldsky 80mm da loja o resultado foi cupom em branco, e o mesmo pedido
+// impresso pelo painel (com este CSS) saía perfeito. A régua aqui é uma só: o
+// cupom do app tem que ser igual ao que o navegador imprime. Se um dia precisar
+// mudar o layout, mude nos DOIS lugares e teste na impressora real.
+const CSS_CUPOM_SRV = `*{margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;font-size:14px;padding:10px;max-width:280px}.c{text-align:center}.b{font-weight:bold}.line{border-top:1px dashed #000;margin:7px 0}.row{display:flex;justify-content:space-between;margin:3px 0}.big{font-size:18px;font-weight:bold}.obs-box{border:2px solid #000;padding:5px 6px;margin:5px 0;font-weight:800;font-size:15px;text-align:center}.rem{display:inline-block;border:1.5px solid #000;border-radius:3px;padding:0 4px;font-weight:800}@media print{@page{margin:3mm;size:80mm auto}}`;
 
 // Realça "sem <ingredientes>" (removidos) no cupom pra cozinha não errar.
 function destacaRemocao(item) {

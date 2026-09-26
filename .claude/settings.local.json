@@ -126,7 +126,11 @@
       "Bash(firebase auth:export /tmp/tcho_users.json --project tcho-burguer-app)",
       "Bash(java -version)",
       "Bash(firebase functions:log --only notificarNovoPedido --project tcho-burguer-app)",
-      "Bash(grep -v \"'\\\\${\")"
+      "Bash(grep -v \"'\\\\${\")",
+      "Bash(firebase functions:secrets:access)",
+      "Bash(npx --no-install playwright --version)",
+      "Bash(powershell -Command \"\\(Get-Content cliente/cliente.css | Measure-Object -Line\\).Lines\")",
+      "Bash(git ls-remote *)"
     ]
   }
 }

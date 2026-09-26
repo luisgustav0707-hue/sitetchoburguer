@@ -206,16 +206,44 @@ exports.pareiarImpressora = onCall({ region: REGION }, async (request) => {
   });
 
   const nome = String(nomeDispositivo || 'PC sem nome').slice(0, 60);
-  const user = await admin.auth().createUser({ displayName: `Impressora — ${nome}` });
   const claims = { perfil: 'impressora' };
-  await admin.auth().setCustomUserClaims(user.uid, claims);
-  await db.collection('impressoras').doc(user.uid).set({
-    nomeDispositivo: nome, pareadoEm: FieldValue.serverTimestamp(),
-  });
+  let uid = null;
+  try {
+    const user = await admin.auth().createUser({ displayName: `Impressora — ${nome}` });
+    uid = user.uid;
+    await admin.auth().setCustomUserClaims(uid, claims);
 
-  const customToken = await admin.auth().createCustomToken(user.uid, claims);
-  logger.info(`Impressora pareada: uid ${user.uid} (${nome})`);
-  return { customToken, lojaNome: 'Tcho Burguer' };
+    // O token vem ANTES de registrar o computador na lista do painel. Se ele
+    // falhar (createCustomToken exige a permissão iam.serviceAccounts.signBlob
+    // na conta de serviço das functions), o pareamento não aconteceu de fato —
+    // e um PC na lista que nunca vai imprimir é pior que nenhum, porque o dono
+    // acha que está tudo certo e só descobre quando o pedido não sai.
+    const customToken = await admin.auth().createCustomToken(uid, claims);
+
+    await db.collection('impressoras').doc(uid).set({
+      nomeDispositivo: nome, pareadoEm: FieldValue.serverTimestamp(),
+    });
+    logger.info(`Impressora pareada: uid ${uid} (${nome})`);
+    return { customToken, lojaNome: 'Tcho Burguer' };
+  } catch (e) {
+    // Desfaz tudo e devolve o código pro dono: falhar no meio não pode custar
+    // um código queimado nem deixar usuário órfão no Auth.
+    if (uid) {
+      await admin.auth().deleteUser(uid).catch(() => {});
+      await db.collection('impressoras').doc(uid).delete().catch(() => {});
+    }
+    await ref.update({ usado: false, usadoEm: FieldValue.delete() }).catch(() => {});
+    if (e instanceof HttpsError) throw e;
+    // Sem isto o app só recebia "internal", que não diz nada a ninguém.
+    logger.error('pareiarImpressora falhou:', e);
+    const detalhe = (e && e.message) || String(e);
+    if (/signBlob|insufficient-permission/i.test(detalhe)) {
+      throw new HttpsError('failed-precondition',
+        'O projeto ainda não autorizou as functions a gerar credenciais. '
+        + 'Dê o papel "Criador de token da conta de serviço" à conta de serviço das functions.');
+    }
+    throw new HttpsError('internal', 'Não foi possível parear: ' + detalhe);
+  }
 });
 
 // data: { uid } — admin. Remove um PC pareado (trocado, vendido, roubado) sem

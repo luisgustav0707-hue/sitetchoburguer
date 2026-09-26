@@ -160,16 +160,22 @@ function imprimirHTML(html, tipo) {
   const arquivo = path.join(app.getPath('temp'), `tcho-${tipo}-${Date.now()}.html`);
   fs.writeFileSync(arquivo, htmlParaKiosk(html), 'utf8');
 
-  // Perfil próprio e fixo: sem isso, se o dono estiver com o Chrome aberto, o
-  // nosso comando vira só mais uma aba na janela dele — e aí o --kiosk-printing
-  // é ignorado, porque quem manda são as flags de quem abriu o Chrome primeiro.
-  const perfil = path.join(app.getPath('userData'), 'perfil-impressao');
+  // EXATAMENTE as flags do servidor-impressao/server.js, que imprimiu por meses
+  // na operação. Eu já tentei "melhorar" isto duas vezes e as duas custaram caro:
+  //
+  //  • --user-data-dir (perfil separado): resolveria o caso de o dono estar com
+  //    o Chrome aberto — aí o comando vira só mais uma aba e o kiosk é ignorado.
+  //    Mas perfil novo abre tela de boas-vindas/escolha de buscador, e aí a
+  //    página nem chega a chamar window.print(). Trocar um problema raro por um
+  //    que acontece sempre é péssimo negócio.
+  //  • --window-position fora da tela: cosmético, e janela totalmente oculta
+  //    pode ser tratada como ocluída e não pintar.
+  //
+  // Se algum dia o "Chrome já aberto" incomodar de verdade, a saída é detectar
+  // e avisar o dono — não inventar flag sem ter como testar impressão.
   const args = [
     '--kiosk-printing', '--no-first-run', '--no-default-browser-check',
-    '--disable-extensions', `--user-data-dir=${perfil}`,
-    // Fora da tela: o operador não precisa ver uma janela piscando a cada pedido.
-    '--window-position=-32000,-32000', '--window-size=400,600',
-    arquivo,
+    '--disable-extensions', arquivo,
   ];
   log(`imprimindo via ${path.basename(navegador)} (${tipo}, ${html.length} bytes)`);
   const proc = spawn(navegador, args, { detached: true, stdio: 'ignore' });

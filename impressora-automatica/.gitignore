@@ -1,0 +1,4 @@
+node_modules/
+# O instalador (~90 MB) é gerado pelo build e publicado em download/ —
+# repositório não é lugar de binário desse tamanho.
+dist/

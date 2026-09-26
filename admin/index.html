@@ -160,6 +160,7 @@
       <button class="cfg-side-item active" data-cfg="operacao"  onclick="showConfig('operacao')">🏪 Operação</button>
       <button class="cfg-side-item"        data-cfg="kanban"    onclick="showConfig('kanban')">🍳 Kanban</button>
       <button class="cfg-side-item"        data-cfg="automacao" onclick="showConfig('automacao')">🤖 Automação</button>
+      <button class="cfg-side-item"        data-cfg="impressao" onclick="showConfig('impressao')">🖨️ Impressão</button>
       <button class="cfg-side-item"        data-cfg="entrega"   onclick="showConfig('entrega')">🛵 Entrega</button>
       <button class="cfg-side-item"        data-cfg="acessos"   onclick="showConfig('acessos')">📊 Acessos</button>
       <button class="cfg-side-item"        data-cfg="nfce"      onclick="showConfig('nfce')">🧾 NFC-e</button>
@@ -252,6 +253,67 @@
       <div class="toggle-row">
         <div class="toggle-info"><div class="toggle-label">Impressão automática</div><div class="toggle-desc">Imprime cupom ao aceitar cada pedido</div></div>
         <label class="toggle-wrap"><input type="checkbox" id="cfg-print" checked onchange="salvarConfig()"><span class="slider"></span></label>
+      </div>
+    </div>
+    <div class="section cfg-panel" id="cfg-impressao">
+      <div class="sec-title">🖨️ App de impressão</div>
+      <div style="font-size:.66rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
+        Com o app instalado no PC da loja, o cupom sai sozinho assim que o pedido chega —
+        <b>sem abrir o painel e sem clicar em nada</b>. É o mesmo comportamento do iFood com
+        aceite automático.
+      </div>
+
+      <div style="display:flex;gap:10px;margin-bottom:14px">
+        <div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--orange);color:#000;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem">1</div>
+        <div style="flex:1">
+          <div style="font-size:.82rem;font-weight:700;margin-bottom:4px">Instale no computador da loja</div>
+          <a id="imp-download" href="../download/Tcho-Impressao.exe" download
+             style="display:inline-block;padding:9px 14px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border-radius:8px;font-weight:700;font-size:.8rem;text-decoration:none">⬇️ Baixar o app (Windows)</a>
+          <div id="imp-versao" style="font-size:.62rem;color:var(--muted);margin-top:5px"></div>
+          <div style="font-size:.64rem;color:var(--muted);margin-top:7px;line-height:1.5;border-left:2px solid #3a3530;padding-left:8px">
+            O instalador não é assinado, então o Windows avisa que o editor é desconhecido —
+            é falta de reputação, não vírus.<br>
+            1) Se o navegador bloquear: <b>⋮ → Manter</b>.<br>
+            2) Na tela azul do SmartScreen: <b>Mais informações → Executar assim mesmo</b>.
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-bottom:14px">
+        <div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--orange);color:#000;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem">2</div>
+        <div style="flex:1">
+          <div style="font-size:.82rem;font-weight:700;margin-bottom:4px">Pareie o computador</div>
+          <div style="font-size:.64rem;color:var(--muted);margin-bottom:7px;line-height:1.5">
+            Na primeira vez o app pede um código. Gere aqui e digite lá — vale 10 minutos e só
+            precisa ser feito uma vez por computador.
+          </div>
+          <button onclick="gerarCodigoImpressora()"
+            style="padding:9px 14px;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:8px;font-size:.78rem;cursor:pointer">🔗 Gerar código de pareamento</button>
+          <div id="impressora-codigo-box" style="display:none;text-align:center;margin-top:10px;padding:14px;background:var(--card);border:1px solid #3a3530;border-radius:10px">
+            <div style="font-size:.64rem;color:var(--muted);margin-bottom:4px">Digite este código no app:</div>
+            <div id="impressora-codigo" style="font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:6px;color:var(--orange)"></div>
+            <div id="impressora-codigo-timer" style="font-size:.64rem;color:var(--muted);margin-top:4px"></div>
+          </div>
+          <div style="font-size:.7rem;font-weight:700;color:var(--orange);margin:12px 0 2px">Computadores pareados</div>
+          <div id="impressoras-lista"></div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px">
+        <div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--orange);color:#000;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem">3</div>
+        <div style="flex:1">
+          <div style="font-size:.82rem;font-weight:700;margin-bottom:4px">Ligue a impressão pelo app</div>
+          <div class="toggle-row" style="padding-left:0">
+            <div class="toggle-info">
+              <div class="toggle-label">Imprimir pelo app</div>
+              <div class="toggle-desc">Com isso ligado, a aba do navegador para de imprimir — senão sai cupom em dobro</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="cfg-impressao-app" onchange="salvarConfig()"><span class="slider"></span></label>
+          </div>
+          <div id="imp-aviso" style="display:none;font-size:.64rem;color:#e74c3c;margin:4px 0 8px;line-height:1.5"></div>
+          <button onclick="imprimirCupomTeste()"
+            style="padding:9px 14px;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:8px;font-size:.78rem;cursor:pointer;margin-top:6px">🧾 Imprimir cupom de teste</button>
+        </div>
       </div>
     </div>
     <div class="section cfg-panel" id="cfg-prazo">
@@ -930,6 +992,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+<!-- Functions: usado pelo pareamento do app de impressão (gerarCodigoImpressora,
+     revogarImpressora, imprimirTeste). -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
 <!-- Carrega os scripts locais sempre na versão mais recente (anti-cache automático).
      O ?v= muda a cada carregamento, então o navegador nunca usa um arquivo antigo. -->
 <script>

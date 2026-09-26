@@ -1,2 +1,6 @@
-﻿_fbtest/
+_fbtest/
 _serve.cjs
+
+# Instalador do app de impressão: publicado em download/ com nome fixo, mas o
+# binário (~90 MB) não vai pro git. O manifesto app-impressao.json vai.
+download/*.exe

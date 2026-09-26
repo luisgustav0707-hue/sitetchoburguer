@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Tcho Burguer — motor</title></head>
+<body>
+  <!-- Janela invisível (show:false no main.js). Existe só pra manter a sessão
+       do Firebase (Auth + Firestore) viva em segundo plano; o usuário nunca a vê.
+       O Electron não roda o Firebase de forma confiável direto no processo
+       principal, por isso o motor mora numa janela. -->
+
+  <!-- Bundles de NAVEGADOR do Firebase (UMD). Com require('firebase/...') o
+       Electron resolve a build de NODE, que não traz as classes de persistência
+       do Auth, e o app morre com
+         "INTERNAL ASSERTION FAILED: Expected a class definition".
+       Carregados do pacote local (não de CDN) pra o app não precisar de
+       internet só pra iniciar — e pra não quebrar se a CDN cair. -->
+  <script src="node_modules/firebase/firebase-app-compat.js"></script>
+  <script src="node_modules/firebase/firebase-auth-compat.js"></script>
+  <script src="node_modules/firebase/firebase-firestore-compat.js"></script>
+  <script src="node_modules/firebase/firebase-functions-compat.js"></script>
+  <script src="engine.js"></script>
+</body>
+</html>

@@ -127,6 +127,7 @@ function showConfig(k){
     if(k==='operacao') carregarHorarios();
     if(k==='entrega'){ renderBairros(); carregarConfigEntrega(); }
   } else {
+    if(k==='impressao'){ carregarImpressoras(); carregarManifestoApp(); }
     const pg=document.getElementById('cfg-'+k)||document.getElementById('inner-'+k);
     if(pg) pg.classList.add('active');
   }
@@ -317,6 +318,7 @@ function salvarConfig(){
     mesaAtiva:document.getElementById('cfg-mesa')?.checked||false,
     autoAceitar:autoAceitar,
     autoImprimir:document.getElementById('cfg-print').checked,
+    impressaoModo:document.getElementById('cfg-impressao-app')?.checked?'app':'navegador',
     prazoMin:parseInt(document.getElementById('cfg-prazo-min').value)||30,
     prazoMax:parseInt(document.getElementById('cfg-prazo-max').value)||45,
     autoHorario:document.getElementById('cfg-auto-horario')?.checked!==false,
@@ -855,6 +857,14 @@ function contaHTML(){
 function imprimirConta(){
   recalcFechamento();
   const html=contaHTML(); if(!html) return;
+  // Via do CAIXA: no menu da bandeja o dono pode mandar a conta pra uma
+  // impressora diferente da que recebe o pedido da cozinha.
+  if(IMPRESSAO_MODO_APP){
+    enfileirarImpressaoApp({caixa:html}, null)
+      .then(()=>showToast('🖨️ Conta enviada pro app','tok-ok'))
+      .catch(e=>showToast('⚠️ '+(e.message||'Não consegui enfileirar'),'tok-err'));
+    return;
+  }
   fetch('http://localhost:3333/imprimir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cozinha:html})})
     .then(r=>r.json()).then(d=>{ if(d.ok) showToast('🖨️ Conta impressa!','tok-ok'); else abrirJanelaImpressao(html,400); })
     .catch(()=>{ showToast('🖨️ Abrindo conta...','tok-info'); abrirJanelaImpressao(html,400); });
@@ -1312,6 +1322,118 @@ async function salvarPedidoManual(){
   }
 }
 
+// ── APP DE IMPRESSÃO (Configurações → 🖨️ Impressão) ──────────────
+// Com impressaoModo==='app' (config/operacao), quem imprime é o app de
+// bandeja instalado no PC da loja: a Cloud Function enfileirarImpressao
+// põe o cupom em `impressoes` e o app pareado imprime sozinho, mesmo com
+// todos os navegadores fechados. A aba para de imprimir (ver o return em
+// imprimirPedido) pra não sair cupom em dobro.
+// Ver: functions/index.js, functions/cupons-srv.js, impressora-automatica/
+let IMPRESSAO_MODO_APP=false;
+let IMPRESSORAS_QTD=0;
+
+const REGIAO_FUNCTIONS='southamerica-east1';
+function chamarFunction(nome){ return firebase.app().functions(REGIAO_FUNCTIONS).httpsCallable(nome); }
+
+// O HTML dos cupons nasceu pra abrir numa janela do navegador, então traz
+// coisas que atrapalham quem imprime pelo app:
+//  • <script>window.print()</script> — dentro do app abriria o diálogo de
+//    impressão do Chromium e mandaria a via duas vezes.
+//  • @page{margin:3mm} — o app imprime numa página do tamanho exato do
+//    conteúdo; com margem, o cupom transborda pra uma segunda página que sai
+//    em branco. A margem vira padding do body, mais um avanço no fim pra
+//    última linha não ficar presa antes da serrilha.
+function prepararHtmlParaApp(html){
+  return String(html)
+    .replace(/<script[\s\S]*?<\/script>/gi,'')
+    .replace(/@page\{margin:3mm;size:80mm auto\}/i,'@page{margin:0;size:80mm auto}')
+    .replace(/body\{([^}]*?)padding:10px;/i,'body{$1width:80mm;padding:3mm;padding-bottom:calc(3mm + 15mm);');
+}
+
+// Usada pelas impressões AVULSAS (reimprimir um pedido, conta da mesa). O
+// pedido novo não passa por aqui — quem enfileira é a Cloud Function, que
+// funciona mesmo sem nenhum navegador aberto.
+function enfileirarImpressaoApp(vias, pedidoId){
+  const doc={pedidoId:pedidoId||null, status:'pendente',
+    criadoEm:firebase.firestore.FieldValue.serverTimestamp()};
+  Object.keys(vias).forEach(k=>{ if(vias[k]) doc[k]=prepararHtmlParaApp(vias[k]); });
+  return db.collection('impressoes').add(doc);
+}
+
+let _impCodigoTimer=null;
+function gerarCodigoImpressora(){
+  chamarFunction('gerarCodigoImpressora')().then(({data})=>{
+    const box=document.getElementById('impressora-codigo-box');
+    if(!box) return;
+    document.getElementById('impressora-codigo').textContent=String(data.codigo).match(/.{1,3}/g).join(' ');
+    box.style.display='block';
+    if(_impCodigoTimer) clearInterval(_impCodigoTimer);
+    // Contador regressivo: o código vale 10 min, e sem ver o tempo o dono fica
+    // digitando um código morto e culpando o app.
+    const atualizaTimer=()=>{
+      const restam=Math.max(0,Math.round((data.expiraEm-Date.now())/1000));
+      const min=String(Math.floor(restam/60)).padStart(2,'0'), seg=String(restam%60).padStart(2,'0');
+      const t=document.getElementById('impressora-codigo-timer');
+      if(t) t.textContent = restam>0?`Expira em ${min}:${seg}`:'Código expirado — gere outro';
+      if(restam<=0) clearInterval(_impCodigoTimer);
+    };
+    atualizaTimer();
+    _impCodigoTimer=setInterval(atualizaTimer,1000);
+  }).catch(e=>showToast('⚠️ '+(e.message||'Não foi possível gerar o código'),'tok-err'));
+}
+
+let unsubImpressoras=null;
+function carregarImpressoras(){
+  const el=document.getElementById('impressoras-lista'); if(!el) return;
+  if(unsubImpressoras) unsubImpressoras();
+  unsubImpressoras=db.collection('impressoras').onSnapshot(snap=>{
+    IMPRESSORAS_QTD=snap.size;
+    atualizarAvisoImpressaoApp();
+    if(snap.empty){ el.innerHTML='<div style="font-size:.68rem;color:var(--muted)">Nenhum computador pareado ainda.</div>'; return; }
+    el.innerHTML=snap.docs.map(d=>{
+      const x=d.data();
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #2a2520;font-size:.78rem">
+        <span>🖥️ ${x.nomeDispositivo||'PC sem nome'}</span>
+        <button onclick="revogarImpressora('${d.id}')" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:.7rem">Remover</button>
+      </div>`;
+    }).join('');
+  },()=>{});
+}
+
+function revogarImpressora(uid){
+  if(!confirm('Remover este computador? Ele para de receber pedidos para imprimir.')) return;
+  chamarFunction('revogarImpressora')({uid})
+    .then(()=>showToast('✅ Computador removido','tok-ok'))
+    .catch(e=>showToast('⚠️ '+(e.message||'Erro'),'tok-err'));
+}
+
+function imprimirCupomTeste(){
+  chamarFunction('imprimirTeste')()
+    .then(()=>showToast('🧾 Cupom de teste na fila — deve sair em instantes','tok-ok'))
+    .catch(e=>showToast('⚠️ '+(e.message||'Erro'),'tok-err'));
+}
+
+// Ligar o modo app sem nenhum PC pareado é a receita pro pedido sumir: a aba
+// para de imprimir e não há ninguém do outro lado pra assumir.
+function atualizarAvisoImpressaoApp(){
+  const el=document.getElementById('imp-aviso'); if(!el) return;
+  const perigo = IMPRESSAO_MODO_APP && IMPRESSORAS_QTD===0;
+  el.style.display = perigo ? 'block' : 'none';
+  if(perigo) el.textContent='⚠️ Modo app ligado e nenhum computador pareado — '
+    + 'ninguém vai imprimir os pedidos. Pareie um PC ou desligue esta chave.';
+}
+
+// Versão/tamanho vêm do manifesto que o script de release escreve junto do
+// .exe, pra o painel não ficar mentindo a versão depois de uma atualização.
+function carregarManifestoApp(){
+  const el=document.getElementById('imp-versao'); if(!el) return;
+  fetch('../download/app-impressao.json?v='+Date.now()).then(r=>r.ok?r.json():null).then(m=>{
+    if(!m) return;
+    const mb=(m.tamanhoBytes/1024/1024).toFixed(0);
+    el.textContent=`Versão ${m.versao} · ${mb} MB · publicado em ${m.publicadoEm}`;
+  }).catch(()=>{});
+}
+
 // ── IMPRESSÃO ──────────────────────────────────────────────────
 const CSS_CUPOM = `*{margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;font-size:14px;padding:10px;max-width:280px}.c{text-align:center}.b{font-weight:bold}.line{border-top:1px dashed #000;margin:7px 0}.row{display:flex;justify-content:space-between;margin:3px 0}.big{font-size:18px;font-weight:bold}.obs-box{border:2px solid #000;padding:5px 6px;margin:5px 0;font-weight:800;font-size:15px;text-align:center}.rem{display:inline-block;border:1.5px solid #000;border-radius:3px;padding:0 4px;font-weight:800}@media print{@page{margin:3mm;size:80mm auto}}`;
 
@@ -1397,6 +1519,11 @@ function cupomEntrega(p){
 
 function imprimirPedido(p){
   if(!document.getElementById('cfg-print').checked)return;
+  // No modo app, quem imprime é o app pareado (Cloud Function enfileirarImpressao
+  // → coleção `impressoes` → impressora-automatica/). Se a aba também imprimisse,
+  // sairiam DUAS vias do mesmo cupom. Este return é o ponto único que segura a
+  // aba: tanto o listener de pedido novo quanto moverStatus() passam por aqui.
+  if(IMPRESSAO_MODO_APP) return;
   fetch('http://localhost:3333/imprimir',{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({cozinha:cupomCozinha(p), entrega:cupomEntrega(p)})
@@ -1420,6 +1547,12 @@ function imprimirPedido(p){
 function reimprimirPedido(id){
   const p=acharPedido(id);
   if(!p){ showToast('Pedido não encontrado','tok-err'); return; }
+  if(IMPRESSAO_MODO_APP){
+    enfileirarImpressaoApp({cozinha:cupomCozinha(p), entrega:cupomEntrega(p)}, p._id)
+      .then(()=>showToast('🖨️ Enviado pro app de impressão','tok-ok'))
+      .catch(e=>showToast('⚠️ '+(e.message||'Não consegui enfileirar'),'tok-err'));
+    return;
+  }
   fetch('http://localhost:3333/imprimir',{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({cozinha:cupomCozinha(p), entrega:cupomEntrega(p)})
@@ -4367,6 +4500,10 @@ function iniciarApp(){
     if(document.getElementById('cfg-mesa')) document.getElementById('cfg-mesa').checked=!!cfg.mesaAtiva;
     aplicarModalidades();
     document.getElementById('cfg-print').checked=cfg.autoImprimir!==false;
+    IMPRESSAO_MODO_APP = cfg.impressaoModo==='app';
+    if(document.getElementById('cfg-impressao-app'))
+      document.getElementById('cfg-impressao-app').checked=IMPRESSAO_MODO_APP;
+    atualizarAvisoImpressaoApp();
     if(cfg.prazoMin) document.getElementById('cfg-prazo-min').value=cfg.prazoMin;
     if(cfg.prazoMax) document.getElementById('cfg-prazo-max').value=cfg.prazoMax;
     autoAceitar=!!cfg.autoAceitar;

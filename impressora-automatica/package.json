@@ -1,0 +1,44 @@
+{
+  "name": "tcho-impressao",
+  "productName": "Tcho Burguer Impressão",
+  "version": "1.0.0",
+  "description": "App de bandeja que imprime os cupons do Tcho Burguer sozinho assim que o pedido chega, sem depender do navegador aberto.",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "icones": "node build/gerar-icones.cjs",
+    "dist": "electron-builder",
+    "publicar": "node build/publicar.cjs",
+    "release": "npm run dist && npm run publicar"
+  },
+  "dependencies": {
+    "firebase": "^10.12.0"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.tchoburguer.impressao",
+    "productName": "Tcho Burguer Impressão",
+    "files": [
+      "**/*",
+      "!build/gerar-icones.cjs",
+      "!build/publicar.cjs"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "artifactName": "Tcho-Impressao-Setup-${version}.exe"
+    },
+    "asarUnpack": [
+      "icones/**"
+    ]
+  }
+}

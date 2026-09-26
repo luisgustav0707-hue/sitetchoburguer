@@ -17,6 +17,16 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
+    // O app de impressão (pasta impressora-automatica/) loga com um usuário
+    // dedicado AO COMPUTADOR, criado pela function pareiarImpressora com o
+    // custom claim perfil:'impressora'. Lê-se o claim (e não um documento)
+    // porque isso não custa uma leitura extra a cada regra avaliada.
+    // O que esse perfil pode: ver a fila de impressão, marcar o que já saiu, e
+    // marcar `impresso` no pedido. Nada além disso — não é um admin.
+    function isImpressora() {
+      return signedIn() && request.auth.token.perfil == 'impressora';
+    }
+
     // Lista de admins: só o próprio admin lê; ninguém escreve pelo app
     // (gerenciado manualmente no console).
     match /admins/{uid} {
@@ -65,6 +75,11 @@ service cloud.firestore {
       allow create: if true;
       allow get:    if true;
       allow list, update, delete: if isAdmin();
+      // O app de impressão só encosta no campo `impresso` — é o que faz o
+      // Kanban do navegador (se estiver aberto) parar de achar que falta
+      // imprimir. `hasOnly` impede que um PC pareado mexa em preço ou status.
+      allow get, update: if isImpressora()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['impresso']);
     }
 
     // ── Clientes (CRM) ───────────────────────────────────────────────────────
@@ -95,6 +110,34 @@ service cloud.firestore {
     // mas só o admin lê. São contadores, sem dado sensível.
     match /stats/{d}     { allow read: if isAdmin(); allow write: if true; }
     match /presenca/{d}  { allow read: if isAdmin(); allow write: if true; }
+
+    // ── App de impressão automática ──────────────────────────────────────────
+    // Fila de trabalhos de impressão: a Cloud Function enfileirarImpressao
+    // escreve o HTML pronto do cupom aqui, o app pareado lê e imprime.
+    // O conteúdo é o cupom inteiro (nome, telefone e endereço do cliente),
+    // por isso nada aqui é público.
+    match /impressoes/{id} {
+      allow read, write: if isAdmin();
+      allow read: if isImpressora();
+      // Depois de imprimir, o app fecha o trabalho. Só esses dois campos —
+      // reescrever o HTML da fila não é papel dele.
+      allow update: if isImpressora()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'impressoEm']);
+    }
+
+    // Computadores pareados (o painel lista e revoga). Quem escreve é só a
+    // Cloud Function, via Admin SDK — que não passa por estas regras.
+    match /impressoras/{uid} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    // Códigos de pareamento: fechados pra todo mundo de propósito. Se fossem
+    // legíveis, qualquer visitante do site leria um código válido e parearia o
+    // próprio computador na loja. Só as functions tocam nisso.
+    match /codigosImpressora/{codigo} {
+      allow read, write: if false;
+    }
 
     // Qualquer coleção não listada acima: negado por padrão.
     match /{document=**} { allow read, write: if false; }

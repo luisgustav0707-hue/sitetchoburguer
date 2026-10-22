@@ -402,7 +402,7 @@ function abrirModal(id){
       ${comboSection}
       <div class="modal-sep"></div>
       <div class="person-section"><div class="person-label">➖ Retirar ingredientes <span class="opt-lbl">(opcional)</span></div>
-        <div class="ing-grid">${b.ing.map(i=>`<div class="ing-btn" id="ing-${i.replace(/[\s&]/g,'_')}" onclick="togIng('${i}')">${i}</div>`).join('')}</div></div>
+        <div class="ing-grid">${(b.ing||[]).map(i=>`<div class="ing-btn" id="ing-${i.replace(/[\s&]/g,'_')}" onclick="togIng('${i}')">${i}</div>`).join('')}</div></div>
       <div class="modal-sep"></div>
       <div class="person-section"><div class="person-label">➕ Acréscimos <span class="opt-lbl">(opcional)</span></div>
         <div class="adic-grid">${ADICIONAIS.map(a=>`<div class="adic-item" id="adi-${a.id}" onclick="togAdic('${a.id}',${a.preco},'${a.nome}')"><span class="adic-name">${a.nome}</span><span class="adic-price">+R$${a.preco}</span></div>`).join('')}</div></div>

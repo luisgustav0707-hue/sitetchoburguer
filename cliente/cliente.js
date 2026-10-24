@@ -93,6 +93,7 @@ const COMBO_SUCO_EXTRA=2;
 let prazoEntrega = { min: 30, max: 45 };
 let lojaAbertaState = true;   // estado atual da loja (usado pra bloquear pedidos)
 let verCardapioFechadoState = false;   // cliente optou por só olhar o cardápio com a loja fechada
+let modalidades = {delivery:true, retirada:true};   // ligadas/desligadas no admin (config/operacao)
 
 function atualizarPrazoBadge(){
   const el = document.getElementById('prazo-texto');
@@ -132,6 +133,7 @@ function verificarLoja(){
   db.collection('config').doc('operacao').onSnapshot(doc => {
     const data = doc.exists ? doc.data() : {};
     aplicarEstadoLoja(data);
+    aplicarModalidades(data);
     if(data.prazoMin) prazoEntrega.min = data.prazoMin;
     if(data.prazoMax) prazoEntrega.max = data.prazoMax;
     atualizarPrazoBadge();
@@ -142,9 +144,38 @@ function verificarLoja(){
   // Re-verifica a cada minuto (para abrir/fechar no horário exato)
   setInterval(()=>{
     db.collection('config').doc('operacao').get()
-      .then(doc=>aplicarEstadoLoja(doc.exists ? doc.data() : {}))
+      .then(doc=>{ const d = doc.exists ? doc.data() : {}; aplicarEstadoLoja(d); aplicarModalidades(d); })
       .catch(()=>aplicarEstadoLoja({autoHorario: true}));
   }, 60000);
+}
+
+// Delivery/Retirada desligados no admin somem do checkout. Se o cliente já
+// tinha escolhido (ou veio pré-selecionado do cadastro salvo) uma opção que
+// foi desligada, a escolha é desfeita; sobrando só uma, ela já vem marcada.
+function aplicarModalidades(data){
+  modalidades = {delivery: data.deliveryAtivo !== false, retirada: data.retiradaAtiva !== false};
+  document.getElementById('t-del').style.display = modalidades.delivery ? '' : 'none';
+  document.getElementById('t-ret').style.display = modalidades.retirada ? '' : 'none';
+  const so = modalidades.delivery !== modalidades.retirada;
+  document.querySelector('.tipo-options').style.gridTemplateColumns = so ? '1fr' : '';
+  const aviso = document.getElementById('aviso-modalidade');
+  aviso.textContent = !modalidades.delivery && modalidades.retirada ? '🛵 Hoje estamos sem delivery — só retirada no local.'
+    : !modalidades.retirada && modalidades.delivery ? '🏃 Hoje estamos sem retirada no local — só delivery.'
+    : !modalidades.delivery && !modalidades.retirada ? '😔 No momento não estamos aceitando pedidos.' : '';
+  aviso.style.display = aviso.textContent ? 'block' : 'none';
+  if(tipoPedido && !modalidades[tipoPedido]) desmarcarTipo();
+  selecionarTipoUnico();
+}
+
+// Só uma modalidade ligada: já deixa marcada pro cliente não precisar escolher.
+function selecionarTipoUnico(){
+  if(!tipoPedido && modalidades.delivery !== modalidades.retirada) selectTipo(modalidades.delivery ? 'delivery' : 'retirada');
+}
+
+function desmarcarTipo(){
+  tipoPedido=null; freteAtual=0; bairroAtendido=false;
+  ['t-ret','t-del'].forEach(id=>document.getElementById(id).classList.remove('selected'));
+  document.getElementById('form-delivery').style.display='none';
 }
 
 // ── FOTOS (localStorage tem prioridade sobre o mapa estático) ──
@@ -524,6 +555,7 @@ function removerCupom(){cupomAtual=null;descontoAtual=0;document.getElementById(
 
 // ── TIPO DE PEDIDO E PAGAMENTO ─────────────────────────────────
 function selectTipo(t){
+  if(!modalidades[t]) return;   // desligado no admin
   tipoPedido=t;
   document.getElementById('t-ret').classList.toggle('selected',t==='retirada');
   document.getElementById('t-del').classList.toggle('selected',t==='delivery');
@@ -714,6 +746,7 @@ function goStep(n){
 function irResumo(){
   if(!document.getElementById('f-nome').value.trim()){alert('Digite seu nome!');return;}
   if(document.getElementById('f-tel').value.replace(/\D/g,'').length<10){alert('Digite seu telefone!');return;}
+  if(tipoPedido && !modalidades[tipoPedido]) desmarcarTipo();
   if(!tipoPedido){document.getElementById('err-tipo').style.display='block';window.scrollTo(0,200);return;}
   if(tipoPedido==='delivery'){
     if(!bairroAtendido){document.getElementById('aviso-bairro').classList.add('show');document.getElementById('bairros-lista').classList.add('show');renderListaBairros();alert('Selecione seu bairro na lista de bairros atendidos, ou escolha retirada.');return;}
@@ -794,6 +827,12 @@ async function finalizarPedido(){
     verCardapioFechadoState = false;   // traz o aviso de volta (e mantém)
     document.getElementById('loja-fechada').classList.add('show');
     alert('😔 A loja está fechada no momento. Não é possível finalizar o pedido.');
+    return;
+  }
+  // Bloqueio: modalidade desligada no admin depois que o cliente já escolheu
+  if(!modalidades[tipoPedido]){
+    alert(tipoPedido==='delivery' ? '🛵 No momento estamos sem delivery. Escolha retirada no local.' : '🏃 No momento estamos sem retirada no local.');
+    desmarcarTipo(); goStep(2);
     return;
   }
   // Abre a janela do WhatsApp JÁ (dentro do clique, em branco) pra o navegador
@@ -1031,7 +1070,8 @@ function montarItensTexto(){
 
 function novoPedido(){
   if(unsubRastreamento){ unsubRastreamento(); unsubRastreamento=null; }
-  cartBurguers={};cartExtras={};tipoPedido=null;pagamento=null;freteAtual=0;bairroAtendido=false;cupomAtual=null;descontoAtual=0;
+  cartBurguers={};cartExtras={};pagamento=null;cupomAtual=null;descontoAtual=0;
+  desmarcarTipo(); selecionarTipoUnico();
   const btnRep=document.getElementById('btn-repetir-sc4');
   if(btnRep) btnRep.style.display='none';
   renderBurguers();renderExtras();goStep(1);
@@ -1121,7 +1161,7 @@ function preencherDadosSalvos(){
   document.getElementById('f-tel').value=s.tel||'';
   if(s.pag) selectPag(s.pag);
   if(s.tipo) selectTipo(s.tipo);
-  if(s.tipo==='delivery'&&s.bairro){
+  if(s.tipo==='delivery'&&s.bairro&&modalidades.delivery){
     document.getElementById('f-cep').value=s.cep||'';
     document.getElementById('f-rua').value=s.rua||'';
     document.getElementById('f-num').value=s.num||'';
@@ -1147,6 +1187,7 @@ function limparDadosSalvos(){
   tipoPedido=null; pagamento=null; freteAtual=0; bairroAtendido=false;
   ['t-ret','t-del'].forEach(id=>document.getElementById(id).classList.remove('selected'));
   document.getElementById('form-delivery').style.display='none';
+  selecionarTipoUnico();
   ['p-pix','p-din','p-car'].forEach(id=>document.getElementById(id).classList.remove('selected'));
   document.getElementById('pix-info').classList.remove('visible');
   document.getElementById('troco-box').style.display='none';

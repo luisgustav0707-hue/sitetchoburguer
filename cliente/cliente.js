@@ -248,7 +248,7 @@ function renderBurguers(){
         ${qty>0?`<div class="cart-itens-list">${resumo}</div>`:''}
       </div>
       <div class="item-controls">
-        <button class="qty-btn" onclick="abrirModal('${b.id}')">+</button>
+        <button class="qty-btn" data-add onclick="abrirModal('${b.id}')">+</button>
         <div class="qty-display">${qty}</div>
         <button class="qty-btn ${qty===0?'dim':''}" onclick="${qty>0?`remUlt('${b.id}')`:'void(0)'}">−</button>
       </div>
@@ -280,7 +280,7 @@ function renderExtras(){
       const qty=temOpc?escolhas.length:(cartExtras[e.id]||0);
       const resumo=escolhas.map((s,i)=>`<div class="cart-item-resumo"><span>${s}</span><span class="rm" onclick="remSaborExtra('${e.id}',${i})">✕</span></div>`).join('');
       const fotoExtra=getFotoCliente(e.id);
-      return`<div class="extra-item ${qty>0?'has-items':''}"${travado?' style="opacity:.4;pointer-events:none;user-select:none"':''}>
+      return`<div class="extra-item ${qty>0?'has-items':''}" id="mi-${e.id}"${travado?' style="opacity:.4;pointer-events:none;user-select:none"':''}>
         ${fotoExtra
           ? `<div class="extra-foto"><img src="${fotoExtra}" alt="${e.nome}" loading="lazy"></div>`
           : `<div class="extra-emoji">${e.emoji}</div>`
@@ -296,7 +296,7 @@ function renderExtras(){
             ? `<div class="eq-disp">🚫</div>`
             : `<button class="eq-btn ${qty===0?'dim':''}" onclick="${qty>0?`chgExtra('${e.id}',-1)`:'void(0)'}">−</button>
           <div class="eq-disp">${qty}</div>
-          <button class="eq-btn" onclick="chgExtra('${e.id}',1)">+</button>`}
+          <button class="eq-btn" data-add onclick="chgExtra('${e.id}',1)">+</button>`}
         </div>
       </div>`;
     }).join('');
@@ -1105,7 +1105,7 @@ function renderCustomCategorias(){
             <div class="item-price">R$${b.preco}</div>
           </div>
           <div class="item-controls">
-            <button class="qty-btn" onclick="abrirModal('${b.id}')">+</button>
+            <button class="qty-btn" data-add onclick="abrirModal('${b.id}')">+</button>
             <div class="qty-display">${qty}</div>
             <button class="qty-btn ${qty===0?'dim':''}" onclick="${qty>0?`remUlt('${b.id}')`:'void(0)'}">−</button>
           </div>
@@ -1118,7 +1118,7 @@ function renderCustomCategorias(){
         const qty=temOpc?escolhas.length:(cartExtras[e.id]||0);
         const resumo=escolhas.map((s,i)=>`<div class="cart-item-resumo"><span>${s}</span><span class="rm" onclick="remSaborExtra('${e.id}',${i})">✕</span></div>`).join('');
         const foto=getFotoCliente(e.id);
-        return`<div class="extra-item ${qty>0?'has-items':''}">
+        return`<div class="extra-item ${qty>0?'has-items':''}" id="mi-${e.id}">
           ${foto?`<div class="extra-foto"><img src="${foto}" alt="${e.nome}" loading="lazy"></div>`:`<div class="extra-emoji">${e.emoji}</div>`}
           <div class="extra-body">
             <div class="extra-name">${e.nome}</div>
@@ -1374,6 +1374,7 @@ function mostrarPopup(cfg,tipo){
   const prod = cfg.produtoId ? acharProduto(cfg.produtoId) : null;
   if(cfg.produtoId && !prod) return;                       // produto ainda não carregou → tenta de novo depois
   const isPromo = tipo==='promo';
+  if(!isPromo && !produtoDisponivel(cfg.produtoId)) return; // esgotado/desativado → não anuncia (aparece quando voltar)
   const foto = cfg.produtoId ? getFotoCliente(cfg.produtoId) : null;
   const badge = isPromo ? '🔥 Promoção' : '✨ Novidade';
   const titulo = isPromo ? ((cfg.titulo||'').trim() || 'Promoção especial!') : (prod?prod.nome:'Novidade');
@@ -1390,7 +1391,7 @@ function mostrarPopup(cfg,tipo){
     ${(!isPromo && prod) ? `<div class="nov-preco">R$${prod.preco}</div>` : ''}
     <div class="nov-texto">${texto}</div>
     ${cupom ? `<div class="nov-cupom">Use o cupom <b>${cupom}</b></div>` : ''}
-    <button class="nov-btn" onclick="popupAcao('${cfg.produtoId||''}')">${btnLabel}</button>`;
+    <button class="nov-btn" onclick="popupAcao('${cfg.produtoId||''}','${tipo}')">${btnLabel}</button>`;
   document.getElementById('novidade-pop').classList.add('show');
   _popupAberto=true;
   localStorage.setItem('tcho_'+tipo+'_vista', String(cfg.v));   // marca visto já ao exibir → 1x por pessoa
@@ -1399,14 +1400,24 @@ function fecharPopup(){
   document.getElementById('novidade-pop').classList.remove('show');
   _popupAberto=false;
 }
-function popupAcao(id){
+function popupAcao(id,tipo){
   fecharPopup();
+  // Promoção com item comprável → pede o item da promoção (preço promocional),
+  // não o produto normal.
+  if(tipo==='promo' && PROMOCOES.length) id=PROMOCOES[0].id;
   if(!id) return;
   const el=document.getElementById('mi-'+id);
-  if(el){
-    el.scrollIntoView({behavior:'smooth',block:'center'});
-    el.classList.add('nov-destaque');
-    setTimeout(()=>el.classList.remove('nov-destaque'),3000);
+  if(!el){ alert('😔 Esse produto não está disponível no momento.'); return; }   // esgotado/desativado
+  el.scrollIntoView({block:'center'});   // instantâneo: o modal trava a rolagem e cortaria o "smooth"
+  // Abre o pedido pelo mesmo botão "+" do cardápio: hambúrguer abre a
+  // personalização, extra com sabor abre a escolha, extra simples soma 1.
+  const btnAdd=el.querySelector('[data-add]');
+  if(btnAdd) btnAdd.click();
+  // O "+" do extra redesenha a lista → pega o card de novo para destacar
+  const card=document.getElementById('mi-'+id);
+  if(card){
+    card.classList.add('nov-destaque');
+    setTimeout(()=>card.classList.remove('nov-destaque'),3000);
   }
 }
 // Reage aos popups definidos no admin. Espera ~1,2s pra dar tempo dos produtos
@@ -1455,7 +1466,7 @@ function renderPromocoes(){
     const precoHtml = (e.precoOriginal && e.precoOriginal>e.preco)
       ? `<span style="text-decoration:line-through;color:var(--muted);font-size:.8rem;margin-right:6px">R$${e.precoOriginal}</span><span style="color:#e74c3c;font-weight:800">R$${e.preco}</span>`
       : `R$${e.preco}`;
-    return`<div class="extra-item ${qty>0?'has-items':''}">
+    return`<div class="extra-item ${qty>0?'has-items':''}" id="mi-${e.id}">
       ${foto ? `<div class="extra-foto"><img src="${foto}" alt="${e.nome}" loading="lazy"></div>` : `<div class="extra-emoji">${e.emoji}</div>`}
       <div class="extra-body">
         <div class="extra-name">${e.nome} <span class="promo-tag">🔥 PROMO</span></div>
@@ -1465,7 +1476,7 @@ function renderPromocoes(){
       <div class="extra-controls">
         <button class="eq-btn ${qty===0?'dim':''}" onclick="${qty>0?`chgExtra('${e.id}',-1)`:'void(0)'}">−</button>
         <div class="eq-disp">${qty}</div>
-        <button class="eq-btn" onclick="chgExtra('${e.id}',1)">+</button>
+        <button class="eq-btn" data-add onclick="chgExtra('${e.id}',1)">+</button>
       </div>
     </div>`;
   }).join('');

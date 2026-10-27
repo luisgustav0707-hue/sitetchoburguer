@@ -148,6 +148,17 @@ let presencaTimer=null;
 function dataLocalHoje(d=new Date()){
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
+// 'YYYY-MM-DD' (valor de <input type="date">) → meia-noite LOCAL daquele dia.
+// NÃO usar new Date('YYYY-MM-DD'): o JS lê como meia-noite UTC, que no Brasil
+// é 21h do dia ANTERIOR — o relatório de sábado puxava pedidos de sexta à noite.
+function inicioDiaLocal(s){
+  const [y,m,d]=String(s||'').split('-').map(Number);
+  return new Date(y,(m||1)-1,d||1);
+}
+// Fim exclusivo: meia-noite local do dia SEGUINTE (usar com '<', não '<=').
+function fimDiaLocal(s){
+  const d=inicioDiaLocal(s); d.setDate(d.getDate()+1); return d;
+}
 function carregarAcessos(){
   db.collection('stats').doc('visitas').get().then(doc=>{
     const d=doc.exists?doc.data():{};
@@ -1729,14 +1740,23 @@ function tt(m){if(m<1)return'agora';if(m>=60)return Math.floor(m/60)+'h'+(m%60?S
 
 // Horário em que o cliente FEZ o pedido (usa criadoEm, que não muda ao trocar
 // de status — ao contrário de hora/horaStr, que são atualizados a cada etapa).
-function horaPedido(p){
+function dataPedido(p){
   let d=null;
   if(p.criadoEm){
     if(typeof p.criadoEm.toDate==='function') d=p.criadoEm.toDate();
     else { const x=new Date(p.criadoEm); if(!isNaN(x)) d=x; }
   }
   if(!d && p.hora) d=(p.hora instanceof Date)?p.hora:new Date(p.hora);
-  return (d && !isNaN(d)) ? d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : (p.horaStr||'--:--');
+  return (d && !isNaN(d)) ? d : null;
+}
+function horaPedido(p){
+  const d=dataPedido(p);
+  return d ? d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : (p.horaStr||'--:--');
+}
+// "dd/mm HH:MM" do pedido — para relatórios que podem abranger vários dias.
+function dataHoraPedido(p){
+  const d=dataPedido(p);
+  return d ? d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' '+horaPedido(p) : (p.horaStr||'-');
 }
 
 function renderCard(p){
@@ -2239,21 +2259,21 @@ async function carregarLog(){
   const fimEl=document.getElementById('log-fim');
   if(!iniEl.value)iniEl.value=hoje;
   if(!fimEl.value)fimEl.value=hoje;
-  const ini=new Date(iniEl.value+'T00:00:00');
-  const fim=new Date(fimEl.value+'T23:59:59');
+  if(iniEl.value>fimEl.value)[iniEl.value,fimEl.value]=[fimEl.value,iniEl.value];   // datas invertidas
+  const ini=inicioDiaLocal(iniEl.value);
+  const fim=fimDiaLocal(fimEl.value);
   document.getElementById('hist-lista').innerHTML='<div style="color:var(--muted);font-size:.78rem;padding:8px 0">Carregando...</div>';
   try{
     const snap=await db.collection('pedidos')
       .where('criadoEm','>=',firebase.firestore.Timestamp.fromDate(ini))
-      .where('criadoEm','<', firebase.firestore.Timestamp.fromDate(new Date(fim.getTime()+1000)))
+      .where('criadoEm','<', firebase.firestore.Timestamp.fromDate(fim))
       .get();
-    if(snap&&snap.docs&&snap.docs.length>0){
-      logPedidos=snap.docs.map(d=>{const data=d.data();return{...data,_id:d.id,hora:data.hora?.toDate?.()||new Date(data.hora||0)};});
-    } else {
-      logPedidos=[...pedidos];
-    }
+    // Consulta OK e vazia = não houve pedido no período. Não cair nos pedidos
+    // da tela (que são de hoje) — isso mostrava pedidos de outro dia.
+    logPedidos=snap.docs.map(d=>{const data=d.data();return{...data,_id:d.id,hora:data.hora?.toDate?.()||new Date(data.hora||0)};});
   }catch(e){
-    logPedidos=[...pedidos];
+    // Sem Firestore: usa os pedidos da tela, mas só os do período pedido
+    logPedidos=pedidos.filter(p=>{const d=dataPedido(p);return d && d>=ini && d<fim;});
   }
   renderLog();
 }
@@ -2262,7 +2282,7 @@ function renderLog(){
   const nome=(document.getElementById('log-nome')?.value||'').toLowerCase().trim();
   const tel=(document.getElementById('log-tel')?.value||'').replace(/\D/g,'');
   const end=(document.getElementById('log-end')?.value||'').toLowerCase().trim();
-  let lista=[...logPedidos].sort((a,b)=>new Date(b.hora)-new Date(a.hora));
+  let lista=[...logPedidos].sort((a,b)=>(dataPedido(b)||0)-(dataPedido(a)||0));
   if(nome)lista=lista.filter(p=>(p.nome||'').toLowerCase().includes(nome));
   if(tel)lista=lista.filter(p=>(p.tel||'').replace(/\D/g,'').includes(tel));
   if(end)lista=lista.filter(p=>(p.bairro||'').toLowerCase().includes(end)||(p.endereco||'').toLowerCase().includes(end));
@@ -2281,7 +2301,7 @@ function renderLog(){
         </div>
         <div style="text-align:right">
           <div style="font-size:.65rem;font-weight:700;color:${statusCor[p.status]||'var(--muted)'}">${statusLabel[p.status]||p.status||'-'}</div>
-          <div style="font-size:.65rem;color:var(--muted)">${p.horaStr||''}</div>
+          <div style="font-size:.65rem;color:var(--muted)">${dataHoraPedido(p)}</div>
         </div>
       </div>
       <div class="log-nome">${p.nome||'-'}</div>
@@ -3284,7 +3304,7 @@ function salvarCupom(){
 function toggleCupom(id){const c=cupons.find(x=>x._id===id);if(!c)return;const novoAtivo=!c.ativo;db.collection('cupons').doc(id).update({ativo:novoAtivo}).then(()=>showToast(novoAtivo?'✅ Cupom ativado!':'🔒 Cupom desativado',novoAtivo?'tok-ok':'tok-info')).catch(console.error);}
 function deletarCupom(id){const c=cupons.find(x=>x._id===id);if(!c||!confirm(`Excluir cupom "${c.codigo}"?`))return;db.collection('cupons').doc(id).delete().then(()=>showToast('🗑️ Cupom excluído','tok-info')).catch(console.error);}
 function copiarCodigo(codigo){navigator.clipboard?.writeText(codigo).then(()=>showToast(`📋 "${codigo}" copiado!`,'tok-ok')).catch(()=>showToast(`Código: ${codigo}`,'tok-info'));}
-function isExp(c){return c.validade&&new Date(c.validade)<new Date();}
+function isExp(c){return c.validade&&new Date(c.validade+'T23:59:59')<new Date();}   // vale até o fim do dia (igual ao cliente.js)
 function descontoLabel(c){if(c.tipo==='pct')return`${c.valor}% OFF`;if(c.tipo==='fixo')return`R$${c.valor} OFF`;if(c.tipo==='frete')return'FRETE GRÁTIS';if(c.tipo==='item')return`${c.item} GRÁTIS`;return'';}
 
 function renderCupons(){
@@ -3930,27 +3950,31 @@ function filtrarPeriodo(tipo){
 
 function getFinRange(){
   const hoje = new Date(); hoje.setHours(0,0,0,0);
-  const amanha = new Date(hoje.getTime() + 86400000);
+  const amanha = new Date(hoje); amanha.setDate(amanha.getDate()+1);
   if(finPeriodo==='hoje')   return {ini:hoje, fim:amanha};
-  if(finPeriodo==='semana') return {ini:new Date(hoje.getTime()-6*86400000), fim:amanha};
+  if(finPeriodo==='semana'){ const ini=new Date(hoje); ini.setDate(ini.getDate()-6); return {ini, fim:amanha}; }
   if(finPeriodo==='mes')    return {ini:new Date(hoje.getFullYear(),hoje.getMonth(),1), fim:amanha};
   if(finPeriodo==='custom'){
-    const vi=document.getElementById('fin-ini').value;
-    const vf=document.getElementById('fin-fim').value;
-    return {
-      ini: vi?new Date(vi):hoje,
-      fim: vf?new Date(vf+'T23:59:59'):amanha
-    };
+    const iniEl=document.getElementById('fin-ini'), fimEl=document.getElementById('fin-fim');
+    if(!iniEl.value) iniEl.value=dataLocalHoje();
+    if(!fimEl.value) fimEl.value=iniEl.value;
+    if(iniEl.value>fimEl.value) [iniEl.value,fimEl.value]=[fimEl.value,iniEl.value];   // datas invertidas
+    // Limites em horário LOCAL: do 00:00 do dia inicial até 00:00 do dia seguinte ao final
+    return { ini:inicioDiaLocal(iniEl.value), fim:fimDiaLocal(fimEl.value) };
   }
   return {ini:hoje, fim:amanha};
 }
 
+let finVariosDias=false;   // período com mais de um dia → mostra a data junto da hora
 function labelPeriodo(range){
   const fmt={day:'2-digit',month:'2-digit',year:'numeric'};
   const di=range.ini.toLocaleDateString('pt-BR',fmt);
   const df=new Date(range.fim.getTime()-1).toLocaleDateString('pt-BR',fmt);
+  finVariosDias = di!==df;
   return di===df?`Período: ${di}`:`Período: ${di} até ${df}`;
 }
+// Quando o pedido foi FEITO (horaStr muda a cada troca de status, não serve aqui)
+function quandoPedidoFin(p){ return finVariosDias ? dataHoraPedido(p) : horaPedido(p); }
 
 async function carregarFinanceiro(){
   const range = getFinRange();
@@ -3961,23 +3985,22 @@ async function carregarFinanceiro(){
   const todos = JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
   finPedidosList = todos.filter(p=>{
     if(p.status==='cancelado' || p.contabil===false) return false;   // cancelados e rodadas de mesa (só o fechamento conta)
-    const h = new Date(p.hora);
-    return !isNaN(h.getTime()) && h >= range.ini && h < range.fim;
+    const h = dataPedido(p);
+    return !!h && h >= range.ini && h < range.fim;
   }).map(p=>({...p, hora: new Date(p.hora)}));
 
-  // 2. Se Firebase configurado e retornar dados reais, usa Firestore
+  // 2. Firestore é a fonte oficial: se a consulta funcionou, vale o que ela
+  //    trouxe — inclusive VAZIO (dia sem pedido). Antes, vazio caía no
+  //    localStorage e podia mostrar pedidos que não eram do período.
   try {
     const snap = await db.collection('pedidos')
       .where('criadoEm','>=', firebase.firestore.Timestamp.fromDate(range.ini))
       .where('criadoEm','<',  firebase.firestore.Timestamp.fromDate(range.fim))
       .get();
-    if(snap && snap.docs && snap.docs.length > 0){
-      finPedidosList = snap.docs.map(d=>{
-        const data=d.data();
-        return {...data, _id:d.id, hora:data.hora?.toDate?.() || new Date(data.hora||0)};
-      }).filter(p=>p.status!=='cancelado' && p.contabil!==false);   // exclui cancelados e rodadas de mesa
-    }
-    // Se snap vazio → mantém dados do localStorage
+    finPedidosList = snap.docs.map(d=>{
+      const data=d.data();
+      return {...data, _id:d.id, hora:data.hora?.toDate?.() || new Date(data.hora||0)};
+    }).filter(p=>p.status!=='cancelado' && p.contabil!==false);   // exclui cancelados e rodadas de mesa
   } catch(e){
     // Erro no Firestore → mantém dados do localStorage
   }
@@ -4186,14 +4209,15 @@ function renderFinanceiro(){
 
   // ── Render Taxas Motoboy ──
   const entregas = ps.filter(p=>p.tipo==='delivery'&&(p.frete||0)>0)
-                     .sort((a,b)=>new Date(a.hora)-new Date(b.hora));
+                     .sort((a,b)=>(dataPedido(a)||0)-(dataPedido(b)||0));
+  const totalFreteEntregas = entregas.reduce((a,p)=>a+(p.frete||0),0);
   if(!entregas.length){
     document.getElementById('fin-fretes').innerHTML='<div style="color:var(--muted);font-size:.78rem">Nenhuma entrega neste período</div>';
   } else {
     document.getElementById('fin-fretes').innerHTML=`
       <div class="fin-moto-header">
         <span>${entregas.length} entrega${entregas.length!==1?'s':''}</span>
-        <span style="color:var(--orange);font-weight:700">Total: ${r(totalFrete)}</span>
+        <span style="color:var(--orange);font-weight:700">Total: ${r(totalFreteEntregas)}</span>
       </div>
       <table class="fin-table">
         <thead><tr><th>Pedido</th><th>Cliente</th><th>Bairro</th><th>Hora</th><th class="fin-val">Taxa</th></tr></thead>
@@ -4202,12 +4226,12 @@ function renderFinanceiro(){
             <td class="fin-num">${p.num||'#'+p.id}</td>
             <td>${p.nome}</td>
             <td>${p.bairro||'-'}</td>
-            <td>${p.horaStr||'-'}</td>
+            <td>${quandoPedidoFin(p)}</td>
             <td class="fin-val">${r(p.frete||0)}</td>
           </tr>`).join('')}
           <tr class="fin-total-row">
             <td colspan="4"><strong>TOTAL (${entregas.length} entrega${entregas.length!==1?'s':''})</strong></td>
-            <td class="fin-val"><strong>${r(totalFrete)}</strong></td>
+            <td class="fin-val"><strong>${r(totalFreteEntregas)}</strong></td>
           </tr>
         </tbody>
       </table>`;
@@ -4216,7 +4240,7 @@ function renderFinanceiro(){
   // ── Render Lista de Pedidos ──
   const statusLabel={novo:'Novo',prep:'Preparo',pronto:'Pronto',entrega:'Entrega',finalizado:'Finalizado'};
   const statusCor={novo:'#e74c3c',prep:'#f39c12',pronto:'#27ae60',entrega:'#3498db',finalizado:'var(--muted)'};
-  const sorted=[...ps].sort((a,b)=>new Date(b.hora)-new Date(a.hora));
+  const sorted=[...ps].sort((a,b)=>(dataPedido(b)||0)-(dataPedido(a)||0));
   document.getElementById('fin-lista').innerHTML=`
     <table class="fin-table">
       <thead><tr><th>Pedido</th><th>Cliente</th><th>Tipo</th><th>Pagamento</th><th>Status</th><th>Hora</th><th class="fin-val">Total</th></tr></thead>
@@ -4227,7 +4251,7 @@ function renderFinanceiro(){
           <td>${p.tipo==='delivery'?'🛵':'🏃'}</td>
           <td>${p.pag||'-'}</td>
           <td style="color:${statusCor[p.status]||'var(--muted)'};font-weight:700;font-size:.68rem">${statusLabel[p.status]||p.status||'-'}</td>
-          <td style="font-size:.7rem;color:var(--muted)">${p.horaStr||'-'}</td>
+          <td style="font-size:.7rem;color:var(--muted)">${quandoPedidoFin(p)}</td>
           <td class="fin-val">${r(p.total||0)}</td>
         </tr>`).join('')}
       </tbody>
@@ -4279,7 +4303,7 @@ function imprimirVendas(){
 
 function imprimirMotoboy(){
   const entregas = finPedidosList.filter(p=>p.tipo==='delivery'&&(p.frete||0)>0)
-                                  .sort((a,b)=>new Date(a.hora)-new Date(b.hora));
+                                  .sort((a,b)=>(dataPedido(a)||0)-(dataPedido(b)||0));
   if(!entregas.length){showToast('Nenhuma entrega para imprimir','tok-err');return;}
   const r = n => 'R$'+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
   const totalFrete = entregas.reduce((a,p)=>a+(p.frete||0),0);
@@ -4302,7 +4326,7 @@ function imprimirMotoboy(){
         ${entregas.map(p=>`<tr>
           <td><b>${p.num||'#'+p.id}</b></td>
           <td>${p.bairro||'-'}</td>
-          <td>${p.horaStr||'-'}</td>
+          <td>${quandoPedidoFin(p)}</td>
           <td class="r">${r(p.frete||0)}</td>
         </tr>`).join('')}
         <tr class="tot">

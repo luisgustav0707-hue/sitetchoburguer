@@ -1,23 +1,30 @@
 // ═══════════════════════════════════════════════════════════════
-// PAGAMENTO ONLINE — Mercado Pago (Checkout Pro)
+// PAGAMENTO ONLINE — Mercado Pago
 // ───────────────────────────────────────────────────────────────
-// O cliente escolhe "Pagar online" e é levado à página do Mercado Pago, que
-// cuida de Pix, crédito e débito (dados de cartão nunca passam pelo nosso
-// site). O pedido SÓ entra no Kanban depois do pagamento aprovado.
+// Duas formas, ambas com o pedido SÓ entrando no Kanban depois de aprovado:
+//  • Pix (Checkout Transparente): criarPixMP gera o Pix pela API de pagamentos
+//    e o QR code / copia e cola aparece na própria tela do site.
+//  • Cartão de crédito/débito (Checkout Pro): criarPagamentoMP gera o link e o
+//    cliente paga na página do Mercado Pago (dados de cartão nunca passam pelo
+//    nosso site).
 //
 // Fluxo:
 //  1) O site grava o pedido em pagamentos/{id} com status 'aguardando'
 //     (o firestore.rules só deixa criar nesse status).
-//  2) criarPagamentoMP({id}) cria a "preferência" no Mercado Pago com o total
-//     desse documento e devolve o link de pagamento.
-//  3) O Mercado Pago avisa o webhookMercadoPago a cada mudança. O cliente, ao
-//     voltar pro site, também chama verificarPagamentoMP (rede de segurança se
-//     o aviso atrasar).
+//  2) criarPixMP({id}) ou criarPagamentoMP({id}) cria a cobrança no Mercado
+//     Pago com o total desse documento (external_reference = id).
+//  3) O Mercado Pago avisa o webhookMercadoPago a cada mudança. O site também
+//     chama verificarPagamentoMP de tempos em tempos (rede de segurança se o
+//     aviso atrasar).
 //  4) processarPagamento CONSULTA o pagamento na API do Mercado Pago (nunca
 //     confia no corpo do aviso) e, se aprovado com o valor certo, cria
 //     pedidos/{id} com status 'novo' — o mesmo ID. A partir daí é um pedido
 //     como outro qualquer: os triggers onCreate (push + fila de impressão)
 //     disparam sozinhos e o cliente acompanha pelo mesmo ID.
+//  5) Se o cliente desiste e escolhe pagar na entrega, cancelarPagamentoMP
+//     marca o pendente como 'cancelado' (e cancela o Pix no Mercado Pago).
+//     Um pagamento aprovado depois disso NÃO vira pedido — fica como
+//     'pago-apos-cancelar' para devolução, já que o cliente fez outro pedido.
 //
 // Por que o webhook não valida a assinatura x-signature: a segurança vem do
 // passo 4 — o status e o valor são lidos da API do Mercado Pago com o nosso
@@ -38,7 +45,8 @@ const MP_ACCESS_TOKEN = defineSecret('MP_ACCESS_TOKEN');
 const REGION = 'southamerica-east1';
 const SITE = 'https://tchoburguer.com';
 const MP_API = 'https://api.mercadopago.com';
-const EXPIRA_MIN = 30;                       // link de pagamento vale 30 min
+const EXPIRA_MIN = 30;                       // link e Pix valem 30 min
+const MAX_PIX = 5;                           // Pix gerados por pedido (expirou → gera outro)
 const ID_OK = /^[A-Za-z0-9]{10,40}$/;        // ID automático do Firestore
 
 const db = () => admin.firestore();
@@ -145,10 +153,20 @@ async function processarPagamento(pay) {
     if (!pgSnap.exists) return 'sem-pendente';
     const pg = pgSnap.data();
     if (pg.status === 'pago') return 'ja-pago';
+    if (pg.status === 'cancelado' || pg.status === 'pago-apos-cancelar') {
+      // O cliente desistiu e fez o pedido pra pagar na entrega. Se mesmo assim
+      // o pagamento entrou, NÃO cria outro pedido: registra pra devolver.
+      if (pay.status !== 'approved') return 'cancelado';
+      t.update(pgRef, { status: 'pago-apos-cancelar', mpId: String(pay.id), mpValor: pay.transaction_amount, atualizadoEm: FieldValue.serverTimestamp() });
+      logger.error(`processarPagamento: ${id} pago DEPOIS de cancelado (pagamento ${pay.id}, R$${pay.transaction_amount}) — devolver no Mercado Pago`);
+      return 'pago-apos-cancelar';
+    }
 
     if (pay.status !== 'approved') {
       // Recusado/cancelado não é definitivo: no Checkout Pro o cliente pode
       // tentar outro cartão no mesmo link, e um aprovado depois vale.
+      // Aviso atrasado de um Pix velho (já trocado por outro) não mexe em nada.
+      if (pg.pix && pg.pix.mpId && pay.payment_method_id === 'pix' && String(pay.id) !== pg.pix.mpId) return 'pix-antigo';
       const st = (pay.status === 'rejected' || pay.status === 'cancelled') ? 'recusado' : 'aguardando';
       t.update(pgRef, { status: st, mpStatus: pay.status, mpDetalhe: pay.status_detail || '', atualizadoEm: FieldValue.serverTimestamp() });
       return st;
@@ -210,7 +228,111 @@ async function processarPagamento(pay) {
   return resultado;
 }
 
-// data: { id } — ID de pagamentos/{id} criado pelo site. Sem login (cliente).
+const urlWebhook = () => `https://${REGION}-${process.env.GCLOUD_PROJECT}.cloudfunctions.net/webhookMercadoPago`;
+
+function barrarSeEncerrado(pg) {
+  if (pg.status === 'pago') throw new HttpsError('failed-precondition', 'Este pedido já foi pago.');
+  if (pg.status === 'cancelado' || pg.status === 'pago-apos-cancelar' || pg.status === 'divergente') {
+    throw new HttpsError('failed-precondition', 'Este pagamento foi encerrado. Faça o pedido de novo.');
+  }
+}
+
+function totalValido(pg) {
+  const total = Math.round(Number(pg.total) * 100) / 100;
+  if (!(total > 0) || total > 5000) throw new HttpsError('invalid-argument', 'Valor do pedido inválido.');
+  return total;
+}
+
+// Busca no Mercado Pago os pagamentos deste pedido e processa o aprovado
+// (ou o mais recente). Usado pelo cliente e antes de cancelar.
+async function verificarNoMP(id) {
+  const busca = await mp(MP_ACCESS_TOKEN.value(), 'GET',
+    `/v1/payments/search?external_reference=${encodeURIComponent(id)}&sort=date_created&criteria=desc`);
+  const lista = busca.results || [];
+  const escolhido = lista.find((p) => p.status === 'approved') || lista[0];
+  if (!escolhido) return null;
+  const r = await processarPagamento(escolhido);
+  return r === 'ja-pago' ? 'pago' : r;
+}
+
+// data: { id } — Pix na tela do site (Checkout Transparente). Grava o QR code
+// em pagamentos/{id}.pix (o site acompanha esse doc) e devolve o mesmo dado.
+exports.criarPixMP = onCall({ region: REGION, secrets: [MP_ACCESS_TOKEN] }, async (request) => {
+  const id = String((request.data || {}).id || '');
+  if (!ID_OK.test(id)) throw new HttpsError('invalid-argument', 'Pedido inválido.');
+  const ref = db().collection('pagamentos').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Pedido não encontrado.');
+  const pg = snap.data();
+  barrarSeEncerrado(pg);
+
+  // Mesmo Pix enquanto não vence (recarregar a página não gera outro)
+  if (pg.pix && pg.pix.qr && pg.pix.venceMs > Date.now() + 60000) {
+    if (pg.status !== 'aguardando') await ref.update({ status: 'aguardando' });
+    return { ...pg.pix, total: pg.total };
+  }
+  const tentativa = (pg.pixTentativas || 0) + 1;
+  if (tentativa > MAX_PIX) throw new HttpsError('resource-exhausted', 'Muitas tentativas. Faça o pedido de novo.');
+
+  const total = totalValido(pg);
+  const vence = new Date(Date.now() + EXPIRA_MIN * 60000);
+  const pedido = pg.pedido || {};
+  const nome = String(pedido.nome || '').trim().split(/\s+/);
+  const pay = await mp(MP_ACCESS_TOKEN.value(), 'POST', '/v1/payments', {
+    transaction_amount: total,
+    description: 'Pedido Tcho Burguer',
+    payment_method_id: 'pix',
+    external_reference: id,
+    notification_url: urlWebhook(),
+    date_of_expiration: isoBR(vence),
+    // O Mercado Pago exige e-mail do pagador; o site não pede e-mail, então vai
+    // um endereço do pedido (o banco do cliente mostra o nome dele mesmo).
+    payer: {
+      email: `pedido.${id.toLowerCase()}@tchoburguer.com`,
+      first_name: (nome[0] || 'Cliente').slice(0, 40),
+      last_name: nome.slice(1).join(' ').slice(0, 60) || undefined,
+    },
+  }, `pix-${id}-${tentativa}`);
+
+  const td = (pay.point_of_interaction && pay.point_of_interaction.transaction_data) || {};
+  if (!td.qr_code) {
+    logger.error(`criarPixMP: ${id} sem QR code (pagamento ${pay.id}, status ${pay.status})`);
+    throw new HttpsError('unavailable', 'O Mercado Pago não gerou o Pix. Tente de novo.');
+  }
+  const pix = { mpId: String(pay.id), qr: td.qr_code, qrBase64: td.qr_code_base64 || '', venceMs: vence.getTime() };
+  await ref.update({ status: 'aguardando', pix, pixTentativas: tentativa });
+  return { ...pix, total };
+});
+
+// data: { id } — o cliente desistiu do online e vai pagar na entrega. Confere
+// antes se já não pagou; se não, encerra o pendente e cancela o Pix.
+exports.cancelarPagamentoMP = onCall({ region: REGION, secrets: [MP_ACCESS_TOKEN] }, async (request) => {
+  const id = String((request.data || {}).id || '');
+  if (!ID_OK.test(id)) throw new HttpsError('invalid-argument', 'Pedido inválido.');
+  const ref = db().collection('pagamentos').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Pedido não encontrado.');
+  if (snap.data().status === 'pago') return { status: 'pago' };
+
+  if ((await verificarNoMP(id)) === 'pago') return { status: 'pago' };
+
+  const status = await db().runTransaction(async (t) => {
+    const s = await t.get(ref);
+    const st = s.data().status;
+    if (st === 'pago' || st === 'pago-apos-cancelar') return st;
+    t.update(ref, { status: 'cancelado', canceladoEm: FieldValue.serverTimestamp() });
+    return 'cancelado';
+  });
+  const pix = snap.data().pix;
+  if (status === 'cancelado' && pix && pix.mpId) {
+    try { await mp(MP_ACCESS_TOKEN.value(), 'PUT', `/v1/payments/${pix.mpId}`, { status: 'cancelled' }); }
+    catch (e) { logger.warn(`cancelarPagamentoMP: Pix ${pix.mpId} não cancelado no MP:`, e.message); }
+  }
+  return { status };
+});
+
+// data: { id } — ID de pagamentos/{id} criado pelo site. Cartão de crédito ou
+// débito pelo Checkout Pro. Sem login (cliente).
 exports.criarPagamentoMP = onCall({ region: REGION, secrets: [MP_ACCESS_TOKEN] }, async (request) => {
   const id = String((request.data || {}).id || '');
   if (!ID_OK.test(id)) throw new HttpsError('invalid-argument', 'Pedido inválido.');
@@ -218,15 +340,15 @@ exports.criarPagamentoMP = onCall({ region: REGION, secrets: [MP_ACCESS_TOKEN] }
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Pedido não encontrado.');
   const pg = snap.data();
-  if (pg.status === 'pago') throw new HttpsError('failed-precondition', 'Este pedido já foi pago.');
+  barrarSeEncerrado(pg);
+  if (pg.status === 'recusado') await ref.update({ status: 'aguardando' });   // nova tentativa
 
   // Mesmo link enquanto não vence: tentar de novo não cria cobrança nova
   if (pg.linkPagamento && pg.linkVenceMs > Date.now() + 60000) {
     return { url: pg.linkPagamento };
   }
 
-  const total = Math.round(Number(pg.total) * 100) / 100;
-  if (!(total > 0) || total > 5000) throw new HttpsError('invalid-argument', 'Valor do pedido inválido.');
+  const total = totalValido(pg);
 
   const agora = new Date();
   const vence = new Date(agora.getTime() + EXPIRA_MIN * 60000);
@@ -236,16 +358,20 @@ exports.criarPagamentoMP = onCall({ region: REGION, secrets: [MP_ACCESS_TOKEN] }
     items: [{ id: 'pedido', title: 'Pedido Tcho Burguer', quantity: 1, unit_price: total, currency_id: 'BRL' }],
     payer: { name: String(pedido.nome || '').slice(0, 60) },
     external_reference: id,
-    notification_url: `https://${REGION}-${process.env.GCLOUD_PROJECT}.cloudfunctions.net/webhookMercadoPago`,
+    notification_url: urlWebhook(),
     back_urls: { success: voltar, pending: voltar, failure: voltar },
     auto_return: 'approved',
-    // Boleto/lotérica demoram dias — não servem pra lanche. Sem parcelamento.
-    payment_methods: { excluded_payment_types: [{ id: 'ticket' }, { id: 'atm' }], installments: 1 },
+    // Só cartão: Pix é feito na tela do site (criarPixMP); boleto/lotérica
+    // demoram dias. Sem parcelamento.
+    payment_methods: {
+      excluded_payment_types: [{ id: 'ticket' }, { id: 'atm' }, { id: 'bank_transfer' }],
+      excluded_payment_methods: [{ id: 'pix' }],
+      installments: 1,
+    },
     statement_descriptor: 'TCHO BURGUER',
     expires: true,
     expiration_date_from: isoBR(agora),
     expiration_date_to: isoBR(vence),
-    date_of_expiration: isoBR(vence),              // Pix gerado vence junto
   }, `pref-${id}-${Math.floor(agora.getTime() / (EXPIRA_MIN * 60000))}`);
 
   await ref.update({
@@ -273,23 +399,17 @@ exports.webhookMercadoPago = onRequest({ region: REGION, secrets: [MP_ACCESS_TOK
   }
 });
 
-// data: { id } — o cliente chama ao voltar do Mercado Pago. Busca os
-// pagamentos desse pedido e processa o aprovado (se o webhook ainda não fez).
+// data: { id } — o site chama enquanto espera (Pix na tela ou volta do
+// Checkout Pro). Processa o aprovado se o webhook ainda não fez.
 exports.verificarPagamentoMP = onCall({ region: REGION, secrets: [MP_ACCESS_TOKEN] }, async (request) => {
   const id = String((request.data || {}).id || '');
   if (!ID_OK.test(id)) throw new HttpsError('invalid-argument', 'Pedido inválido.');
   const snap = await db().collection('pagamentos').doc(id).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Pedido não encontrado.');
-  if (snap.data().status === 'pago') return { status: 'pago' };
-
-  const busca = await mp(MP_ACCESS_TOKEN.value(), 'GET',
-    `/v1/payments/search?external_reference=${encodeURIComponent(id)}&sort=date_created&criteria=desc`);
-  const lista = busca.results || [];
-  const aprovado = lista.find((p) => p.status === 'approved');
-  const escolhido = aprovado || lista[0];
-  if (!escolhido) return { status: snap.data().status };
-  const r = await processarPagamento(escolhido);
-  return { status: r === 'ja-pago' ? 'pago' : r };
+  const st = snap.data().status;
+  if (st === 'pago' || st === 'cancelado' || st === 'pago-apos-cancelar') return { status: st };
+  const r = await verificarNoMP(id);
+  return { status: r || st };
 });
 
 // Exportado para teste

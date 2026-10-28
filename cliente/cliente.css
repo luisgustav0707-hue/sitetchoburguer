@@ -189,6 +189,12 @@ select option{background:var(--card)}
 .pag-card{background:var(--card);border:2px solid #2a2520;border-radius:10px;padding:11px 7px;text-align:center;cursor:pointer;transition:all .2s}
 .pag-card:hover,.pag-card.selected{border-color:var(--orange);background:#2a2018}
 .pag-online{grid-column:1/-1}
+.pag-online-tit{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:0 0 5px}
+.pag-online-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:4px}
+#pagamento-box .pix-qr{display:block;width:200px;max-width:70%;margin:4px auto 10px;background:#fff;border-radius:8px;padding:6px}
+#pagamento-box .pix-copia{font-family:monospace;font-size:.62rem;color:var(--muted);background:#1a1208;border-radius:8px;padding:8px;word-break:break-all;max-height:62px;overflow:hidden;text-align:left}
+#pagamento-box .pg-sub{font-size:.72rem;color:var(--muted);line-height:1.6;margin-top:8px}
+#pagamento-box .pg-aguarde{font-size:.78rem;color:var(--orange);font-weight:700;margin-top:10px}
 .pag-sub{font-size:.66rem;color:var(--muted);margin-top:2px}
 #pagamento-box{background:var(--card);border:1px solid #2a2520;border-radius:12px;padding:14px;margin:10px auto;max-width:360px;text-align:center}
 #pagamento-box .pg-msg{font-size:.82rem;color:var(--cream);line-height:1.55;margin-bottom:10px}

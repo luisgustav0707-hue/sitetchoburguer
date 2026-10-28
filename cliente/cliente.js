@@ -135,7 +135,7 @@ function aplicarPagamentoOnline(data){
   pagOnlineAtivo = data.pagamentoOnline === true;
   const el = document.getElementById('p-onl');
   if(el) el.style.display = pagOnlineAtivo ? '' : 'none';
-  if(!pagOnlineAtivo && pagamento==='online') limparSelecaoPagamento();
+  if(!pagOnlineAtivo && ehOnline(pagamento)) limparSelecaoPagamento();
 }
 
 function verificarLoja(){
@@ -578,17 +578,25 @@ function selectTipo(t){
   document.getElementById('err-tipo').style.display='none';
   if(t==='retirada'){bairroAtendido=true;freteAtual=0;}else bairroAtendido=false;
 }
+// Forma de pagamento → card na tela. online_* = pago agora pelo Mercado Pago.
+const PAG_CARDS={pix:'p-pix',dinheiro:'p-din',cartao:'p-car',online_pix:'p-opix',online_cartao:'p-ocar'};
+const ehOnline=p=>p==='online_pix'||p==='online_cartao';
+const TXT_ONLINE={
+  online_pix:'Ao tocar em <b>FAZER PEDIDO</b>, aparece o <b>QR code e o Pix copia e cola</b> aqui mesmo. Pagou, seu pedido vai direto para a cozinha — <b>sem precisar mandar comprovante</b>.',
+  online_cartao:'Ao tocar em <b>FAZER PEDIDO</b>, você vai para a página segura do <b>Mercado Pago</b> e paga com <b>cartão de crédito ou débito</b>. Seu pedido vai para a cozinha assim que o pagamento for aprovado.',
+};
 function selectPag(p){
   pagamento=p;
-  ['pix','din','car','onl'].forEach(x=>document.getElementById('p-'+x).classList.toggle('selected',x===p.substring(0,3)));
+  Object.entries(PAG_CARDS).forEach(([k,id])=>document.getElementById(id).classList.toggle('selected',k===p));
   document.getElementById('pix-info').classList.toggle('visible',p==='pix');
-  document.getElementById('online-info').classList.toggle('visible',p==='online');
+  document.getElementById('online-info').classList.toggle('visible',ehOnline(p));
+  document.getElementById('online-info-txt').innerHTML=TXT_ONLINE[p]||'';
   document.getElementById('troco-box').style.display=p==='dinheiro'?'block':'none';
   document.getElementById('err-pag').style.display='none';
 }
 function limparSelecaoPagamento(){
   pagamento=null;
-  ['pix','din','car','onl'].forEach(x=>document.getElementById('p-'+x).classList.remove('selected'));
+  Object.values(PAG_CARDS).forEach(id=>document.getElementById(id).classList.remove('selected'));
   document.getElementById('pix-info').classList.remove('visible');
   document.getElementById('online-info').classList.remove('visible');
   document.getElementById('troco-box').style.display='none';
@@ -775,7 +783,7 @@ function irResumo(){
     if(!bairroAtendido){document.getElementById('aviso-bairro').classList.add('show');document.getElementById('bairros-lista').classList.add('show');renderListaBairros();alert('Selecione seu bairro na lista de bairros atendidos, ou escolha retirada.');return;}
     if(!document.getElementById('f-num').value.trim()){alert('Digite o número do endereço!');return;}
   }
-  if(pagamento==='online' && !pagOnlineAtivo) limparSelecaoPagamento();   // desligado no admin
+  if(ehOnline(pagamento) && !pagOnlineAtivo) limparSelecaoPagamento();   // desligado no admin
   if(!pagamento){document.getElementById('err-pag').style.display='block';return;}
   renderResumo();goStep(3);
 }
@@ -809,7 +817,7 @@ function renderResumo(){
     html+=`<div class="resumo-linha"><span>🛵 Delivery — ${bairro}</span><span>+R$${frete}</span></div>`;
     if(rua) html+=`<div class="resumo-sub">📍 ${rua}, ${num}${comp?', '+comp:''} — ${bairro} — ${cidade}</div>`;
   }else{html+=`<div class="resumo-linha"><span>🏃 Retirada no local</span><span>Grátis</span></div>`;}
-  const pLabel={pix:'PIX',dinheiro:'Dinheiro',cartao:'Cartão na entrega',online:'Pagar online (Pix, crédito ou débito)'};
+  const pLabel={pix:'PIX',dinheiro:'Dinheiro',cartao:'Cartão na entrega',online_pix:'Pix na hora (QR code na tela)',online_cartao:'Cartão online (crédito ou débito)'};
   html+=`<div class="resumo-linha"><span>💳 ${pLabel[pagamento]}</span>${pagamento==='dinheiro'&&valorTroco()?`<span>Troco p/ R$${valorTroco()}</span>`:''}</div>`;
   // Fonte de verdade única: getTotal() já faz subtotal + frete − desconto
   // (e zera o frete quando há cupom de frete grátis). Evita cálculo duplicado.
@@ -861,7 +869,7 @@ async function finalizarPedido(){
     return;
   }
   // Pagamento online: o pedido só é criado depois de pago (ver finalizarPedidoOnline)
-  if(pagamento==='online'){
+  if(ehOnline(pagamento)){
     if(!pagOnlineAtivo){ alert('💳 O pagamento online está indisponível agora. Escolha outra forma de pagamento.'); goStep(2); return; }
     return finalizarPedidoOnline();
   }
@@ -983,21 +991,25 @@ function dadosPedido(){
 }
 
 // ── PAGAMENTO ONLINE (Mercado Pago) ────────────────────────────
-// O pedido vai pra pagamentos/{id} como 'aguardando' e o cliente segue pro
-// Mercado Pago. Quem cria o pedido de verdade (status 'novo', mesmo ID) é a
-// Cloud Function, depois de conferir o pagamento — ver functions/pagamentos.js.
+// O pedido vai pra pagamentos/{id} como 'aguardando'. Pix: o QR code aparece
+// aqui na tela (criarPixMP). Cartão: o cliente segue pro Mercado Pago
+// (criarPagamentoMP). Quem cria o pedido de verdade (status 'novo', mesmo ID)
+// é a Cloud Function, depois de conferir o pagamento — ver functions/pagamentos.js.
 const PG_ID_OK=/^[A-Za-z0-9]{10,40}$/;
 function chamarFn(nome){ return firebase.app().functions('southamerica-east1').httpsCallable(nome); }
-let pagandoOnline=false, unsubPagamento=null, timerVerificar=null, pgAcompanhado=null;
+let pagandoOnline=false, unsubPagamento=null, timerVerificar=null, pgAcompanhado=null, pgTipo='delivery';
+let timerPix=null, telaPix=null, pixCopiaAtual='';
 
 async function finalizarPedidoOnline(){
   if(pagandoOnline) return;
   const dados=dadosPedido();
   if(!(dados.total>0)){ alert('Este pedido está com valor zero. Escolha outra forma de pagamento.'); goStep(2); return; }
+  const pix=pagamento==='online_pix';
   pagandoOnline=true;
   const btn=document.getElementById('btn-fazer-pedido');
   const txtBtn=btn?btn.textContent:'';
-  if(btn){ btn.disabled=true; btn.textContent='⏳ ABRINDO O PAGAMENTO...'; }
+  const liberar=()=>{ if(btn){ btn.disabled=false; btn.textContent=txtBtn; } pagandoOnline=false; };
+  if(btn){ btn.disabled=true; btn.textContent=pix?'⏳ GERANDO O PIX...':'⏳ ABRINDO O PAGAMENTO...'; }
   try{
     const ref=db.collection('pagamentos').doc();
     await ref.set({
@@ -1011,20 +1023,30 @@ async function finalizarPedidoOnline(){
     localStorage.setItem('tcho_pg_pendente',JSON.stringify({id:ref.id,tipo:tipoPedido,em:Date.now()}));
     salvarDadosCliente();
     salvarUltimoPedido();
-    const r=await chamarFn('criarPagamentoMP')({id:ref.id});
-    window.location.href=r.data.url;          // segue pro Mercado Pago
+    if(pix){
+      const r=await chamarFn('criarPixMP')({id:ref.id});
+      liberar();
+      acompanharPagamento(ref.id,tipoPedido,r.data);   // QR code na tela
+    } else {
+      const r=await chamarFn('criarPagamentoMP')({id:ref.id});
+      window.location.href=r.data.url;          // segue pro Mercado Pago
+    }
   }catch(e){
     console.error('Pagamento online:',e);
-    alert('😔 Não conseguimos abrir o pagamento online agora. Tente de novo ou escolha pagar na entrega.');
-    if(btn){ btn.disabled=false; btn.textContent=txtBtn; }
-    pagandoOnline=false;
+    localStorage.removeItem('tcho_pg_pendente');
+    alert(pix ? '😔 Não conseguimos gerar o Pix agora. Tente de novo ou escolha outra forma de pagamento.'
+              : '😔 Não conseguimos abrir o pagamento online agora. Tente de novo ou escolha pagar na entrega.');
+    liberar();
   }
 }
+
+function pararTelaPix(){ clearInterval(timerPix); timerPix=null; telaPix=null; }
 
 // Tela 4 no modo normal (pedido recebido + WhatsApp + rastreamento).
 function resetarTelaSucesso(){
   if(unsubPagamento){ unsubPagamento(); unsubPagamento=null; }
   clearTimeout(timerVerificar);
+  pararTelaPix();
   pgAcompanhado=null;                          // encerra as verificações em andamento
   document.getElementById('success-icon').textContent='🎉';
   document.getElementById('success-title').textContent='PEDIDO RECEBIDO!';
@@ -1033,7 +1055,8 @@ function resetarTelaSucesso(){
   document.getElementById('wa-dica').style.display='';
 }
 
-function mostrarTelaPagamento(estado,id){
+// Deixa a tela 4 pronta pra mostrar o pagamento (sem WhatsApp/rastreamento).
+function prepararTelaPagamento(icone,titulo,msg){
   [1,2,3].forEach(i=>document.getElementById('sc'+i).classList.remove('active'));
   document.getElementById('sc4').classList.add('active');
   document.getElementById('cartFloat').classList.remove('visible');
@@ -1041,54 +1064,137 @@ function mostrarTelaPagamento(estado,id){
   document.getElementById('wa-dica').style.display='none';
   document.getElementById('tracking-box').style.display='none';
   document.getElementById('order-num').textContent='';
+  document.getElementById('success-icon').textContent=icone;
+  document.getElementById('success-title').textContent=titulo;
+  document.getElementById('success-msg').textContent=msg;
   const box=document.getElementById('pagamento-box');
   box.style.display='block';
-  if(estado==='recusado'){
-    document.getElementById('success-icon').textContent='😕';
-    document.getElementById('success-title').textContent='PAGAMENTO NÃO APROVADO';
-    document.getElementById('success-msg').textContent='';
-    box.innerHTML=`<div class="pg-msg">O pagamento não foi aprovado e <b>o pedido ainda não foi feito</b>. Você pode tentar de novo (outro cartão ou Pix) ou escolher pagar na entrega.</div>
+  return box;
+}
+
+const BTN_ENTREGA='<button class="btn-secondary" onclick="mudarFormaPagamento()">💵 DESISTIR E PAGAR NA ENTREGA</button>';
+
+function mostrarTelaPagamento(estado,id){
+  pararTelaPix();
+  let box;
+  if(estado==='carregando'){
+    box=prepararTelaPagamento('⏳','CARREGANDO PAGAMENTO','');
+    box.innerHTML='<div class="pg-msg">Só um instante...</div>';
+  } else if(estado==='recusado'){
+    box=prepararTelaPagamento('😕','PAGAMENTO NÃO APROVADO','');
+    box.innerHTML=`<div class="pg-msg">O cartão não foi aprovado e <b>o pedido ainda não foi feito</b>. Você pode tentar de novo (outro cartão) ou escolher pagar na entrega.</div>
       <button class="btn-primary" onclick="tentarPagarDeNovo('${id}')">💳 TENTAR PAGAR DE NOVO</button>
-      <button class="btn-secondary" onclick="mudarFormaPagamento()">💵 PAGAR NA ENTREGA</button>`;
+      ${BTN_ENTREGA.replace('DESISTIR E ','')}`;
+  } else if(estado==='pix-expirado'){
+    box=prepararTelaPagamento('⌛','O PIX VENCEU','');
+    box.innerHTML=`<div class="pg-msg">O Pix venceu sem pagamento e <b>o pedido ainda não foi feito</b>. Gere um novo Pix ou escolha pagar na entrega.</div>
+      <button class="btn-primary" onclick="gerarNovoPix('${id}',this)">⚡ GERAR NOVO PIX</button>
+      ${BTN_ENTREGA.replace('DESISTIR E ','')}`;
+  } else if(estado==='pix-sem-qr'){
+    box=prepararTelaPagamento('⚡','PAGAR COM PIX','');
+    box.innerHTML=`<div class="pg-msg">O Pix deste pedido ainda não foi gerado.</div>
+      <button class="btn-primary" onclick="gerarNovoPix('${id}',this)">⚡ GERAR PIX</button>
+      ${BTN_ENTREGA}`;
+  } else if(estado==='divergente'){
+    box=prepararTelaPagamento('⚠️','CONFIRA SEU PAGAMENTO','');
+    box.innerHTML=`<div class="pg-msg">Recebemos um pagamento com <b>valor diferente do pedido</b>, por isso ele ainda não foi para a cozinha. Chame a gente no WhatsApp que a gente resolve.</div>
+      <a class="btn-primary" style="display:block;text-decoration:none" href="https://wa.me/${TCHO.loja.whatsapp}" target="_blank" rel="noopener">💬 FALAR NO WHATSAPP</a>`;
   } else {
-    document.getElementById('success-icon').textContent='⏳';
-    document.getElementById('success-title').textContent='CONFIRMANDO PAGAMENTO';
-    document.getElementById('success-msg').textContent='Assim que o Mercado Pago aprovar, seu pedido vai para a cozinha.';
-    box.innerHTML=`<div class="pg-msg">Pagou com Pix? A confirmação costuma levar alguns segundos. <b>Não feche esta página.</b></div>
+    box=prepararTelaPagamento('⏳','CONFIRMANDO PAGAMENTO','Assim que o Mercado Pago aprovar, seu pedido vai para a cozinha.');
+    box.innerHTML=`<div class="pg-msg">A confirmação do cartão costuma levar alguns segundos. <b>Não feche esta página.</b></div>
       <button class="btn-secondary" onclick="tentarPagarDeNovo('${id}')">↩ VOLTAR PARA O PAGAMENTO</button>
-      <button class="btn-secondary" onclick="mudarFormaPagamento()">💵 DESISTIR E PAGAR NA ENTREGA</button>`;
+      ${BTN_ENTREGA}`;
   }
   window.scrollTo(0,0);
 }
 
+// QR code + copia e cola + contagem até vencer.
+function mostrarTelaPix(id,pix,total){
+  if(telaPix===pix.mpId) return;               // já está na tela (evita piscar)
+  pararTelaPix();
+  const box=prepararTelaPagamento('⚡','PAGUE COM PIX',total?`Total: R$${total}`:'');
+  telaPix=pix.mpId;
+  pixCopiaAtual=pix.qr;
+  const qrOk=/^[A-Za-z0-9+/=]+$/.test(pix.qrBase64||'');
+  box.innerHTML=`<div class="pg-msg">Pagou, seu pedido vai <b>direto para a cozinha</b>. Não precisa mandar comprovante.</div>
+    ${qrOk?`<img class="pix-qr" src="data:image/png;base64,${pix.qrBase64}" alt="QR code do Pix">`:''}
+    <div class="pix-copia" id="pix-copia"></div>
+    <button class="btn-primary" id="btn-copiar-pix-mp" onclick="copiarPixCopiaECola()">📋 COPIAR CÓDIGO PIX</button>
+    <div class="pg-sub">No app do banco, escolha <b>Pix → Pix Copia e Cola</b> e cole o código${qrOk?' (ou escaneie o QR code)':''}.<br>Vence em <b id="pix-tempo">--:--</b></div>
+    <div class="pg-aguarde">⏳ Aguardando o pagamento...</div>
+    ${BTN_ENTREGA}`;
+  document.getElementById('pix-copia').textContent=pix.qr;
+  const tick=()=>{
+    const s=Math.max(0,Math.round((pix.venceMs-Date.now())/1000));
+    const el=document.getElementById('pix-tempo');
+    if(el) el.textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+    if(s<=0) mostrarTelaPagamento('pix-expirado',id);
+  };
+  tick();
+  if(telaPix) timerPix=setInterval(tick,1000);
+  window.scrollTo(0,0);
+}
+
+function copiarPixCopiaECola(){
+  const btn=document.getElementById('btn-copiar-pix-mp');
+  const feedback=()=>{
+    if(!btn) return;
+    btn.textContent='✓ CÓDIGO COPIADO!';
+    setTimeout(()=>{ btn.textContent='📋 COPIAR CÓDIGO PIX'; },1800);
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(pixCopiaAtual).then(feedback).catch(()=>copiarFallback(pixCopiaAtual,feedback));
+  } else {
+    copiarFallback(pixCopiaAtual,feedback);
+  }
+}
+
 // Acompanha pagamentos/{id} até virar pedido. Pergunta também ao Mercado Pago
 // de tempos em tempos (verificarPagamentoMP), caso o aviso automático atrase.
-function acompanharPagamento(id,tipo){
+// pixInicial: o Pix que acabou de ser gerado (mostra sem esperar o Firestore).
+function acompanharPagamento(id,tipo,pixInicial){
   resetarTelaSucesso();
-  mostrarTelaPagamento('aguardando',id);
-  pgAcompanhado=id;
-  let tentativas=0;
+  pgAcompanhado=id; pgTipo=tipo||'delivery';
+  let forma=pixInicial?'pix':null, pixAtual=pixInicial||null, tentativas=0;
+  if(pixInicial) mostrarTelaPix(id,pixInicial,pixInicial.total);
+  else mostrarTelaPagamento('carregando',id);
+  // Cartão: algumas vezes logo na volta do Mercado Pago. Pix: a cada 10 s
+  // enquanto o QR vale (o aviso do Mercado Pago costuma chegar antes).
   const verificar=()=>{
     if(pgAcompanhado!==id) return;             // já aprovado ou saiu da tela
-    if(++tentativas<12) timerVerificar=setTimeout(verificar,tentativas<4?4000:10000);
-    chamarFn('verificarPagamentoMP')({id}).catch(()=>{});
+    tentativas++;
+    const pix=forma==='pix';
+    const continuar=pix ? (pixAtual && Date.now()<pixAtual.venceMs+60000) : tentativas<12;
+    if(continuar) timerVerificar=setTimeout(verificar,pix?10000:(tentativas<4?4000:10000));
+    if(!(pix && document.visibilityState==='hidden')) chamarFn('verificarPagamentoMP')({id}).catch(()=>{});
   };
-  verificar();
+  timerVerificar=setTimeout(verificar,pixInicial?10000:0);
   unsubPagamento=db.collection('pagamentos').doc(id).onSnapshot(doc=>{
-    if(!doc.exists){ localStorage.removeItem('tcho_pg_pendente'); resetarTelaSucesso(); goStep(1); return; }
-    const d=doc.data();
+    const d=doc.exists?doc.data():null;
+    if(!d || d.status==='cancelado' || d.status==='pago-apos-cancelar'){
+      localStorage.removeItem('tcho_pg_pendente'); resetarTelaSucesso(); goStep(1); return;
+    }
+    forma=(d.pedido&&d.pedido.pag)==='online_pix'?'pix':'cartao';
+    if(d.pix) pixAtual=d.pix;
     if(d.status==='pago'){
       resetarTelaSucesso();
       localStorage.removeItem('tcho_pg_pendente');
-      localStorage.setItem('tcho_pedido_atual',JSON.stringify({docId:id,tipo,num:d.pedidoNum||''}));
+      localStorage.setItem('tcho_pedido_atual',JSON.stringify({docId:id,tipo:pgTipo,num:d.pedidoNum||''}));
       cartBurguers={};cartExtras={};cupomAtual=null;descontoAtual=0;
       document.getElementById('order-num').textContent=d.pedidoNum||'';
       document.getElementById('success-icon').textContent='✅';
       document.getElementById('success-title').textContent='PAGAMENTO APROVADO!';
       document.getElementById('success-msg').textContent='Seu pedido já foi para a cozinha. Acompanhe abaixo 👇';
       const btnRep=document.getElementById('btn-repetir-sc4'); if(btnRep) btnRep.style.display='block';
-      iniciarRastreamento(id,tipo);
-    } else if(d.status==='recusado'||d.status==='divergente'){
+      iniciarRastreamento(id,pgTipo);
+    } else if(d.status==='divergente'){
+      mostrarTelaPagamento('divergente',id);
+    } else if(forma==='pix'){
+      if(d.status==='recusado') mostrarTelaPagamento('pix-expirado',id);
+      else if(!pixAtual) mostrarTelaPagamento('pix-sem-qr',id);
+      else if(pixAtual.venceMs<=Date.now()) mostrarTelaPagamento('pix-expirado',id);
+      else mostrarTelaPix(id,pixAtual,d.total);
+    } else if(d.status==='recusado'){
       mostrarTelaPagamento('recusado',id);
     } else {
       mostrarTelaPagamento('aguardando',id);
@@ -1106,13 +1212,45 @@ async function tentarPagarDeNovo(id){
   }
 }
 
-// Desiste do online: volta pro checkout com o mesmo carrinho.
-function mudarFormaPagamento(){
+async function gerarNovoPix(id,btn){
+  if(btn){ btn.disabled=true; btn.textContent='⏳ GERANDO...'; }
+  try{
+    const r=await chamarFn('criarPixMP')({id});
+    acompanharPagamento(id,pgTipo,r.data);
+  }catch(e){
+    console.error('Pix:',e);
+    alert('😔 Não conseguimos gerar o Pix agora. Tente de novo em instantes ou escolha pagar na entrega.');
+    if(btn){ btn.disabled=false; btn.textContent='⚡ GERAR NOVO PIX'; }
+  }
+}
+
+// Desiste do online: cancela a cobrança (pra um Pix pago depois não virar
+// pedido duplicado) e volta pro checkout com o mesmo carrinho.
+async function mudarFormaPagamento(){
+  const id=pgAcompanhado, tipo=pgTipo;
+  if(id){
+    resetarTelaSucesso();                      // para de ouvir: o 'cancelado' não deve mandar pro cardápio
+    prepararTelaPagamento('⏳','CANCELANDO...','').innerHTML='<div class="pg-msg">Cancelando o pagamento online...</div>';
+    try{
+      const r=await chamarFn('cancelarPagamentoMP')({id});
+      if(r.data.status==='pago'){
+        alert('✅ Seu pagamento já foi aprovado! O pedido foi para a cozinha.');
+        acompanharPagamento(id,tipo);
+        return;
+      }
+    }catch(e){
+      console.error('Cancelar pagamento:',e);
+      if(!confirm('Não conseguimos cancelar o pagamento online agora.\n\nSe você JÁ PAGOU, toque em Cancelar e aguarde a confirmação.\nSe NÃO pagou, toque em OK para pagar na entrega.')){
+        acompanharPagamento(id,tipo);
+        return;
+      }
+    }
+  }
   resetarTelaSucesso();
   localStorage.removeItem('tcho_pg_pendente');
   repetirPedido();                             // recarrega o carrinho salvo e vai pro passo 2
   if(getCount()===0) goStep(1);
-  limparSelecaoPagamento();                    // depois: o passo 2 restaura a forma salva ('online')
+  limparSelecaoPagamento();                    // depois: o passo 2 restaura a forma salva (online)
 }
 
 // Ao abrir o site: voltou do Mercado Pago (?pg=ID) ou tem pagamento recente
@@ -1361,7 +1499,7 @@ function preencherDadosSalvos(){
   if(!s||!s.nome) return;
   document.getElementById('f-nome').value=s.nome;
   document.getElementById('f-tel').value=s.tel||'';
-  if(s.pag && (s.pag!=='online' || pagOnlineAtivo)) selectPag(s.pag);   // online só se estiver ligado
+  if(s.pag && PAG_CARDS[s.pag] && (!ehOnline(s.pag) || pagOnlineAtivo)) selectPag(s.pag);   // online só se estiver ligado
   if(s.tipo) selectTipo(s.tipo);
   if(s.tipo==='delivery'&&s.bairro&&modalidades.delivery){
     document.getElementById('f-cep').value=s.cep||'';

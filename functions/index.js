@@ -318,5 +318,7 @@ exports.enfileirarImpressao = onDocumentCreated(
 // ═══════════════════════════════════════════════════════════════
 const pagamentos = require('./pagamentos');
 exports.criarPagamentoMP = pagamentos.criarPagamentoMP;
+exports.criarPixMP = pagamentos.criarPixMP;
+exports.cancelarPagamentoMP = pagamentos.cancelarPagamentoMP;
 exports.webhookMercadoPago = pagamentos.webhookMercadoPago;
 exports.verificarPagamentoMP = pagamentos.verificarPagamentoMP;

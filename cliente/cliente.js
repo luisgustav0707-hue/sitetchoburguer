@@ -129,11 +129,21 @@ function verCardapioFechado(){
   window.scrollTo(0,0);
 }
 
+// Pagamento online só aparece quando o dono liga no admin.
+let pagOnlineAtivo = false;
+function aplicarPagamentoOnline(data){
+  pagOnlineAtivo = data.pagamentoOnline === true;
+  const el = document.getElementById('p-onl');
+  if(el) el.style.display = pagOnlineAtivo ? '' : 'none';
+  if(!pagOnlineAtivo && pagamento==='online') limparSelecaoPagamento();
+}
+
 function verificarLoja(){
   db.collection('config').doc('operacao').onSnapshot(doc => {
     const data = doc.exists ? doc.data() : {};
     aplicarEstadoLoja(data);
     aplicarModalidades(data);
+    aplicarPagamentoOnline(data);
     if(data.prazoMin) prazoEntrega.min = data.prazoMin;
     if(data.prazoMax) prazoEntrega.max = data.prazoMax;
     atualizarPrazoBadge();
@@ -197,7 +207,8 @@ function produtoDisponivel(id){
 
 // Baixa automática: desconta do estoque os itens do carrinho (só os em modo quantidade).
 // Usa transação pra ser seguro mesmo com vários clientes comprando ao mesmo tempo.
-function baixarEstoque(){
+// Quanto cada produto do carrinho consome do estoque ({id: qtd}).
+function calcularConsumo(){
   const consumo={};
   Object.entries(cartBurguers).forEach(([id,insts])=>{
     consumo[id]=(consumo[id]||0)+insts.length;
@@ -212,6 +223,10 @@ function baixarEstoque(){
     });
   });
   Object.entries(cartExtras).forEach(([id,v])=>{consumo[id]=(consumo[id]||0)+(Array.isArray(v)?v.length:v);});
+  return consumo;
+}
+function baixarEstoque(){
+  const consumo=calcularConsumo();
   if(!Object.keys(consumo).length) return;
   const ref=db.collection('cardapio').doc('estoque');
   db.runTransaction(async t=>{
@@ -565,10 +580,18 @@ function selectTipo(t){
 }
 function selectPag(p){
   pagamento=p;
-  ['pix','din','car'].forEach(x=>document.getElementById('p-'+x).classList.toggle('selected',x===p.substring(0,3)));
+  ['pix','din','car','onl'].forEach(x=>document.getElementById('p-'+x).classList.toggle('selected',x===p.substring(0,3)));
   document.getElementById('pix-info').classList.toggle('visible',p==='pix');
+  document.getElementById('online-info').classList.toggle('visible',p==='online');
   document.getElementById('troco-box').style.display=p==='dinheiro'?'block':'none';
   document.getElementById('err-pag').style.display='none';
+}
+function limparSelecaoPagamento(){
+  pagamento=null;
+  ['pix','din','car','onl'].forEach(x=>document.getElementById('p-'+x).classList.remove('selected'));
+  document.getElementById('pix-info').classList.remove('visible');
+  document.getElementById('online-info').classList.remove('visible');
+  document.getElementById('troco-box').style.display='none';
 }
 // Copia a chave PIX para o cliente colar no app do banco
 function copiarChavePix(){
@@ -752,6 +775,7 @@ function irResumo(){
     if(!bairroAtendido){document.getElementById('aviso-bairro').classList.add('show');document.getElementById('bairros-lista').classList.add('show');renderListaBairros();alert('Selecione seu bairro na lista de bairros atendidos, ou escolha retirada.');return;}
     if(!document.getElementById('f-num').value.trim()){alert('Digite o número do endereço!');return;}
   }
+  if(pagamento==='online' && !pagOnlineAtivo) limparSelecaoPagamento();   // desligado no admin
   if(!pagamento){document.getElementById('err-pag').style.display='block';return;}
   renderResumo();goStep(3);
 }
@@ -785,8 +809,8 @@ function renderResumo(){
     html+=`<div class="resumo-linha"><span>🛵 Delivery — ${bairro}</span><span>+R$${frete}</span></div>`;
     if(rua) html+=`<div class="resumo-sub">📍 ${rua}, ${num}${comp?', '+comp:''} — ${bairro} — ${cidade}</div>`;
   }else{html+=`<div class="resumo-linha"><span>🏃 Retirada no local</span><span>Grátis</span></div>`;}
-  const pLabel={pix:'PIX',dinheiro:'Dinheiro',cartao:'Cartão na entrega'};
-  html+=`<div class="resumo-linha"><span>💳 ${pLabel[pagamento]}</span></div>`;
+  const pLabel={pix:'PIX',dinheiro:'Dinheiro',cartao:'Cartão na entrega',online:'Pagar online (Pix, crédito ou débito)'};
+  html+=`<div class="resumo-linha"><span>💳 ${pLabel[pagamento]}</span>${pagamento==='dinheiro'&&valorTroco()?`<span>Troco p/ R$${valorTroco()}</span>`:''}</div>`;
   // Fonte de verdade única: getTotal() já faz subtotal + frete − desconto
   // (e zera o frete quando há cupom de frete grátis). Evita cálculo duplicado.
   const total=getTotal();
@@ -817,6 +841,7 @@ function linkWhatsAppPedido(pedido){
   if(pedido.desconto) L.push(`Desconto: -R$${pedido.desconto}${pedido.cupom?' ('+pedido.cupom+')':''}`);
   L.push(`💰 *TOTAL: R$${pedido.total}*`);
   L.push(`💳 Pagamento: ${pedido.pag||'-'}`);
+  if(pedido.troco) L.push(`💵 Troco para: R$${pedido.troco}`);
   return `https://wa.me/${TCHO.loja.whatsapp}?text=${encodeURIComponent(L.join('\n'))}`;
 }
 
@@ -835,6 +860,20 @@ async function finalizarPedido(){
     desmarcarTipo(); goStep(2);
     return;
   }
+  // Pagamento online: o pedido só é criado depois de pago (ver finalizarPedidoOnline)
+  if(pagamento==='online'){
+    if(!pagOnlineAtivo){ alert('💳 O pagamento online está indisponível agora. Escolha outra forma de pagamento.'); goStep(2); return; }
+    return finalizarPedidoOnline();
+  }
+  if(pagamento==='dinheiro'){
+    const troco=valorTroco(), total=Math.max(0,getTotal());
+    if(troco>0 && troco<total){
+      alert(`💵 O troco precisa ser para um valor maior que o total (R$${total}). Corrija ou deixe em branco se não precisar de troco.`);
+      goStep(2); setTimeout(()=>document.getElementById('f-troco')?.focus(),300);
+      return;
+    }
+  }
+  resetarTelaSucesso();
   // Abre a janela do WhatsApp JÁ (dentro do clique, em branco) pra o navegador
   // não bloquear o popup — a URL é definida depois. Assim dá pra usar o contador
   // COMPARTILHADO do Firestore (numeração sequencial e global), sem perder o popup.
@@ -858,19 +897,7 @@ async function finalizarPedido(){
 
   const pedido={
     id:numOrdem, num:`#${num}`,
-    nome:document.getElementById('f-nome').value,
-    tel:document.getElementById('f-tel').value,
-    tipo:tipoPedido,
-    bairro:tipoPedido==='delivery'?document.getElementById('f-bairro').value:'',
-    endereco:tipoPedido==='delivery'?`${document.getElementById('f-rua').value}, ${document.getElementById('f-num').value}${document.getElementById('f-comp').value?', '+document.getElementById('f-comp').value:''}`:'' ,
-    cidade:tipoPedido==='delivery'?document.getElementById('f-cidade').value:'',
-    pag:pagamento,
-    frete:tipoPedido==='delivery'?freteAtual:0,
-    desconto:descontoAtual,
-    cupom:cupomAtual?.codigo||'',
-    obs:document.getElementById('f-obs').value,
-    itens:montarItensTexto(),
-    total:Math.max(0,getTotal()),
+    ...dadosPedido(),
     status:'novo',
     hora:firebase.firestore.FieldValue.serverTimestamp(),
     horaStr:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
@@ -926,6 +953,180 @@ async function finalizarPedido(){
   const btnRep=document.getElementById('btn-repetir-sc4');
   if(btnRep) btnRep.style.display='block';
   window.scrollTo(0,0);
+}
+
+// Dados do pedido que vêm do formulário/carrinho (comuns ao pedido normal e
+// ao pago online).
+// "Troco para quanto?" — 0 quando vazio ou inválido
+function valorTroco(){
+  const v=parseFloat(document.getElementById('f-troco').value);
+  return v>0?Math.round(v*100)/100:0;
+}
+function dadosPedido(){
+  const total=Math.max(0,getTotal());     // getTotal() também atualiza descontoAtual
+  return {
+    nome:document.getElementById('f-nome').value,
+    tel:document.getElementById('f-tel').value,
+    tipo:tipoPedido,
+    bairro:tipoPedido==='delivery'?document.getElementById('f-bairro').value:'',
+    endereco:tipoPedido==='delivery'?`${document.getElementById('f-rua').value}, ${document.getElementById('f-num').value}${document.getElementById('f-comp').value?', '+document.getElementById('f-comp').value:''}`:'' ,
+    cidade:tipoPedido==='delivery'?document.getElementById('f-cidade').value:'',
+    pag:pagamento,
+    troco:pagamento==='dinheiro'?valorTroco():0,
+    frete:tipoPedido==='delivery'?freteAtual:0,
+    desconto:descontoAtual,
+    cupom:cupomAtual?.codigo||'',
+    obs:document.getElementById('f-obs').value,
+    itens:montarItensTexto(),
+    total,
+  };
+}
+
+// ── PAGAMENTO ONLINE (Mercado Pago) ────────────────────────────
+// O pedido vai pra pagamentos/{id} como 'aguardando' e o cliente segue pro
+// Mercado Pago. Quem cria o pedido de verdade (status 'novo', mesmo ID) é a
+// Cloud Function, depois de conferir o pagamento — ver functions/pagamentos.js.
+const PG_ID_OK=/^[A-Za-z0-9]{10,40}$/;
+function chamarFn(nome){ return firebase.app().functions('southamerica-east1').httpsCallable(nome); }
+let pagandoOnline=false, unsubPagamento=null, timerVerificar=null, pgAcompanhado=null;
+
+async function finalizarPedidoOnline(){
+  if(pagandoOnline) return;
+  const dados=dadosPedido();
+  if(!(dados.total>0)){ alert('Este pedido está com valor zero. Escolha outra forma de pagamento.'); goStep(2); return; }
+  pagandoOnline=true;
+  const btn=document.getElementById('btn-fazer-pedido');
+  const txtBtn=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='⏳ ABRINDO O PAGAMENTO...'; }
+  try{
+    const ref=db.collection('pagamentos').doc();
+    await ref.set({
+      status:'aguardando',
+      pedido:dados,
+      total:dados.total,
+      consumo:calcularConsumo(),
+      cupomId:cupomAtual?._id||'',
+      criadoEm:firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    localStorage.setItem('tcho_pg_pendente',JSON.stringify({id:ref.id,tipo:tipoPedido,em:Date.now()}));
+    salvarDadosCliente();
+    salvarUltimoPedido();
+    const r=await chamarFn('criarPagamentoMP')({id:ref.id});
+    window.location.href=r.data.url;          // segue pro Mercado Pago
+  }catch(e){
+    console.error('Pagamento online:',e);
+    alert('😔 Não conseguimos abrir o pagamento online agora. Tente de novo ou escolha pagar na entrega.');
+    if(btn){ btn.disabled=false; btn.textContent=txtBtn; }
+    pagandoOnline=false;
+  }
+}
+
+// Tela 4 no modo normal (pedido recebido + WhatsApp + rastreamento).
+function resetarTelaSucesso(){
+  if(unsubPagamento){ unsubPagamento(); unsubPagamento=null; }
+  clearTimeout(timerVerificar);
+  pgAcompanhado=null;                          // encerra as verificações em andamento
+  document.getElementById('success-icon').textContent='🎉';
+  document.getElementById('success-title').textContent='PEDIDO RECEBIDO!';
+  document.getElementById('pagamento-box').style.display='none';
+  document.getElementById('tracking-box').style.display='';
+  document.getElementById('wa-dica').style.display='';
+}
+
+function mostrarTelaPagamento(estado,id){
+  [1,2,3].forEach(i=>document.getElementById('sc'+i).classList.remove('active'));
+  document.getElementById('sc4').classList.add('active');
+  document.getElementById('cartFloat').classList.remove('visible');
+  document.getElementById('btn-wa-pedido').style.display='none';
+  document.getElementById('wa-dica').style.display='none';
+  document.getElementById('tracking-box').style.display='none';
+  document.getElementById('order-num').textContent='';
+  const box=document.getElementById('pagamento-box');
+  box.style.display='block';
+  if(estado==='recusado'){
+    document.getElementById('success-icon').textContent='😕';
+    document.getElementById('success-title').textContent='PAGAMENTO NÃO APROVADO';
+    document.getElementById('success-msg').textContent='';
+    box.innerHTML=`<div class="pg-msg">O pagamento não foi aprovado e <b>o pedido ainda não foi feito</b>. Você pode tentar de novo (outro cartão ou Pix) ou escolher pagar na entrega.</div>
+      <button class="btn-primary" onclick="tentarPagarDeNovo('${id}')">💳 TENTAR PAGAR DE NOVO</button>
+      <button class="btn-secondary" onclick="mudarFormaPagamento()">💵 PAGAR NA ENTREGA</button>`;
+  } else {
+    document.getElementById('success-icon').textContent='⏳';
+    document.getElementById('success-title').textContent='CONFIRMANDO PAGAMENTO';
+    document.getElementById('success-msg').textContent='Assim que o Mercado Pago aprovar, seu pedido vai para a cozinha.';
+    box.innerHTML=`<div class="pg-msg">Pagou com Pix? A confirmação costuma levar alguns segundos. <b>Não feche esta página.</b></div>
+      <button class="btn-secondary" onclick="tentarPagarDeNovo('${id}')">↩ VOLTAR PARA O PAGAMENTO</button>
+      <button class="btn-secondary" onclick="mudarFormaPagamento()">💵 DESISTIR E PAGAR NA ENTREGA</button>`;
+  }
+  window.scrollTo(0,0);
+}
+
+// Acompanha pagamentos/{id} até virar pedido. Pergunta também ao Mercado Pago
+// de tempos em tempos (verificarPagamentoMP), caso o aviso automático atrase.
+function acompanharPagamento(id,tipo){
+  resetarTelaSucesso();
+  mostrarTelaPagamento('aguardando',id);
+  pgAcompanhado=id;
+  let tentativas=0;
+  const verificar=()=>{
+    if(pgAcompanhado!==id) return;             // já aprovado ou saiu da tela
+    if(++tentativas<12) timerVerificar=setTimeout(verificar,tentativas<4?4000:10000);
+    chamarFn('verificarPagamentoMP')({id}).catch(()=>{});
+  };
+  verificar();
+  unsubPagamento=db.collection('pagamentos').doc(id).onSnapshot(doc=>{
+    if(!doc.exists){ localStorage.removeItem('tcho_pg_pendente'); resetarTelaSucesso(); goStep(1); return; }
+    const d=doc.data();
+    if(d.status==='pago'){
+      resetarTelaSucesso();
+      localStorage.removeItem('tcho_pg_pendente');
+      localStorage.setItem('tcho_pedido_atual',JSON.stringify({docId:id,tipo,num:d.pedidoNum||''}));
+      cartBurguers={};cartExtras={};cupomAtual=null;descontoAtual=0;
+      document.getElementById('order-num').textContent=d.pedidoNum||'';
+      document.getElementById('success-icon').textContent='✅';
+      document.getElementById('success-title').textContent='PAGAMENTO APROVADO!';
+      document.getElementById('success-msg').textContent='Seu pedido já foi para a cozinha. Acompanhe abaixo 👇';
+      const btnRep=document.getElementById('btn-repetir-sc4'); if(btnRep) btnRep.style.display='block';
+      iniciarRastreamento(id,tipo);
+    } else if(d.status==='recusado'||d.status==='divergente'){
+      mostrarTelaPagamento('recusado',id);
+    } else {
+      mostrarTelaPagamento('aguardando',id);
+    }
+  }, e=>console.error('Pagamento erro:',e));
+}
+
+async function tentarPagarDeNovo(id){
+  try{
+    const r=await chamarFn('criarPagamentoMP')({id});
+    window.location.href=r.data.url;
+  }catch(e){
+    console.error('Pagamento online:',e);
+    alert('😔 Não conseguimos abrir o pagamento agora. Tente de novo em instantes ou escolha pagar na entrega.');
+  }
+}
+
+// Desiste do online: volta pro checkout com o mesmo carrinho.
+function mudarFormaPagamento(){
+  resetarTelaSucesso();
+  localStorage.removeItem('tcho_pg_pendente');
+  repetirPedido();                             // recarrega o carrinho salvo e vai pro passo 2
+  if(getCount()===0) goStep(1);
+  limparSelecaoPagamento();                    // depois: o passo 2 restaura a forma salva ('online')
+}
+
+// Ao abrir o site: voltou do Mercado Pago (?pg=ID) ou tem pagamento recente
+// em andamento (ex.: foi no app do banco pagar o Pix e voltou).
+function retomarPagamentoOnline(){
+  const q=new URLSearchParams(location.search);
+  let pend=null; try{ pend=JSON.parse(localStorage.getItem('tcho_pg_pendente')||'null'); }catch(e){}
+  const daUrl=q.get('pg');
+  if(daUrl) history.replaceState(null,'',location.pathname);
+  const recente=pend && pend.id && (Date.now()-(pend.em||0)) < 40*60000;
+  const id=daUrl || (recente ? pend.id : null);
+  if(!id || !PG_ID_OK.test(id)){ if(pend && !recente) localStorage.removeItem('tcho_pg_pendente'); return; }
+  const tipo=(pend && pend.id===id && pend.tipo) || 'delivery';
+  acompanharPagamento(id,tipo);
 }
 
 // ── RASTREAMENTO DO PEDIDO ─────────────────────────────────────
@@ -991,6 +1192,7 @@ function mostrarBotaoAcompanhar(){
 function acompanharPedido(){
   const saved=JSON.parse(localStorage.getItem('tcho_pedido_atual')||'null');
   if(!saved||!saved.docId){ alert('Você ainda não tem um pedido para acompanhar.'); return; }
+  resetarTelaSucesso();
   document.getElementById('order-num').textContent=saved.num||'';
   const sucEl=document.getElementById('success-msg');
   if(sucEl) sucEl.textContent='Acompanhe seu pedido em tempo real. '+(saved.tipo==='delivery'?'🛵':'🍔');
@@ -1159,7 +1361,7 @@ function preencherDadosSalvos(){
   if(!s||!s.nome) return;
   document.getElementById('f-nome').value=s.nome;
   document.getElementById('f-tel').value=s.tel||'';
-  if(s.pag) selectPag(s.pag);
+  if(s.pag && (s.pag!=='online' || pagOnlineAtivo)) selectPag(s.pag);   // online só se estiver ligado
   if(s.tipo) selectTipo(s.tipo);
   if(s.tipo==='delivery'&&s.bairro&&modalidades.delivery){
     document.getElementById('f-cep').value=s.cep||'';
@@ -1191,6 +1393,7 @@ function limparDadosSalvos(){
   ['p-pix','p-din','p-car'].forEach(id=>document.getElementById(id).classList.remove('selected'));
   document.getElementById('pix-info').classList.remove('visible');
   document.getElementById('troco-box').style.display='none';
+  document.getElementById('f-troco').value='';
   document.getElementById('campos-endereco').style.display='none';
   document.getElementById('cep-msg').textContent='';
   document.getElementById('cep-msg').className='cep-msg';
@@ -1258,6 +1461,7 @@ verificarLoja();
 // Render imediato com localStorage, depois sincroniza do Firestore
 renderBurguers();renderExtras();renderCustomCategorias();
 mostrarBannerRepetir();
+retomarPagamentoOnline();
 mostrarBotaoAcompanhar();   // mostra "Acompanhar meu pedido" se houver pedido ativo
 // Pedido ativo? Retoma o acompanhamento automaticamente, mesmo se o cliente
 // fechou a página e voltou depois (a tela de rastreamento "fica fixa").

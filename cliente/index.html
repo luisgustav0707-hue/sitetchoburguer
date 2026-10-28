@@ -178,11 +178,15 @@
 
   <div class="sec-mini">💳 Pagamento</div>
   <div class="pag-options">
+    <div class="pag-card pag-online" id="p-onl" onclick="selectPag('online')" style="display:none"><div class="pag-icon">💳</div><div class="pag-label">Pagar agora online</div><div class="pag-sub">Pix, crédito ou débito · Mercado Pago</div></div>
     <div class="pag-card" id="p-pix" onclick="selectPag('pix')"><div class="pag-icon">📱</div><div class="pag-label">PIX</div></div>
     <div class="pag-card" id="p-din" onclick="selectPag('dinheiro')"><div class="pag-icon">💵</div><div class="pag-label">Dinheiro</div></div>
     <div class="pag-card" id="p-car" onclick="selectPag('cartao')"><div class="pag-icon">💳</div><div class="pag-label">Cartão</div></div>
   </div>
   <div id="err-pag" class="err-inline">⚠ Selecione a forma de pagamento</div>
+  <div class="pix-box" id="online-info" style="border-style:solid;text-align:left">
+    <div style="font-size:.76rem;color:var(--cream);line-height:1.6">Ao tocar em <b>FAZER PEDIDO</b>, você vai para a página segura do <b>Mercado Pago</b> e paga com <b>Pix, cartão de crédito ou débito</b>. Seu pedido vai para a cozinha assim que o pagamento for aprovado.</div>
+  </div>
   <div class="pix-box" id="pix-info">
     <p style="font-size:.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Chave PIX (CNPJ)</p>
     <div class="pix-key" id="pix-key-val">63.633.508/0001-47</div>
@@ -208,15 +212,15 @@
   <div class="section-title">Resumo do pedido</div>
   <div class="resumo-box" id="resumo-content"></div>
   <button class="btn-secondary" onclick="goStep(1)">➕ ADICIONAR MAIS ITENS</button>
-  <button class="btn-primary" onclick="finalizarPedido()">✅ FAZER PEDIDO</button>
+  <button class="btn-primary" id="btn-fazer-pedido" onclick="finalizarPedido()">✅ FAZER PEDIDO</button>
   <button class="btn-secondary" onclick="goStep(2)">← VOLTAR</button>
 </div>
 
 <!-- TELA 4: SUCESSO + RASTREAMENTO -->
 <div class="screen" id="sc4">
   <div class="success-box">
-    <div class="success-icon">🎉</div>
-    <div class="success-title">PEDIDO RECEBIDO!</div>
+    <div class="success-icon" id="success-icon">🎉</div>
+    <div class="success-title" id="success-title">PEDIDO RECEBIDO!</div>
     <div class="order-num" id="order-num">#001</div>
     <p class="success-sub" id="success-msg"></p>
 
@@ -224,7 +228,10 @@
     <a id="btn-wa-pedido" href="#" target="_blank" rel="noopener"
        style="display:inline-flex;align-items:center;justify-content:center;gap:8px;margin:6px auto 4px;background:#25d366;color:#000;font-weight:800;font-size:1rem;padding:14px 22px;border-radius:30px;text-decoration:none;letter-spacing:.5px;max-width:340px;width:100%;box-shadow:0 4px 14px rgba(37,211,102,.35)">
        📲 ENVIAR MEU PEDIDO NO WHATSAPP</a>
-    <p style="color:var(--muted);font-size:.72rem;margin:2px 0 6px">Toque no botão acima e envie a mensagem para confirmar seu pedido.</p>
+    <p id="wa-dica" style="color:var(--muted);font-size:.72rem;margin:2px 0 6px">Toque no botão acima e envie a mensagem para confirmar seu pedido.</p>
+
+    <!-- PAGAMENTO ONLINE: aguardando / recusado (preenchido por JS) -->
+    <div id="pagamento-box" style="display:none"></div>
 
     <!-- RASTREAMENTO EM TEMPO REAL -->
     <div class="tracking-box" id="tracking-box">
@@ -262,6 +269,7 @@
 <!-- SCRIPTS -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
 <!-- Carrega os scripts locais sempre na versão mais recente (anti-cache automático).
      O ?v= muda a cada carregamento, então o navegador nunca usa um arquivo antigo. -->
 <script>

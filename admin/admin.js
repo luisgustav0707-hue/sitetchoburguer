@@ -329,6 +329,7 @@ function salvarConfig(){
     mesaAtiva:document.getElementById('cfg-mesa')?.checked||false,
     autoAceitar:autoAceitar,
     autoImprimir:document.getElementById('cfg-print').checked,
+    pagamentoOnline:document.getElementById('cfg-pag-online')?.checked||false,
     impressaoModo:document.getElementById('cfg-impressao-app')?.checked?'app':'navegador',
     prazoMin:parseInt(document.getElementById('cfg-prazo-min').value)||30,
     prazoMax:parseInt(document.getElementById('cfg-prazo-max').value)||45,
@@ -1518,6 +1519,8 @@ function cupomEntrega(p){
     ${enderecoBloco}
     <div class="line"></div>
     <div class="row"><span>Pag:</span><span>${p.pag}</span></div>
+    ${p.pagamentoOnline?'<div class="c b" style="font-size:13px;margin-top:3px">*** PAGO - NÃO COBRAR ***</div>':''}
+    ${p.troco&&(p.pag||'').toLowerCase()==='dinheiro'?`<div class="row b"><span>Troco p/:</span><span>R$${p.troco} (levar R$${Math.max(0,p.troco-(p.total||0))})</span></div>`:''}
     <div class="line"></div>
     ${p.itens.map(i=>`<div style="margin:2px 0">• ${i}</div>`).join('')}
     ${obsBloco}
@@ -1647,9 +1650,15 @@ function mostrarCardFinalizado(p){
 function fecharCardFinalizado(){
   document.getElementById('modal-finalizado').style.display='none';
 }
+// Pedido pago pelo Mercado Pago: cancelar aqui NÃO devolve o dinheiro.
+function avisoEstorno(p){
+  return p&&p.pagamentoOnline
+    ? `\n\n⚠️ Este pedido foi PAGO ONLINE (R$${p.pagamentoOnline.valor}). Faça a devolução no app/site do Mercado Pago (pagamento nº ${p.pagamentoOnline.mpId}).`
+    : '';
+}
 function cancelar(id){
   const p=pedidos.find(x=>x._id===id);
-  if(!p||!confirm(`Cancelar pedido ${p.num||('#'+p.id)}?`))return;
+  if(!p||!confirm(`Cancelar pedido ${p.num||('#'+p.id)}?${avisoEstorno(p)}`))return;
   db.collection('pedidos').doc(id).update({status:'cancelado'}).catch(console.error);
   pedidos=pedidos.filter(x=>x._id!==id);
   totalHoje=Math.max(0,totalHoje-1);
@@ -1658,7 +1667,7 @@ function cancelar(id){
 function excluirPedido(id){
   const p=acharPedido(id);
   const ref=p?(p.num||('#'+p.id)):'';
-  if(!confirm(`Excluir permanentemente o pedido ${ref}?\n\nEssa ação apaga o pedido de vez e não pode ser desfeita.`))return;
+  if(!confirm(`Excluir permanentemente o pedido ${ref}?\n\nEssa ação apaga o pedido de vez e não pode ser desfeita.${p?avisoEstorno(p):''}`))return;
   db.collection('pedidos').doc(id).delete().then(()=>showToast('🗑️ Pedido excluído','tok-info')).catch(console.error);
   const eraDeHoje=pedidos.some(x=>x._id===id)||pedidosFinHoje.some(x=>x._id===id);
   if(eraDeHoje) totalHoje=Math.max(0,totalHoje-1);
@@ -1784,6 +1793,8 @@ function renderCard(p){
   return`<div class="card" id="card-${fid}" draggable="true" ondragstart="onDragStart(event,'${fid}','${p.status}')" ondragend="onDragEnd()">
     <div class="card-hdr"><span class="card-num">${p.num||('#'+p.id)}${pb}</span>${tipoEl}</div>
     <div class="card-cli">${p.nome}${p.bairro?` · ${p.bairro}`:''}</div>
+    ${p.pagamentoOnline?`<div style="font-size:.66rem;font-weight:800;color:#27ae60;margin:2px 0" title="Pago pelo Mercado Pago — não cobrar na entrega">✅ ${p.pag||'Pago online'}</div>`:''}
+    ${p.troco&&(p.pag||'').toLowerCase()==='dinheiro'?`<div style="font-size:.66rem;font-weight:800;color:#f39c12;margin:2px 0">💵 Troco p/ R$${p.troco} · levar R$${Math.max(0,p.troco-(p.total||0))}</div>`:''}
     <div class="card-itens">${p.itens.join(' · ')}</div>
     ${p.obs?`<div class="card-obs">⚠ ${p.obs}</div>`:''}
     <div class="card-ftr"><div class="card-total">R$${p.total}</div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:.68rem;color:var(--muted)" title="Horário do pedido">🕐 ${horaPedido(p)}</span><div class="timer ${cls}">⏱ ${tt(m)}</div></div></div>
@@ -4527,6 +4538,7 @@ function iniciarApp(){
     if(document.getElementById('cfg-mesa')) document.getElementById('cfg-mesa').checked=!!cfg.mesaAtiva;
     aplicarModalidades();
     document.getElementById('cfg-print').checked=cfg.autoImprimir!==false;
+    if(document.getElementById('cfg-pag-online')) document.getElementById('cfg-pag-online').checked=!!cfg.pagamentoOnline;
     IMPRESSAO_MODO_APP = cfg.impressaoModo==='app';
     if(document.getElementById('cfg-impressao-app'))
       document.getElementById('cfg-impressao-app').checked=IMPRESSAO_MODO_APP;

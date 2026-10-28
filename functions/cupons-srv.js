@@ -88,6 +88,8 @@ function cupomEntregaSrv(p) {
     ${enderecoBloco}
     <div class="line"></div>
     <div class="row"><span>Pag:</span><span>${p.pag || ''}</span></div>
+    ${p.pagamentoOnline ? '<div class="c b" style="font-size:13px;margin-top:3px">*** PAGO - NÃO COBRAR ***</div>' : ''}
+    ${p.troco && String(p.pag || '').toLowerCase() === 'dinheiro' ? `<div class="row b"><span>Troco p/:</span><span>R$${p.troco} (levar R$${Math.max(0, p.troco - (p.total || 0))})</span></div>` : ''}
     <div class="line"></div>
     ${itens.map((i) => `<div style="margin:2px 0">• ${i}</div>`).join('')}
     ${blocoObs(p)}

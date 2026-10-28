@@ -312,3 +312,11 @@ exports.enfileirarImpressao = onDocumentCreated(
     logger.info(`enfileirarImpressao: pedido ${pedido.num || pedidoId} na fila`);
   }
 );
+
+// ═══════════════════════════════════════════════════════════════
+// PAGAMENTO ONLINE — Mercado Pago (ver functions/pagamentos.js)
+// ═══════════════════════════════════════════════════════════════
+const pagamentos = require('./pagamentos');
+exports.criarPagamentoMP = pagamentos.criarPagamentoMP;
+exports.webhookMercadoPago = pagamentos.webhookMercadoPago;
+exports.verificarPagamentoMP = pagamentos.verificarPagamentoMP;

@@ -72,7 +72,11 @@ service cloud.firestore {
     // Cliente CRIA o pedido e lê APENAS o próprio doc (pelo ID aleatório que só
     // ele tem). Não pode listar todos, editar nem apagar — isso é do admin.
     match /pedidos/{id} {
-      allow create: if true;
+      // Pedido "pago online" só nasce pela Cloud Function do Mercado Pago
+      // (Admin SDK, não passa por aqui). O site não pode forjar esse selo.
+      allow create: if !('pagamentoOnline' in request.resource.data)
+        && !(request.resource.data.get('pag', '') is string
+             && request.resource.data.get('pag', '').lower().matches('.*online.*'));
       allow get:    if true;
       allow list, update, delete: if isAdmin();
       // O app de impressão só encosta no campo `impresso` — é o que faz o
@@ -80,6 +84,23 @@ service cloud.firestore {
       // imprimir. `hasOnly` impede que um PC pareado mexa em preço ou status.
       allow get, update: if isImpressora()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['impresso']);
+    }
+
+    // ── Pagamento online (Mercado Pago) ──────────────────────────────────────
+    // O site grava o pedido aqui ANTES de pagar, sempre como 'aguardando', e só
+    // lê o próprio doc (pelo ID aleatório) pra acompanhar. Quem muda o status e
+    // cria o pedido de verdade é a Cloud Function, depois de conferir o
+    // pagamento na API do Mercado Pago (ver functions/pagamentos.js).
+    match /pagamentos/{id} {
+      allow create: if request.resource.data.status == 'aguardando'
+        && request.resource.data.keys().hasOnly(['status', 'pedido', 'total', 'consumo', 'cupomId', 'criadoEm'])
+        && request.resource.data.total is number
+        && request.resource.data.total > 0
+        && request.resource.data.pedido is map
+        && !('pagamentoOnline' in request.resource.data.pedido);
+      allow get:  if true;
+      allow list: if isAdmin();
+      allow update, delete: if false;
     }
 
     // ── Clientes (CRM) ───────────────────────────────────────────────────────

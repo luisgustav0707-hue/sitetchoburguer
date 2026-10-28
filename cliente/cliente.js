@@ -129,13 +129,17 @@ function verCardapioFechado(){
   window.scrollTo(0,0);
 }
 
-// Pagamento online só aparece quando o dono liga no admin.
+// Pagamento online só aparece quando o dono liga no admin. Ligado, o "PIX"
+// por chave (com comprovante no WhatsApp) some — o "Pix na hora" substitui.
 let pagOnlineAtivo = false;
 function aplicarPagamentoOnline(data){
   pagOnlineAtivo = data.pagamentoOnline === true;
   const el = document.getElementById('p-onl');
   if(el) el.style.display = pagOnlineAtivo ? '' : 'none';
-  if(!pagOnlineAtivo && ehOnline(pagamento)) limparSelecaoPagamento();
+  const pix = document.getElementById('p-pix');
+  if(pix) pix.style.display = pagOnlineAtivo ? 'none' : '';
+  document.getElementById('pag-options')?.classList.toggle('sem-pix', pagOnlineAtivo);
+  if(pagOnlineAtivo ? pagamento==='pix' : ehOnline(pagamento)) limparSelecaoPagamento();
 }
 
 function verificarLoja(){
@@ -581,6 +585,8 @@ function selectTipo(t){
 // Forma de pagamento → card na tela. online_* = pago agora pelo Mercado Pago.
 const PAG_CARDS={pix:'p-pix',dinheiro:'p-din',cartao:'p-car',online_pix:'p-opix',online_cartao:'p-ocar'};
 const ehOnline=p=>p==='online_pix'||p==='online_cartao';
+// Online só com a chave do admin ligada; o PIX por chave só com ela desligada.
+const pagDisponivel=p=>ehOnline(p)?pagOnlineAtivo:(p==='pix'?!pagOnlineAtivo:true);
 const TXT_ONLINE={
   online_pix:'Ao tocar em <b>FAZER PEDIDO</b>, aparece o <b>QR code e o Pix copia e cola</b> aqui mesmo. Pagou, seu pedido vai direto para a cozinha — <b>sem precisar mandar comprovante</b>.',
   online_cartao:'Ao tocar em <b>FAZER PEDIDO</b>, você vai para a página segura do <b>Mercado Pago</b> e paga com <b>cartão de crédito ou débito</b>. Seu pedido vai para a cozinha assim que o pagamento for aprovado.',
@@ -783,7 +789,7 @@ function irResumo(){
     if(!bairroAtendido){document.getElementById('aviso-bairro').classList.add('show');document.getElementById('bairros-lista').classList.add('show');renderListaBairros();alert('Selecione seu bairro na lista de bairros atendidos, ou escolha retirada.');return;}
     if(!document.getElementById('f-num').value.trim()){alert('Digite o número do endereço!');return;}
   }
-  if(ehOnline(pagamento) && !pagOnlineAtivo) limparSelecaoPagamento();   // desligado no admin
+  if(pagamento && !pagDisponivel(pagamento)) limparSelecaoPagamento();   // mudou no admin
   if(!pagamento){document.getElementById('err-pag').style.display='block';return;}
   renderResumo();goStep(3);
 }
@@ -1499,7 +1505,7 @@ function preencherDadosSalvos(){
   if(!s||!s.nome) return;
   document.getElementById('f-nome').value=s.nome;
   document.getElementById('f-tel').value=s.tel||'';
-  if(s.pag && PAG_CARDS[s.pag] && (!ehOnline(s.pag) || pagOnlineAtivo)) selectPag(s.pag);   // online só se estiver ligado
+  if(s.pag && PAG_CARDS[s.pag] && pagDisponivel(s.pag)) selectPag(s.pag);   // só o que estiver na tela
   if(s.tipo) selectTipo(s.tipo);
   if(s.tipo==='delivery'&&s.bairro&&modalidades.delivery){
     document.getElementById('f-cep').value=s.cep||'';

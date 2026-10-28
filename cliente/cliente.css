@@ -189,6 +189,7 @@ select option{background:var(--card)}
 .pag-card{background:var(--card);border:2px solid #2a2520;border-radius:10px;padding:11px 7px;text-align:center;cursor:pointer;transition:all .2s}
 .pag-card:hover,.pag-card.selected{border-color:var(--orange);background:#2a2018}
 .pag-online{grid-column:1/-1}
+.pag-options.sem-pix{grid-template-columns:1fr 1fr}
 .pag-online-tit{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:0 0 5px}
 .pag-online-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:4px}
 #pagamento-box .pix-qr{display:block;width:200px;max-width:70%;margin:4px auto 10px;background:#fff;border-radius:8px;padding:6px}

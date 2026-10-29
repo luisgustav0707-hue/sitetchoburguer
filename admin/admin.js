@@ -3,6 +3,27 @@
 // fica mais no código. Só é admin quem está logado E tem o doc /admins/{uid}
 // no Firestore (as regras exigem isso). Ver firestore.rules.
 
+// ── DADOS VINDOS DO PÚBLICO ────────────────────────────────────
+// Pedidos, clientes, cupons (usosFeitos) e estoque são gravados pelo site do
+// cliente, sem login — qualquer um pode mandar texto com HTML. O painel monta
+// tudo com innerHTML, então isso viraria código rodando com o login do admin.
+// Por isso esses dados passam aqui ao chegar: os caracteres que abrem tag ou
+// fecham aspas viram parecidos inofensivos. Não precisa "desfazer" depois —
+// editar e salvar de volta continua igual.
+const TROCA_HTML={'<':'‹','>':'›','"':'”',"'":'’','`':'´'};
+function limparDados(v){
+  if(typeof v==='string') return v.replace(/[<>"'`]/g,c=>TROCA_HTML[c]);
+  if(Array.isArray(v)) return v.map(limparDados);
+  // Só objeto "puro": Timestamp e afins do Firestore passam intactos
+  if(v && typeof v==='object' && Object.getPrototypeOf(v)===Object.prototype){
+    const o={}; for(const k in v) o[k]=limparDados(v[k]); return o;
+  }
+  return v;
+}
+// O ID do doc vai pra dentro de onclick="...('ID')" — só aceita o formato que
+// o Firestore gera (e os 'local-123' do fallback).
+function idSeguro(id){ return /^[A-Za-z0-9_-]{1,80}$/.test(String(id)); }
+
 // Perfis e quais abas cada um enxerga.
 const PERFIL_ABAS={
   admin:   ['cozinha','salao','pedidos','config','crm','cardapio','financeiro'],
@@ -1014,7 +1035,8 @@ function carregarFinalizadosHoje(){
     .get()
     .then(snap=>{
       snap.forEach(doc=>{
-        const d=doc.data();
+        if(!idSeguro(doc.id)) return;
+        const d=limparDados(doc.data());
         const p={...d,_id:doc.id,hora:d.hora?d.hora.toDate():new Date()};
         if(!pedidosFinHoje.find(x=>x._id===p._id)) pedidosFinHoje.push(p);
       });
@@ -1537,6 +1559,7 @@ function cupomEntrega(p){
     <div class="line"></div>
     <div class="row"><span>Pag:</span><span>${p.pag}</span></div>
     ${p.pagamentoOnline?'<div class="c b" style="font-size:13px;margin-top:3px">*** PAGO - NÃO COBRAR ***</div>':''}
+    ${p.conferirValor?`<div class="obs-box">⚠ CONFERIR VALOR ⚠<br><span style="font-size:12px;font-weight:600">${textoConferir(p)}</span></div>`:''}
     ${p.troco&&(p.pag||'').toLowerCase()==='dinheiro'?`<div class="row b"><span>Troco p/:</span><span>R$${p.troco} (levar R$${Math.max(0,p.troco-(p.total||0))})</span></div>`:''}
     <div class="line"></div>
     ${p.itens.map(i=>`<div style="margin:2px 0">• ${i}</div>`).join('')}
@@ -1811,6 +1834,7 @@ function renderCard(p){
     <div class="card-hdr"><span class="card-num">${p.num||('#'+p.id)}${pb}</span>${tipoEl}</div>
     <div class="card-cli">${p.nome}${p.bairro?` · ${p.bairro}`:''}</div>
     ${p.pagamentoOnline?`<div style="font-size:.66rem;font-weight:800;color:#27ae60;margin:2px 0" title="Pago pelo Mercado Pago — não cobrar na entrega">✅ ${p.pag||'Pago online'}</div>`:''}
+    ${p.conferirValor?`<div style="font-size:.66rem;font-weight:800;color:#e74c3c;margin:2px 0" title="${textoConferir(p)}">⚠ CONFERIR VALOR</div>`:''}
     ${p.troco&&(p.pag||'').toLowerCase()==='dinheiro'?`<div style="font-size:.66rem;font-weight:800;color:#f39c12;margin:2px 0">💵 Troco p/ R$${p.troco} · levar R$${Math.max(0,p.troco-(p.total||0))}</div>`:''}
     <div class="card-itens">${p.itens.join(' · ')}</div>
     ${p.obs?`<div class="card-obs">⚠ ${p.obs}</div>`:''}
@@ -2298,7 +2322,7 @@ async function carregarLog(){
       .get();
     // Consulta OK e vazia = não houve pedido no período. Não cair nos pedidos
     // da tela (que são de hoje) — isso mostrava pedidos de outro dia.
-    logPedidos=snap.docs.map(d=>{const data=d.data();return{...data,_id:d.id,hora:data.hora?.toDate?.()||new Date(data.hora||0)};});
+    logPedidos=snap.docs.filter(d=>idSeguro(d.id)).map(d=>{const data=limparDados(d.data());return{...data,_id:d.id,hora:data.hora?.toDate?.()||new Date(data.hora||0)};});
   }catch(e){
     // Sem Firestore: usa os pedidos da tela, mas só os do período pedido
     logPedidos=pedidos.filter(p=>{const d=dataPedido(p);return d && d>=ini && d<fim;});
@@ -2356,7 +2380,7 @@ function renderLog(){
       ${p.obs?`<div style="font-size:.7rem;color:#f39c12;margin-top:4px">⚠ ${p.obs}</div>`:''}
       <div class="log-sep"></div>
       <div class="log-footer">
-        <div class="log-pag">${p.pag||'-'}${(p.frete||0)>0?` · Frete: ${r(p.frete)}`:''}</div>
+        <div class="log-pag">${p.pag||'-'}${(p.frete||0)>0?` · Frete: ${r(p.frete)}`:''}${p.conferirValor?`<div style="color:#e74c3c;font-weight:700">⚠ CONFERIR VALOR — ${textoConferir(p)}</div>`:''}</div>
         <div class="log-total">${r(p.total||0)}</div>
       </div>
       <div style="display:flex;justify-content:flex-end;gap:4px;margin-top:8px">
@@ -2368,6 +2392,15 @@ function renderLog(){
 }
 
 function renderHistorico(){renderLog();}
+
+// Pedido pago online que o servidor não conseguiu bater com o cardápio
+// (functions/conferencia.js): valor pago abaixo do preço dos itens, item que
+// não existe etc. Texto curto pro card, o log e o cupom.
+function textoConferir(p){
+  const c=p.conferirValor||{};
+  const valor=c.esperado!=null?`itens R$${c.esperado}, pago R$${c.pago}`:'';
+  return [valor,...(c.motivos||[])].filter(Boolean).join(' · ');
+}
 
 // ── SITUAÇÃO DO PAGAMENTO (controle interno) ───────────────────
 // Pedido sem o campo `situacao` conta como pago — é a maioria, e assim os
@@ -3452,7 +3485,7 @@ async function buscarInativos(){
     const snap=await db.collection('pedidos')
       .where('criadoEm','>=',firebase.firestore.Timestamp.fromDate(limite)).get();
     if(snap&&snap.docs&&snap.docs.length>0){
-      todos=snap.docs.map(d=>{const dt=d.data();return{...dt,_id:d.id,hora:dt.criadoEm?.toDate?.()||dt.hora?.toDate?.()||new Date()};});
+      todos=snap.docs.filter(d=>idSeguro(d.id)).map(d=>{const dt=limparDados(d.data());return{...dt,_id:d.id,hora:dt.criadoEm?.toDate?.()||dt.hora?.toDate?.()||new Date()};});
     }
   }catch(e){todos=[...pedidos];}
   if(!todos.length){recLista.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div>Sem dados suficientes</div></div>';return;}
@@ -3519,7 +3552,7 @@ function carregarCRM(){
   const el=document.getElementById('crm-clientes-lista');
   if(el) el.innerHTML='<div style="color:var(--muted);font-size:.78rem;padding:10px 0">🔍 Carregando clientes...</div>';
   db.collection('clientes').get().then(snap=>{
-    crmClientes=snap.docs.map(d=>({_id:d.id,...d.data()}));
+    crmClientes=snap.docs.filter(d=>idSeguro(d.id)).map(d=>({...limparDados(d.data()),_id:d.id}));
     renderCrmOverview();
     renderClientesCRM();
     renderDashCRM();
@@ -4053,7 +4086,7 @@ async function carregarFinanceiro(){
   document.getElementById('fin-stats').innerHTML = '<div style="color:var(--muted);font-size:.78rem;padding:8px 0">Carregando...</div>';
 
   // 1. Sempre carrega localStorage primeiro — fonte confiável sem Firebase
-  const todos = JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
+  const todos = limparDados(JSON.parse(localStorage.getItem('tcho_pedidos')||'[]'));
   finPedidosList = todos.filter(p=>{
     if(p.status==='cancelado' || p.contabil===false) return false;   // cancelados e rodadas de mesa (só o fechamento conta)
     if(!entraNoFinanceiro(p)) return false;                          // permuta e brinde
@@ -4069,8 +4102,8 @@ async function carregarFinanceiro(){
       .where('criadoEm','>=', firebase.firestore.Timestamp.fromDate(range.ini))
       .where('criadoEm','<',  firebase.firestore.Timestamp.fromDate(range.fim))
       .get();
-    finPedidosList = snap.docs.map(d=>{
-      const data=d.data();
+    finPedidosList = snap.docs.filter(d=>idSeguro(d.id)).map(d=>{
+      const data=limparDados(d.data());
       return {...data, _id:d.id, hora:data.hora?.toDate?.() || new Date(data.hora||0)};
     }).filter(p=>p.status!=='cancelado' && p.contabil!==false && entraNoFinanceiro(p));   // exclui cancelados, rodadas de mesa, permuta e brinde
   } catch(e){
@@ -4475,7 +4508,7 @@ function receberPedidoLocal(p){
 }
 
 function lerPedidosLocal(){
-  const salvos=JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
+  const salvos=limparDados(JSON.parse(localStorage.getItem('tcho_pedidos')||'[]'));
   salvos.forEach(p=>receberPedidoLocal(p));
 }
 
@@ -4500,7 +4533,8 @@ function iniciarListenerPedidos(){
         carregarFinalizadosHoje();
       }
       snapshot.docChanges().forEach(change=>{
-        const data=change.doc.data();
+        if(!idSeguro(change.doc.id)){ console.warn('Pedido com ID inválido ignorado:',change.doc.id); return; }
+        const data=limparDados(change.doc.data());
         const p={...data,_id:change.doc.id,hora:data.hora?data.hora.toDate():new Date()};
         if(change.type==='added'){
           // Numa reconexão o Firestore reenvia tudo como 'added'; o find evita
@@ -4640,7 +4674,7 @@ function iniciarApp(){
       if(doc.id==='opcoes'       && d.data ) localStorage.setItem('tcho_opcoes',      JSON.stringify(d.data));
       if(doc.id==='ing_edits'    && d.data ) localStorage.setItem('tcho_ing_edits',   JSON.stringify(d.data));
       if(doc.id==='adicionais'   && d.lista) localStorage.setItem('tcho_adicionais',  JSON.stringify(d.lista));
-      if(doc.id==='estoque'      && d.data ) localStorage.setItem('tcho_estoque',     JSON.stringify(d.data));
+      if(doc.id==='estoque'      && d.data ) localStorage.setItem('tcho_estoque',     JSON.stringify(limparDados(d.data)));
       if(doc.id==='bairros'      && d.lista) localStorage.setItem('tcho_bairros',     JSON.stringify(d.lista));
       if(doc.id==='cat_despesa'  && d.lista) localStorage.setItem('tcho_cat_despesa', JSON.stringify(d.lista));
       if(doc.id==='novidade'                ){ novidadeCfg=d; localStorage.setItem('tcho_novidade', JSON.stringify(d)); }
@@ -4660,7 +4694,7 @@ function iniciarApp(){
   // ── Estoque ao vivo: reflete a baixa automática feita pelos pedidos ──
   db.collection('cardapio').doc('estoque').onSnapshot(doc=>{
     if(!doc.exists) return;
-    const data=doc.data().data||{};
+    const data=limparDados(doc.data().data||{});   // gravável pelo site (baixa de estoque)
     Object.keys(data).forEach(id=>{est[id]={...(est[id]||{ativo:true,modo:'inf',qtd:10}),...data[id]};});
     localStorage.setItem('tcho_estoque',JSON.stringify(est));
     const tab=document.querySelector('.nav-tab.active');
@@ -4693,7 +4727,8 @@ function iniciarApp(){
   // Listener cupons (Firestore)
   db.collection('cupons').onSnapshot(snapshot=>{
     snapshot.docChanges().forEach(change=>{
-      const data=change.doc.data();
+      if(!idSeguro(change.doc.id)) return;
+      const data=limparDados(change.doc.data());   // usosFeitos é gravável pelo site
       const c={...data,_id:change.doc.id};
       if(change.type==='added') cupons.push(c);
       else if(change.type==='modified'){const idx=cupons.findIndex(x=>x._id===c._id);if(idx!==-1)cupons[idx]=c;}

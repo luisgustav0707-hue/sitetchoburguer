@@ -30,6 +30,22 @@ const BASE_URL = 'https://tchoburguer.com';
 // mudar o layout, mude nos DOIS lugares e teste na impressora real.
 const CSS_CUPOM_SRV = `*{margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;font-size:14px;padding:10px;max-width:280px}.c{text-align:center}.b{font-weight:bold}.line{border-top:1px dashed #000;margin:7px 0}.row{display:flex;justify-content:space-between;margin:3px 0}.big{font-size:18px;font-weight:bold}.obs-box{border:2px solid #000;padding:5px 6px;margin:5px 0;font-weight:800;font-size:15px;text-align:center}.rem{display:inline-block;border:1.5px solid #000;border-radius:3px;padding:0 4px;font-weight:800}@media print{@page{margin:3mm;size:80mm auto}}`;
 
+// O pedido é gravado pelo site do cliente, sem login: qualquer texto (nome,
+// obs, itens...) pode trazer HTML. O cupom é renderizado pelo Electron do app
+// de impressão, então os caracteres que abrem tag/aspas viram parecidos
+// inofensivos — mesma troca do limparDados() de admin/admin.js.
+const TROCA_HTML = { '<': '‹', '>': '›', '"': '”', "'": '’', '`': '´' };
+function limparDados(v) {
+  if (typeof v === 'string') return v.replace(/[<>"'`]/g, (c) => TROCA_HTML[c]);
+  if (Array.isArray(v)) return v.map(limparDados);
+  if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) {
+    const o = {};
+    for (const k in v) o[k] = limparDados(v[k]);
+    return o;
+  }
+  return v;
+}
+
 // Realça "sem <ingredientes>" (removidos) no cupom pra cozinha não errar.
 function destacaRemocao(item) {
   return String(item).replace(/\bsem\s+([^•)—]+)/gi, (m, p1) => `<span class="rem">⚠ NÃO ${p1.trim().toUpperCase()}</span>`);
@@ -41,6 +57,13 @@ function enderecoCompleto(p) {
 function mapsUrl(p) {
   return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(enderecoCompleto(p));
 }
+// Mesmo texto do textoConferir() de admin/admin.js.
+function textoConferir(p) {
+  const c = p.conferirValor || {};
+  const valor = c.esperado != null ? `itens R$${c.esperado}, pago R$${c.pago}` : '';
+  return [valor, ...(c.motivos || [])].filter(Boolean).join(' · ');
+}
+
 function blocoObs(p) {
   return p.obs
     ? `<div class="line"></div><div class="obs-box">⚠ OBS: ${String(p.obs).toUpperCase()} ⚠</div>`
@@ -48,6 +71,7 @@ function blocoObs(p) {
 }
 
 function cupomCozinhaSrv(p) {
+  p = limparDados(p);
   const itens = Array.isArray(p.itens) ? p.itens : [];
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${CSS_CUPOM_SRV}</style></head><body>
     <div class="c b" style="font-size:16px">— COZINHA —</div>
@@ -62,6 +86,7 @@ function cupomCozinhaSrv(p) {
 }
 
 function cupomEntregaSrv(p) {
+  p = limparDados(p);
   const itens = Array.isArray(p.itens) ? p.itens : [];
   const endTxt = enderecoCompleto(p);
   // QR code que abre o Google Maps no endereço do cliente (pro motoboy).
@@ -89,6 +114,7 @@ function cupomEntregaSrv(p) {
     <div class="line"></div>
     <div class="row"><span>Pag:</span><span>${p.pag || ''}</span></div>
     ${p.pagamentoOnline ? '<div class="c b" style="font-size:13px;margin-top:3px">*** PAGO - NÃO COBRAR ***</div>' : ''}
+    ${p.conferirValor ? `<div class="obs-box">⚠ CONFERIR VALOR ⚠<br><span style="font-size:12px;font-weight:600">${textoConferir(p)}</span></div>` : ''}
     ${p.troco && String(p.pag || '').toLowerCase() === 'dinheiro' ? `<div class="row b"><span>Troco p/:</span><span>R$${p.troco} (levar R$${Math.max(0, p.troco - (p.total || 0))})</span></div>` : ''}
     <div class="line"></div>
     ${itens.map((i) => `<div style="margin:2px 0">• ${i}</div>`).join('')}

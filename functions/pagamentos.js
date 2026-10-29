@@ -39,6 +39,7 @@ const admin = require('firebase-admin');
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
+const { conferirPedido } = require('./conferencia');
 
 const MP_ACCESS_TOKEN = defineSecret('MP_ACCESS_TOKEN');
 
@@ -148,6 +149,20 @@ async function processarPagamento(pay) {
   const contRef = db().collection('config').doc('contador');
   const estRef = db().collection('cardapio').doc('estoque');
 
+  // Conferência de itens e valor (ver conferencia.js). Fica fora da transação
+  // porque lê o cardápio inteiro e o dados.js do site. Falhou? O pedido entra
+  // mesmo assim — o cliente já pagou — marcado para conferir.
+  let conf = null;
+  if (pay.status === 'approved') {
+    try {
+      const s = await pgRef.get();
+      if (s.exists && ['aguardando', 'recusado'].includes(s.data().status)) conf = await conferirPedido(db(), s.data());
+    } catch (e) {
+      logger.error(`processarPagamento: conferência de ${id} falhou`, e.message);
+      conf = { conferirValor: { esperado: null, motivos: ['não foi possível conferir — conferir itens e valor'] } };
+    }
+  }
+
   const resultado = await db().runTransaction(async (t) => {
     const pgSnap = await t.get(pgRef);
     if (!pgSnap.exists) return 'sem-pendente';
@@ -180,8 +195,9 @@ async function processarPagamento(pay) {
     }
 
     // Leituras antes das escritas (regra da transação)
+    const consumo = (conf && conf.consumo) || pg.consumo;
     const contSnap = await t.get(contRef);
-    const estSnap = pg.consumo ? await t.get(estRef) : null;
+    const estSnap = consumo ? await t.get(estRef) : null;
     const cupRef = pg.cupomId && ID_OK.test(pg.cupomId) ? db().collection('cupons').doc(pg.cupomId) : null;
     const cupSnap = cupRef ? await t.get(cupRef) : null;
 
@@ -192,6 +208,8 @@ async function processarPagamento(pay) {
     const base = pg.pedido || {};
     const pedido = {
       ...base,
+      // Itens remontados pelo servidor a partir do carrinho (o texto do navegador sai)
+      ...(conf && conf.itens ? { itens: conf.itens, desconto: conf.desconto } : {}),
       id: numOrdem, num,
       total: pg.total,
       pag: rotuloPagamento(pay),
@@ -208,13 +226,18 @@ async function processarPagamento(pay) {
       impresso: false,
       criadoEm: FieldValue.serverTimestamp(),
     };
+    delete pedido.conferirValor;      // só o servidor marca
+    if (conf && conf.conferirValor) {
+      pedido.conferirValor = { ...conf.conferirValor, pago: pg.total };
+      logger.warn(`processarPagamento: ${num} marcado para conferir — ${conf.conferirValor.motivos.join('; ')}`);
+    }
 
     t.set(contRef, { ultimo: numOrdem }, { merge: true });
     t.set(pedRef, pedido);
     t.update(pgRef, { status: 'pago', pedidoNum: num, mpId: String(pay.id), pagoEm: FieldValue.serverTimestamp() });
     if (estSnap && estSnap.exists) {
       const estoque = estSnap.data().data || {};
-      if (aplicarConsumo(estoque, pg.consumo)) t.set(estRef, { data: estoque }, { merge: true });
+      if (aplicarConsumo(estoque, consumo)) t.set(estRef, { data: estoque }, { merge: true });
     }
     if (cupSnap && cupSnap.exists) t.update(cupRef, { usosFeitos: FieldValue.increment(1) });
     return { criado: pedido };

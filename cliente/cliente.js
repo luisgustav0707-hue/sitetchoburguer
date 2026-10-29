@@ -497,7 +497,7 @@ function selComboSabor(sabor){
 }
 function togIng(ing){const idx=removidosAtual.indexOf(ing);if(idx>-1)removidosAtual.splice(idx,1);else removidosAtual.push(ing);document.getElementById('ing-'+ing.replace(/[\s&]/g,'_')).classList.toggle('removido',removidosAtual.includes(ing));}
 function togAdic(id,preco,nome){
-  if(adicionaisAtual[id])delete adicionaisAtual[id];else adicionaisAtual[id]={preco,nome};
+  if(adicionaisAtual[id])delete adicionaisAtual[id];else adicionaisAtual[id]={id,preco,nome};   // id: o servidor confere o preço por ele
   document.getElementById('adi-'+id).classList.toggle('sel',!!adicionaisAtual[id]);
   const comboItem=[...COMBO].find(c=>c.id==='cmb');
   atualizarTotalModal(comboItem?.preco||15);
@@ -1006,6 +1006,25 @@ function chamarFn(nome){ return firebase.app().functions('southamerica-east1').h
 let pagandoOnline=false, unsubPagamento=null, timerVerificar=null, pgAcompanhado=null, pgTipo='delivery';
 let timerPix=null, telaPix=null, pixCopiaAtual='';
 
+// Carrinho só com ids e escolhas. No pagamento online o servidor remonta os
+// itens e confere o preço a partir dele (functions/conferencia.js) — o texto
+// e o total daqui não valem sozinhos. Mesma ordem do montarItensTexto().
+function montarCarrinhoServidor(){
+  const burguers=[];
+  Object.entries(cartBurguers).forEach(([id,insts])=>insts.forEach(inst=>burguers.push({
+    id, ponto:inst.ponto?.id||'', sache:inst.sache?.id||'',
+    removidos:[...(inst.removidos||[])],
+    adicionais:(inst.adicionais||[]).map(a=>a.id||a.nome),   // pedido repetido antigo não tem id
+    combo:inst.combo||null, suco:!!inst.comboSuco,
+  })));
+  const extras={};
+  [...EXTRAS,...COMBO,...PROMOCOES].forEach(e=>{
+    const q=cartExtras[e.id];
+    if(Array.isArray(q)?q.length:q>0) extras[e.id]=Array.isArray(q)?[...q]:q;
+  });
+  return {burguers,extras};
+}
+
 async function finalizarPedidoOnline(){
   if(pagandoOnline) return;
   const dados=dadosPedido();
@@ -1023,6 +1042,7 @@ async function finalizarPedidoOnline(){
       pedido:dados,
       total:dados.total,
       consumo:calcularConsumo(),
+      carrinho:montarCarrinhoServidor(),
       cupomId:cupomAtual?._id||'',
       criadoEm:firebase.firestore.FieldValue.serverTimestamp(),
     });

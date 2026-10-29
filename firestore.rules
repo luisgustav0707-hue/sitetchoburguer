@@ -16,6 +16,10 @@ service cloud.firestore {
       return signedIn()
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
+    // ID de doc criado pelo site: só o formato que o Firestore gera (ou o
+    // telefone, no CRM). O painel usa o ID dentro de onclick="...('ID')" —
+    // aspas ou parênteses num ID forjado virariam código no admin.
+    function idOk(id) { return id.matches('^[A-Za-z0-9_-]{1,80}$'); }
 
     // O app de impressão (pasta impressora-automatica/) loga com um usuário
     // dedicado AO COMPUTADOR, criado pela function pareiarImpressora com o
@@ -44,7 +48,8 @@ service cloud.firestore {
       allow read:  if true;
       allow write: if isAdmin();
       allow update: if doc == 'contador'
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimo']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimo'])
+        && request.resource.data.ultimo == resource.data.get('ultimo', 0) + 1;   // só +1, sempre número
     }
 
     // cardapio: cliente só pode baixar estoque (doc `estoque`, campo `data`).
@@ -65,7 +70,8 @@ service cloud.firestore {
       allow read:   if true;
       allow create, delete: if isAdmin();
       allow update: if isAdmin()
-        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usosFeitos']);
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usosFeitos'])
+            && request.resource.data.usosFeitos == resource.data.get('usosFeitos', 0) + 1);   // só +1
     }
 
     // ── Pedidos ──────────────────────────────────────────────────────────────
@@ -74,7 +80,8 @@ service cloud.firestore {
     match /pedidos/{id} {
       // Pedido "pago online" só nasce pela Cloud Function do Mercado Pago
       // (Admin SDK, não passa por aqui). O site não pode forjar esse selo.
-      allow create: if !('pagamentoOnline' in request.resource.data)
+      allow create: if idOk(id)
+        && !('pagamentoOnline' in request.resource.data)
         && !(request.resource.data.get('pag', '') is string
              && request.resource.data.get('pag', '').lower().matches('.*online.*'));
       allow get:    if true;
@@ -92,8 +99,10 @@ service cloud.firestore {
     // cria o pedido de verdade é a Cloud Function, depois de conferir o
     // pagamento na API do Mercado Pago (ver functions/pagamentos.js).
     match /pagamentos/{id} {
-      allow create: if request.resource.data.status == 'aguardando'
-        && request.resource.data.keys().hasOnly(['status', 'pedido', 'total', 'consumo', 'cupomId', 'criadoEm'])
+      allow create: if idOk(id)
+        && request.resource.data.status == 'aguardando'
+        && request.resource.data.keys().hasOnly(['status', 'pedido', 'total', 'consumo', 'carrinho', 'cupomId', 'criadoEm'])
+        && (!('carrinho' in request.resource.data) || request.resource.data.carrinho is map)
         && request.resource.data.total is number
         && request.resource.data.total > 0
         && request.resource.data.pedido is map
@@ -112,7 +121,7 @@ service cloud.firestore {
     // Function e fechar clientes 100% (só admin). Ver runbook.
     match /clientes/{id} {
       allow get:    if true;
-      allow create, update: if true;
+      allow create, update: if idOk(id);
       allow list, delete: if isAdmin();
     }
 

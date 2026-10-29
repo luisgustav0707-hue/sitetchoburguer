@@ -2293,22 +2293,38 @@ function renderLog(){
   const nome=(document.getElementById('log-nome')?.value||'').toLowerCase().trim();
   const tel=(document.getElementById('log-tel')?.value||'').replace(/\D/g,'');
   const end=(document.getElementById('log-end')?.value||'').toLowerCase().trim();
+  const sit=document.getElementById('log-situacao')?.value||'';
   let lista=[...logPedidos].sort((a,b)=>(dataPedido(b)||0)-(dataPedido(a)||0));
   if(nome)lista=lista.filter(p=>(p.nome||'').toLowerCase().includes(nome));
   if(tel)lista=lista.filter(p=>(p.tel||'').replace(/\D/g,'').includes(tel));
   if(end)lista=lista.filter(p=>(p.bairro||'').toLowerCase().includes(end)||(p.endereco||'').toLowerCase().includes(end));
+  if(sit)lista=lista.filter(p=>situacaoPedido(p)===sit);
+  const r=n=>'R$'+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
   const countEl=document.getElementById('log-count');
-  if(countEl)countEl.textContent=lista.length?`${lista.length} pedido${lista.length!==1?'s':''} encontrado${lista.length!==1?'s':''}` :'';
+  if(countEl){
+    // Resumo das situações fora do normal (não pago / permuta / brinde) com o valor de cada
+    const resumo=['naopago','permuta','brinde'].map(k=>{
+      const ps=lista.filter(p=>situacaoPedido(p)===k);
+      if(!ps.length) return '';
+      const s=SITUACOES[k];
+      return ` · ${s.e} ${ps.length} ${s.l.toLowerCase()}: ${r(ps.reduce((a,p)=>a+(Number(p.total)||0),0))}`;
+    }).join('');
+    countEl.textContent=lista.length?`${lista.length} pedido${lista.length!==1?'s':''} encontrado${lista.length!==1?'s':''}${resumo}` :'';
+  }
   if(!lista.length){document.getElementById('hist-lista').innerHTML='<div class="empty"><div class="empty-icon">🔍</div><div>Nenhum pedido encontrado</div></div>';return;}
   const statusLabel={novo:'Novo',prep:'Em preparo',pronto:'Pronto',entrega:'Em entrega',finalizado:'Finalizado'};
   const statusCor={novo:'#e74c3c',prep:'#f39c12',pronto:'#27ae60',entrega:'#3498db',finalizado:'var(--muted)'};
-  const r=n=>'R$'+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-  document.getElementById('hist-lista').innerHTML=lista.map(p=>`
-    <div class="log-card">
+  document.getElementById('hist-lista').innerHTML=lista.map(p=>{
+    const sp=situacaoPedido(p), s=SITUACOES[sp];
+    return `
+    <div class="log-card" style="${sp!=='pago'?`border-color:${s.cor}`:''}">
       <div class="log-card-header">
         <div>
           <span class="log-num">${p.num||'#'+p.id}</span>
           <span class="log-badge" style="background:${p.tipo==='delivery'?'#1a0e0e':'#081508'};color:${p.tipo==='delivery'?'#e74c3c':'#27ae60'}">${p.tipo==='delivery'?'🛵 DELIVERY':'🏃 RETIRADA'}</span>
+          <select class="log-situacao" title="Situação do pagamento" onchange="mudarSituacaoPedido('${p._id}',this.value)" style="background:${s.bg};color:${s.cor};border-color:${s.cor}">
+            ${Object.entries(SITUACOES).map(([k,o])=>`<option value="${k}"${k===sp?' selected':''}>${o.e} ${o.l}</option>`).join('')}
+          </select>
         </div>
         <div style="text-align:right">
           <div style="font-size:.65rem;font-weight:700;color:${statusCor[p.status]||'var(--muted)'}">${statusLabel[p.status]||p.status||'-'}</div>
@@ -2331,10 +2347,37 @@ function renderLog(){
         <button class="btn-editar-card" onclick="abrirModalEditar('${p._id}')">✏️ Editar</button>
         <button class="btn-editar-card" onclick="excluirPedido('${p._id}')" style="color:#e74c3c">🗑️ Excluir</button>
       </div>
-    </div>`).join('');
+    </div>`;}).join('');
 }
 
 function renderHistorico(){renderLog();}
+
+// ── SITUAÇÃO DO PAGAMENTO (controle interno) ───────────────────
+// Pedido sem o campo `situacao` conta como pago — é a maioria, e assim os
+// pedidos antigos já entram certos. Não pago = cliente acerta depois (continua
+// no financeiro, é venda a receber). Permuta e brinde saem do financeiro.
+const SITUACOES={
+  pago:   {e:'✅',l:'PAGO',     cor:'#27ae60',bg:'#081508'},
+  naopago:{e:'⏳',l:'NÃO PAGO', cor:'#e74c3c',bg:'#1a0e0e'},
+  permuta:{e:'🔄',l:'PERMUTA',  cor:'#3498db',bg:'#0a1420'},
+  brinde: {e:'🎁',l:'BRINDE',   cor:'#9b59b6',bg:'#160d1c'},
+};
+function situacaoPedido(p){ return SITUACOES[p.situacao]?p.situacao:'pago'; }
+function entraNoFinanceiro(p){ const s=situacaoPedido(p); return s!=='permuta' && s!=='brinde'; }
+
+function mudarSituacaoPedido(id,nova){
+  const p=acharPedido(id);
+  if(!p||!SITUACOES[nova]) return;
+  const antes=situacaoPedido(p);
+  if(antes===nova) return;
+  const aplicar=v=>[pedidos,pedidosFinHoje,logPedidos].forEach(arr=>{const it=arr.find(x=>x._id===id);if(it)it.situacao=v;});
+  aplicar(nova);
+  renderLog();
+  const s=SITUACOES[nova];
+  db.collection('pedidos').doc(id).update({situacao:nova})
+    .then(()=>showToast(`${s.e} Pedido ${p.num||'#'+p.id} marcado como ${s.l}`,nova==='pago'?'tok-ok':'tok-info'))
+    .catch(e=>{console.error(e);aplicar(antes);renderLog();showToast('⚠️ Não foi possível salvar a situação do pedido','tok-err');});
+}
 
 // ── CARDÁPIO (estoque) — dados de shared/dados.js via TCHO ─────
 const PRODS = [
@@ -3996,6 +4039,7 @@ async function carregarFinanceiro(){
   const todos = JSON.parse(localStorage.getItem('tcho_pedidos')||'[]');
   finPedidosList = todos.filter(p=>{
     if(p.status==='cancelado' || p.contabil===false) return false;   // cancelados e rodadas de mesa (só o fechamento conta)
+    if(!entraNoFinanceiro(p)) return false;                          // permuta e brinde
     const h = dataPedido(p);
     return !!h && h >= range.ini && h < range.fim;
   }).map(p=>({...p, hora: new Date(p.hora)}));
@@ -4011,7 +4055,7 @@ async function carregarFinanceiro(){
     finPedidosList = snap.docs.map(d=>{
       const data=d.data();
       return {...data, _id:d.id, hora:data.hora?.toDate?.() || new Date(data.hora||0)};
-    }).filter(p=>p.status!=='cancelado' && p.contabil!==false);   // exclui cancelados e rodadas de mesa
+    }).filter(p=>p.status!=='cancelado' && p.contabil!==false && entraNoFinanceiro(p));   // exclui cancelados, rodadas de mesa, permuta e brinde
   } catch(e){
     // Erro no Firestore → mantém dados do localStorage
   }

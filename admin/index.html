@@ -145,6 +145,13 @@
         <input type="text" id="log-nome" placeholder="🔍 Nome" oninput="renderLog()" class="log-input">
         <input type="tel"  id="log-tel"  placeholder="📞 Telefone" oninput="renderLog()" class="log-input">
         <input type="text" id="log-end"  placeholder="📍 Bairro / Endereço" oninput="renderLog()" class="log-input">
+        <select id="log-situacao" onchange="renderLog()" class="log-input">
+          <option value="">💳 Todas as situações</option>
+          <option value="pago">✅ Pagos</option>
+          <option value="naopago">⏳ Não pagos</option>
+          <option value="permuta">🔄 Permuta</option>
+          <option value="brinde">🎁 Brinde</option>
+        </select>
         <button class="fin-btn active" onclick="carregarLog()">Buscar</button>
       </div>
       <div id="log-count" style="font-size:.72rem;color:var(--muted);margin-bottom:8px"></div>

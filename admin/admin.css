@@ -9,6 +9,8 @@
 .log-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
 .log-num{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--orange)}
 .log-badge{font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:4px;margin-left:6px}
+.log-situacao{font-size:.6rem;font-weight:700;padding:2px 4px;border-radius:4px;margin-left:6px;border:1px solid;cursor:pointer;outline:none;font-family:'Barlow',sans-serif}
+.log-situacao option{background:var(--card);color:var(--cream)}
 .log-nome{font-size:.85rem;font-weight:700;color:var(--cream);margin-bottom:2px}
 .log-info{font-size:.72rem;color:var(--muted);margin-bottom:3px}
 .log-sep{height:1px;background:#2a2520;margin:8px 0}

@@ -207,14 +207,30 @@ function showInner(t){
 }
 
 // ── LOJA ABERTA/FECHADA ────────────────────────────────────────
+// Mesma regra do site do cliente (aplicarEstadoLoja em cliente.js): o selo
+// mostra o que o cliente está vendo, não só o toggle manual.
+function lojaAbertaEfetiva(){
+  if(!document.getElementById('cfg-loja').checked) return false;            // fechamento manual manda
+  if(document.getElementById('cfg-forcar-aberta')?.checked) return true;     // forçada
+  if(document.getElementById('cfg-auto-horario')?.checked!==false) return lojaAbertaAgora();
+  return true;
+}
+// Clique no selo = abrir/fechar agora. Fora do horário com o automático
+// ligado, abrir liga o "Forçar abertura" (senão o horário fecharia de novo).
 function toggleLoja(){
-  const aberta=document.getElementById('cfg-loja').checked;
-  document.getElementById('cfg-loja').checked=!aberta;
-  atualizarBadgeLoja();
+  const loja=document.getElementById('cfg-loja');
+  const forcar=document.getElementById('cfg-forcar-aberta');
+  if(lojaAbertaEfetiva()){
+    loja.checked=false;
+    if(forcar) forcar.checked=false;
+  } else {
+    loja.checked=true;
+    if(!lojaAbertaEfetiva() && forcar) forcar.checked=true;
+  }
   salvarConfig();
 }
 function atualizarBadgeLoja(){
-  const aberta=document.getElementById('cfg-loja').checked;
+  const aberta=lojaAbertaEfetiva();
   const badge=document.getElementById('loja-badge');
   badge.textContent=aberta?'🟢 ABERTA':'🔴 FECHADA';
   badge.className='loja-badge '+(aberta?'aberta':'fechada');
@@ -292,6 +308,7 @@ function salvarHorarios(){
 }
 
 function atualizarStatusAutoHorario(){
+  atualizarBadgeLoja();   // roda a cada minuto: o selo vira sozinho na hora de abrir/fechar
   const el=document.getElementById('auto-horario-status');
   if(!el)return;
   const auto=document.getElementById('cfg-auto-horario')?.checked;

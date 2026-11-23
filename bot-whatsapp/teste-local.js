@@ -33,7 +33,7 @@ function fakeDb(inicial = {}) {
     runTransaction: async (fn) => fn({ get: (r) => r.get(), set: (r, d, o) => r.set(d, o), update: (r, d) => r.update(d) }),
   };
 }
-const fakeAdmin = { firestore: { FieldValue: { serverTimestamp: () => '__serverTimestamp__' } } };
+const fakeFieldValue = { serverTimestamp: () => '__serverTimestamp__' };
 
 // ── Cardápio parecido com o de produção ─────────────────────────
 const TCHO = require(path.join(__dirname, '..', 'shared', 'dados.js'));
@@ -61,7 +61,7 @@ const lanche = (p) => ({ id: 'xs', ponto: '', sache: '', removidos: [], adiciona
 const enviadas = [];
 const pausas = [];
 const db = fakeDb({ 'config/contador': { ultimo: 580 }, 'cardapio/estoque': { data: ESTOQUE } });
-const at = criarAtendente({ db, admin: fakeAdmin, ia: iaFake, enviar: async (chatId, texto) => enviadas.push({ chatId, texto }), aoPausar: (chatId) => pausas.push(chatId) });
+const at = criarAtendente({ db, FieldValue: fakeFieldValue, ia: iaFake, enviar: async (chatId, texto) => enviadas.push({ chatId, texto }), aoPausar: (chatId) => pausas.push(chatId) });
 const ultima = (chatId) => [...enviadas].reverse().find((e) => e.chatId === chatId)?.texto || '';
 const fala = (chatId, texto, extra = {}) => at.receber({ chatId, numero: extra.numero || '5531999990001', tipo: 'texto', texto, ...extra });
 

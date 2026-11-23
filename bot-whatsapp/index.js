@@ -20,9 +20,10 @@ if (!process.env.GEMINI_API_KEY) {
   process.exit(3);   // 3 = falta configuração (o INICIAR.bat não fica reiniciando)
 }
 
-const admin = require('firebase-admin');
-admin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(SA, 'utf8'))) });
-const db = admin.firestore();
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+initializeApp({ credential: cert(JSON.parse(fs.readFileSync(SA, 'utf8'))) });
+const db = getFirestore();
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
@@ -63,7 +64,7 @@ async function enviar(chatId, texto) {
 setInterval(() => { const t = Date.now(); for (const [k, exp] of doBot) if (exp < t) doBot.delete(k); }, 60000).unref();
 
 const atendente = criarAtendente({
-  db, admin, ia, enviar,
+  db, FieldValue, ia, enviar,
   // Pausou (pediu atendente / não entendeu 2x / erro): marca como não lida pra equipe ver.
   aoPausar: async (chatId) => { const chat = await client.getChatById(chatId); await chat.markUnread(); },
 });

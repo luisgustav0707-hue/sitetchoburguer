@@ -3,9 +3,19 @@ chcp 65001 >nul
 title TCHO BURGUER — Atendente WhatsApp
 cd /d "%~dp0"
 
+where node >nul 2>nul
+if errorlevel 1 (
+  echo  Node.js nao encontrado. Instalando ^(pode pedir permissao do Windows^)...
+  winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
+  echo.
+  echo  Pronto. Feche esta janela e abra o INICIAR.bat de novo.
+  pause
+  exit /b
+)
+
 if not exist node_modules (
   echo  Instalando dependencias ^(so na primeira vez, demora uns minutos^)...
-  call npm install
+  call npm install --omit=dev
 )
 
 :inicio

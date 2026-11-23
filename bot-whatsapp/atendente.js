@@ -32,7 +32,7 @@ const semAcento = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, ''
 function mascara(numero) { const d = String(numero || '').replace(/\D/g, ''); return d ? '…' + d.slice(-4) : '?'; }
 function log(chatId, numero, ...a) { console.log(new Date().toLocaleTimeString('pt-BR', { timeZone: CD.TZ }), `[${mascara(numero || chatId)}]`, ...a); }
 
-function criarAtendente({ db, admin, ia, enviar, aoPausar }) {
+function criarAtendente({ db, FieldValue, ia, enviar, aoPausar }) {
   const filas = new Map();   // chatId → Promise (uma mensagem por vez por cliente)
 
   async function responder(c, texto) {
@@ -73,7 +73,7 @@ function criarAtendente({ db, admin, ia, enviar, aoPausar }) {
     }
     let r;
     try {
-      r = await PED.gravarPedido(db, admin, v, c.numero);
+      r = await PED.gravarPedido(db, FieldValue, v, c.numero);
     } catch (e) {
       console.error('[atendente] erro ao gravar pedido:', e);
       await responder(c, MSG.erroGravar);

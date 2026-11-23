@@ -219,9 +219,8 @@ function textoResumo(v) {
 }
 
 // ── GRAVAÇÃO ────────────────────────────────────────────────────
-// v = resultado de conferir() sem pendência. admin = require('firebase-admin').
-async function gravarPedido(db, admin, v, numeroWhatsApp) {
-  const FV = admin.firestore.FieldValue;
+// v = resultado de conferir() sem pendência. FV = FieldValue de firebase-admin/firestore.
+async function gravarPedido(db, FV, v, numeroWhatsApp) {
   const r = v.rascunho;
 
   // Número sequencial: o MESMO contador do site, balcão e mesa.

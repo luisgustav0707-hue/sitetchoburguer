@@ -4,3 +4,10 @@ _serve.cjs
 # Instalador do app de impressão: publicado em download/ com nome fixo, mas o
 # binário (~90 MB) não vai pro git. O manifesto app-impressao.json vai.
 download/*.exe
+
+# Atendente de WhatsApp: credenciais, sessão do WhatsApp e dependências
+bot-whatsapp/serviceAccount.json
+bot-whatsapp/.env
+bot-whatsapp/.wwebjs_auth/
+bot-whatsapp/.wwebjs_cache/
+bot-whatsapp/node_modules/

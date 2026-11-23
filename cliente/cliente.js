@@ -86,6 +86,8 @@ let cartBurguers={},cartExtras={},tipoPedido=null,pagamento=null,freteAtual=0,ba
 let cupomAtual=null,descontoAtual=0;
 let orderCounter=Math.floor(Math.random()*100)+1;
 let modalId=null,pontoAtual=null,sacheAtual=null,removidosAtual=[],adicionaisAtual={},comboAtual=null,comboSaborAtual=null,comboBebidaAtual=null;
+// true depois que o cardápio do painel chegou nesta visita (ver sincronizarCardapio).
+let cardapioCarregado=false;
 // Trocar o refrigerante do combo por suco custa R$2 a mais.
 const COMBO_SUCO_EXTRA=2;
 
@@ -246,6 +248,108 @@ function baixarEstoque(){
   }).catch(e=>console.error('baixa de estoque:',e));
 }
 
+// ── CONFERÊNCIA DO CARRINHO (estoque + sabores do painel) ─────
+// Tira do carrinho o que não pode ser vendido agora: produto desligado ou
+// esgotado, quantidade acima do estoque, e sabor que não está mais na lista
+// do painel (ex.: combo com Fanta quando o painel só tem Coca). Combo inválido
+// sai do lanche, mas o lanche fica. Devolve a lista do que foi retirado.
+function removerIndisponiveis(){
+  const fora=[];
+  const est=JSON.parse(localStorage.getItem('tcho_estoque')||'{}');
+  const resta={};   // unidades que ainda dá pra vender (só itens no modo quantidade)
+  Object.entries(est).forEach(([id,e])=>{ if(e && e.modo==='qtd') resta[id]=Math.max(0,Number(e.qtd)||0); });
+  const ok=id=>{
+    if(!produtoDisponivel(id)) return false;
+    if(!(id in resta)) return true;
+    if(resta[id]<=0) return false;
+    resta[id]--; return true;
+  };
+
+  Object.keys(cartBurguers).forEach(id=>{
+    const b=BURGUERS.find(x=>x.id===id);
+    cartBurguers[id]=cartBurguers[id].filter(inst=>{
+      if(!b || !ok(id)){ fora.push(b?b.nome:'Lanche indisponível'); return false; }
+      if(inst.combo){
+        const suco=!!inst.comboSuco;
+        const sabores=getOpcoes(suco?COMBO_SUCO_ID:'cmb');
+        const comboOK=produtoDisponivel('cmb') && sabores.includes(inst.combo)
+          && ok(suco?COMBO_SUCO_ID:COMBO_REFRI_ID) && ok('bat');
+        if(!comboOK){
+          fora.push(`Combo do ${b.nome} (${suco?'Suco':'Refri'} ${inst.combo})`);
+          inst.combo=null; inst.comboSuco=false;
+          inst.precoExtra=(inst.adicionais||[]).reduce((a,x)=>a+(Number(x.preco)||0),0);
+        }
+      }
+      return true;
+    });
+    if(!cartBurguers[id].length) delete cartBurguers[id];
+  });
+
+  Object.keys(cartExtras).forEach(id=>{
+    if(id==='promo_main') return;                      // promoção: tratada em atualizarPromocoes()
+    const e=[...EXTRAS,...COMBO].find(x=>x.id===id);
+    const v=cartExtras[id];
+    const okExtra=()=>ok(id) && (id!=='cmb' || produtoDisponivel(COMBO_REFRI_ID));
+    if(!e){ delete cartExtras[id]; fora.push('Item indisponível'); return; }
+    if(Array.isArray(v)){
+      const sabores=getOpcoes(id);
+      cartExtras[id]=v.filter(s=>{
+        if((!sabores.length || sabores.includes(s)) && okExtra()) return true;
+        fora.push(`${e.nome} (${s})`); return false;
+      });
+      if(!cartExtras[id].length) delete cartExtras[id];
+    } else {
+      let q=0;
+      for(let i=0;i<v;i++){ if(okExtra()) q++; }
+      if(q<v) fora.push(q?`${e.nome}: ${v-q} unidade(s) (só temos ${q})`:e.nome);
+      if(q) cartExtras[id]=q; else delete cartExtras[id];
+    }
+  });
+  return fora;
+}
+
+// Busca no servidor o estoque e os sabores de agora e confere o carrinho.
+// Sem internet usa o que já está salvo — mas só se o cardápio do painel já
+// chegou alguma vez; senão devolve null (não dá pra conferir).
+async function conferirCarrinhoAoVivo(){
+  try{
+    const docs=await Promise.race([
+      Promise.all(['estoque','opcoes'].map(d=>db.collection('cardapio').doc(d).get({source:'server'}))),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000)),
+    ]);
+    const [est,opc]=docs;
+    if(est.exists) localStorage.setItem('tcho_estoque',JSON.stringify(est.data().data||{}));
+    if(opc.exists && opc.data().data) localStorage.setItem('tcho_opcoes',JSON.stringify(opc.data().data));
+  }catch(e){
+    console.warn('conferência do carrinho sem servidor:',e);
+    if(!cardapioCarregado && !localStorage.getItem('tcho_opcoes')) return null;
+  }
+  return removerIndisponiveis();
+}
+
+// Usado no botão "FAZER PEDIDO": confere e, se algo saiu, avisa o cliente
+// e devolve false (ele revê o pedido antes de mandar de novo).
+let conferindoCarrinho=false;
+async function carrinhoConferido(){
+  if(conferindoCarrinho) return false;
+  conferindoCarrinho=true;
+  const btn=document.getElementById('btn-fazer-pedido');
+  const txtBtn=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='⏳ CONFERINDO O PEDIDO...'; }
+  let fora;
+  try{ fora=await conferirCarrinhoAoVivo(); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent=txtBtn; } conferindoCarrinho=false; }
+  if(fora===null){
+    alert('📶 Não conseguimos confirmar o cardápio agora. Verifique sua internet e toque em FAZER PEDIDO de novo.');
+    return false;
+  }
+  if(!fora.length) return true;
+  renderBurguers();renderExtras();renderCustomCategorias();updateFloat();
+  alert('😔 Alguns itens acabaram e saíram do seu pedido:\n\n• '+fora.join('\n• ')+'\n\nConfira o pedido antes de enviar.');
+  if(getCount()===0) goStep(1); else renderResumo();
+  return false;
+}
+
 // ── RENDER CARDÁPIO ────────────────────────────────────────────
 function renderBurguers(){
   document.getElementById('menu-burguers').innerHTML=BURGUERS.filter(b=>!b.customCat&&produtoDisponivel(b.id)).map(b=>{
@@ -335,6 +439,7 @@ function renderExtras(){
 }
 
 function chgExtra(id,d){
+  if(d>0 && !cardapioCarregado){ esperarCardapio(()=>chgExtra(id,d)); return; }
   const opc=getOpcoes(id);
   if(opc.length>0){
     if(d>0){abrirPickerSabor(id);return;}
@@ -358,6 +463,7 @@ function remSaborExtra(id,idx){
 }
 
 function abrirPickerSabor(id){
+  if(!cardapioCarregado){ esperarCardapio(()=>abrirPickerSabor(id)); return; }
   const opc=getOpcoes(id);
   const extra=[...EXTRAS,...COMBO].find(e=>e.id===id)||{emoji:'🍟',nome:''};
   document.getElementById('modal-box').innerHTML=`
@@ -385,6 +491,9 @@ function escolherSabor(id,sabor){
 
 // ── MODAL PERSONALIZAÇÃO ───────────────────────────────────────
 function abrirModal(id){
+  // Sabores do combo só depois que a lista do painel chegou (senão aparecia a
+  // lista padrão do dados.js, com bebida que a loja nem tem).
+  if(!cardapioCarregado){ esperarCardapio(()=>abrirModal(id)); return; }
   const b=BURGUERS.find(x=>x.id===id)||{emoji:'🍔',nome:'Hamburguer',preco:0,ing:[]};
   modalId=id;pontoAtual=null;sacheAtual=null;removidosAtual=[];adicionaisAtual={};comboBebidaAtual=null;comboSaborAtual=null;
   const comboItem=[...COMBO].find(c=>c.id==='cmb');
@@ -394,7 +503,7 @@ function abrirModal(id){
   const refriOK   = produtoDisponivel(COMBO_REFRI_ID);   // Refrigerante Lata em estoque?
   const sucoOK    = produtoDisponivel(COMBO_SUCO_ID);     // Suco Lata em estoque?
   const temBebida = refriOK || sucoOK;                    // tem alguma bebida pro combo?
-  const comboAtivo= produtoDisponivel('cmb');             // combo ligado no admin?
+  const comboAtivo= produtoDisponivel('cmb') && produtoDisponivel('bat');   // combo ligado no admin e com batata?
   const comboLiberado = temBebida && comboAtivo;          // só libera se tem bebida E combo ligado
   // Sem bebida (some) ou combo desligado (transparente): não é obrigatório escolher.
   comboAtual = comboLiberado ? null : false;
@@ -893,6 +1002,10 @@ async function finalizarPedido(){
   // COMPARTILHADO do Firestore (numeração sequencial e global), sem perder o popup.
   let waWin=null; try{ waWin=window.open('','_blank'); }catch(e){}
 
+  // Confere o carrinho com o estoque e os sabores de AGORA (o cliente pode ter
+  // montado o pedido com o cardápio desatualizado). Se algo saiu, ele revê.
+  if(!await carrinhoConferido()){ try{ if(waWin) waWin.close(); }catch(e){} return; }
+
   // Número sequencial: contador único no Firestore (mesma fonte do balcão/mesa).
   let numOrdem;
   try {
@@ -1027,6 +1140,7 @@ function montarCarrinhoServidor(){
 
 async function finalizarPedidoOnline(){
   if(pagandoOnline) return;
+  if(!await carrinhoConferido()) return;   // estoque/sabores de agora (ver carrinhoConferido)
   const dados=dadosPedido();
   if(!(dados.total>0)){ alert('Este pedido está com valor zero. Escolha outra forma de pagamento.'); goStep(2); return; }
   const pix=pagamento==='online_pix';
@@ -1605,12 +1719,19 @@ function repetirPedido(){
   Object.entries(saved.extras||{}).forEach(([id,val])=>{
     if([...EXTRAS,...COMBO].find(x=>x.id===id)) cartExtras[id]=val;
   });
-  if(getCount()===0) return;
+  // O pedido salvo pode ter bebida/sabor que acabou ou saiu do painel.
+  const fora=removerIndisponiveis();
+  if(getCount()===0){
+    renderBurguers();renderExtras();renderCustomCategorias();updateFloat();
+    if(fora.length) alert('😔 Os itens do seu último pedido não estão disponíveis agora. Monte um novo pedido pelo cardápio.');
+    return;
+  }
   fecharBannerRepetir();
   const btnRep=document.getElementById('btn-repetir-sc4');
   if(btnRep) btnRep.style.display='none';
   renderBurguers();renderExtras();renderCustomCategorias();updateFloat();
   goStep(2);
+  if(fora.length) alert('😔 Alguns itens do seu último pedido acabaram e ficaram de fora:\n\n• '+fora.join('\n• '));
 }
 
 // ── INICIALIZAÇÃO ──────────────────────────────────────────────
@@ -1633,7 +1754,46 @@ mostrarBotaoAcompanhar();   // mostra "Acompanhar meu pedido" se houver pedido a
   const sv=JSON.parse(localStorage.getItem('tcho_pedido_atual')||'null');
   if(sv && sv.docId) acompanharPedido();
 })();
-db.collection('cardapio').get().then(snapshot=>{
+// Sincroniza o cardápio do painel (produtos, sabores, estoque...). Pode ser
+// chamada de novo (esperarCardapio) se a primeira tentativa falhar; chamadas
+// simultâneas reaproveitam a mesma busca.
+let _syncCardapio=null;
+function sincronizarCardapio(){
+  if(cardapioCarregado) return Promise.resolve();
+  if(!_syncCardapio) _syncCardapio=buscarCardapio().finally(()=>{ _syncCardapio=null; });
+  return _syncCardapio;
+}
+sincronizarCardapio().catch(e=>console.warn('cardápio do painel não carregou:',e));
+
+// Enquanto o cardápio do painel não chegou, a escolha de lanche/sabor espera
+// (mostra "carregando") e abre sozinha quando ele chegar.
+let _esperaCardapio=null, _fnCardapio=null;
+function esperarCardapio(fn){
+  _fnCardapio=fn;
+  const box=document.getElementById('modal-box');
+  box.innerHTML=`
+    <div class="modal-header"><div><div class="modal-title">⏳ Carregando o cardápio...</div></div><button class="modal-close" onclick="fecharModal()">✕</button></div>
+    <div class="modal-body"><div style="font-size:.8rem;color:var(--muted)">Só um instante, estamos conferindo o que tem disponível agora.</div></div>`;
+  document.getElementById('modal-overlay').style.display='flex';
+  document.body.style.overflow='hidden';
+  const vez=_esperaCardapio={};
+  sincronizarCardapio().then(()=>{
+    if(_esperaCardapio!==vez) return;
+    _esperaCardapio=null;
+    if(document.getElementById('modal-overlay').style.display==='none') return;   // cliente fechou
+    fecharModal(); fn();
+  }).catch(()=>{
+    if(_esperaCardapio!==vez) return;
+    _esperaCardapio=null;
+    box.innerHTML=`
+      <div class="modal-header"><div><div class="modal-title">📶 Sem conexão</div></div><button class="modal-close" onclick="fecharModal()">✕</button></div>
+      <div class="modal-body"><div style="font-size:.8rem;color:var(--muted);margin-bottom:12px">Não conseguimos carregar o cardápio. Verifique sua internet e tente de novo.</div>
+        <button class="btn-primary" style="margin:0" onclick="esperarCardapio(_fnCardapio)">🔄 Tentar de novo</button></div>`;
+  });
+}
+
+function buscarCardapio(){ return db.collection('cardapio').get().then(snapshot=>{
+  cardapioCarregado=true;   // a partir daqui getOpcoes() usa a lista do painel
   if(snapshot.empty) return;
   let mudou=false;
   const chk=(k,v)=>{if(v && v!==localStorage.getItem(k)){localStorage.setItem(k,v);mudou=true;}};
@@ -1679,7 +1839,7 @@ db.collection('cardapio').get().then(snapshot=>{
   const map={burguers:'cat-title-burguers',extras:'cat-title-extras',combo:'cat-title-combo'};
   Object.entries(map).forEach(([id,elId])=>{if(catNomes[id]){const el=document.getElementById(elId);if(el)el.textContent=catNomes[id];}});
   renderBurguers();renderExtras();renderCustomCategorias();updateFloat();
-}).catch(()=>{});
+}); }
 
 // Fotos dos produtos (coleção própria — 1 doc por produto). Mostra no cardápio.
 db.collection('fotos').get().then(snap=>{

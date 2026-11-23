@@ -8,7 +8,7 @@ Ele roda no PC da loja, junto com o `servidor-impressao/`.
 
 | Etapa | Quem faz |
 |---|---|
-| Entender o cliente (texto e áudio) | Gemini (`gemini-2.5-flash`), com saída em JSON |
+| Entender o cliente (texto e áudio) | Gemini (`gemini-3.5-flash-lite`; se estiver sobrecarregado ou demorar mais de 30s, troca sozinho para `gemini-3.5-flash` e `gemini-3.8-flash`), com saída em JSON |
 | Saber o que tem e quanto custa | `cardapio.js`: Firestore em tempo real (`cardapio/*`, `config/operacao`), mesmas regras do site |
 | Conferir itens, estoque, sabores, frete e total | `pedido.js`: usa o `montarDoCarrinho()` de `functions/conferencia.js`, o mesmo que confere o pagamento online |
 | Gravar o pedido, dar baixa no estoque e atualizar o CRM | `pedido.js`: mesmo formato de `finalizarPedido()` em `cliente/cliente.js`, mais `origem: 'whatsapp'` |
@@ -72,6 +72,8 @@ Roda o fluxo inteiro (montar o pedido, resumo, "sim", gravação, baixa de estoq
 |---|---|
 | `Falta o arquivo serviceAccount.json` / `Falta a GEMINI_API_KEY` | Refaça os passos 2 e 3 da instalação |
 | `Falha no login do WhatsApp` | Feche o bot, apague a pasta `.wwebjs_auth` e inicie de novo para escanear outro QR |
+| Fica em "O WhatsApp Web não respondeu a tempo" e o QR Code não aparece | O WhatsApp mudou o WhatsApp Web e a biblioteca `whatsapp-web.js` ainda não acompanhou (aconteceu em 23/11/2026). O `INICIAR.bat` procura atualização a cada reinício: deixe aberto, e quando sair a correção oficial o QR aparece sozinho |
+| Não acha o navegador | O bot usa o Chrome ou o Edge instalados. Para usar outro, coloque `CHROME_PATH=` com o caminho do .exe no `.env` |
 | Cliente recebe "deu um probleminha aqui" | O Gemini não respondeu, por limite de uso ou instabilidade. O plano grátis tem limite de pedidos por minuto; em dia cheio, considere ativar o faturamento no AI Studio |
 | O bot não responde alguém | A conversa pode estar pausada (30 min) por atendimento humano, ou a loja está fechada. Os motivos aparecem na janela |
 

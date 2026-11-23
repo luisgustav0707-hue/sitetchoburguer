@@ -9,7 +9,12 @@ const { GoogleGenAI } = require('@google/genai');
 const CD = require('./cardapio');
 const { brl } = require('./pedido');
 
-const MODELO = process.env.GEMINI_MODELO || 'gemini-2.5-flash';
+// Modelos em ordem de preferência: se um estiver fora do ar ou sobrecarregado
+// (503), tenta o próximo. GEMINI_MODELO no .env troca a lista (separada por vírgula).
+// O lite é o mais rápido no plano gratuito; o gemini-2.5-flash não está mais liberado para contas novas.
+const MODELOS = (process.env.GEMINI_MODELO || 'gemini-3.5-flash-lite,gemini-3.5-flash,gemini-3.8-flash')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+const MODELO = MODELOS.join(' → ');
 let ai = null;
 function cliente() {
   if (!ai) {
@@ -174,15 +179,18 @@ function montarContents(conversa, entrada) {
 }
 
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+// Vale tentar de novo / outro modelo: limite (429), servidor (5xx), modelo
+// indisponível (404) ou rede (sem status).
 function temporario(e) {
   const s = Number(e && (e.status || e.code));
-  return !s || s === 429 || s >= 500;   // sem status = rede
+  return !s || s === 404 || s === 429 || s >= 500;
 }
+const resumoErro = (e) => `${e.status || ''} ${String(e.message || '').replace(/\s+/g, ' ').slice(0, 140)}`;
 
 // entrada = { texto } ou { audio: base64 }. Devolve { transcricao, resposta, acao, pedido }.
+// Passa pelos modelos da lista; se todos falharem, espera um pouco e tenta mais uma volta.
 async function entender(conversa, entrada, nomeWhatsApp) {
-  const req = {
-    model: MODELO,
+  const base = {
     contents: montarContents(conversa, entrada),
     config: {
       systemInstruction: instrucoes(conversa, nomeWhatsApp),
@@ -192,19 +200,22 @@ async function entender(conversa, entrada, nomeWhatsApp) {
     },
   };
   let ultimoErro;
-  for (let tentativa = 1; tentativa <= 3; tentativa++) {
-    try {
-      const r = await cliente().models.generateContent(req);
-      const json = JSON.parse(r.text);
-      if (!json || typeof json.resposta !== 'string' || !json.acao) throw Object.assign(new Error('JSON fora do formato'), { status: 500 });
-      json.pedido = json.pedido || {};
-      return json;
-    } catch (e) {
-      ultimoErro = e;
-      console.warn(`[ia] tentativa ${tentativa} falhou: ${e.status || ''} ${e.message}`);
-      if (!temporario(e) && !(e instanceof SyntaxError)) break;
-      if (tentativa < 3) await espera(tentativa === 1 ? 1500 : 4000);
+  for (let volta = 1; volta <= 2; volta++) {
+    for (const model of MODELOS) {
+      try {
+        // 30s por tentativa: com o modelo na fila, passa pro próximo em vez de deixar o cliente esperando
+        const r = await cliente().models.generateContent({ ...base, model, config: { ...base.config, abortSignal: AbortSignal.timeout(30000) } });
+        const json = JSON.parse(r.text);
+        if (!json || typeof json.resposta !== 'string' || !json.acao) throw Object.assign(new Error('JSON fora do formato'), { status: 500 });
+        json.pedido = json.pedido || {};
+        return json;
+      } catch (e) {
+        ultimoErro = e;
+        console.warn(`[ia] ${model} falhou: ${resumoErro(e)}`);
+        if (!temporario(e) && !(e instanceof SyntaxError)) throw e;   // chave inválida etc.: não adianta insistir
+      }
     }
+    if (volta === 1) await espera(3000);
   }
   throw ultimoErro;
 }

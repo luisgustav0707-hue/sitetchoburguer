@@ -36,10 +36,29 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
 CD.iniciar(db);
 
+// Navegador que o WhatsApp Web usa: o Chrome ou o Edge já instalados no
+// Windows (o Edge vem em todo Windows 10/11). CHROME_PATH no .env força um.
+// Mesma busca do servidor-impressao/server.js.
+function caminhoNavegador() {
+  const pf = process.env.PROGRAMFILES || 'C:\\Program Files';
+  const pf86 = process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)';
+  const local = process.env.LOCALAPPDATA || '';
+  const candidatos = [
+    process.env.CHROME_PATH,
+    `${pf}\\Google\\Chrome\\Application\\chrome.exe`,
+    `${pf86}\\Google\\Chrome\\Application\\chrome.exe`,
+    local && `${local}\\Google\\Chrome\\Application\\chrome.exe`,
+    `${pf86}\\Microsoft\\Edge\\Application\\msedge.exe`,
+    `${pf}\\Microsoft\\Edge\\Application\\msedge.exe`,
+  ];
+  return candidatos.find((p) => { try { return p && fs.existsSync(p); } catch (e) { return false; } }) || undefined;
+}
+const navegador = caminhoNavegador();
+
 const client = new Client({
   authStrategy: new LocalAuth({ clientId: 'tcho', dataPath: path.join(__dirname, '.wwebjs_auth') }),
   webVersionCache: { type: 'local', path: path.join(__dirname, '.wwebjs_cache') },
-  puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] },
+  puppeteer: { headless: true, executablePath: navegador, args: ['--no-sandbox', '--disable-setuid-sandbox'] },
 });
 
 // Mensagens que o PRÓPRIO bot está mandando — pra não confundir com resposta
@@ -152,8 +171,18 @@ async function conectar(tentativa = 1) {
   try {
     await client.initialize();
   } catch (e) {
-    const s = Math.min(60, 5 * tentativa);
-    console.error(`${hora()} ⚠️  Não conectou (${e.message}). Tentando de novo em ${s}s...`);
+    try { await client.destroy(); } catch (x) {}   // fecha o navegador, senão a próxima tentativa acha a sessão "em uso"
+    if (/Waiting failed/i.test(e.message)) {
+      console.error(`${hora()} ⚠️  O WhatsApp Web não respondeu a tempo. Se continuar, pode ser mudança do WhatsApp que a biblioteca ainda não suporta — o INICIAR.bat busca atualização a cada reinício.`);
+    } else {
+      console.error(`${hora()} ⚠️  Não conectou (${e.message}).`);
+    }
+    if (tentativa >= 3) {
+      console.error(`${hora()} Reiniciando o atendente para buscar atualização...`);
+      process.exit(1);                               // o INICIAR.bat reinicia (e roda o npm update)
+    }
+    const s = 10 * tentativa;
+    console.error(`${hora()} Tentando de novo em ${s}s...`);
     await espera(s * 1000);
     return conectar(tentativa + 1);
   }
@@ -172,5 +201,6 @@ process.on('unhandledRejection', (e) => console.error('[erro não tratado]', e))
 process.on('SIGINT', async () => { console.log('\nDesligando...'); try { await client.destroy(); } catch (e) {} process.exit(0); });
 
 console.log(`${hora()} 🍔 Tcho Burguer — atendente de WhatsApp (modelo ${ia.MODELO})`);
+console.log(`${hora()} Navegador: ${navegador || 'Chromium do puppeteer'}`);
 console.log(`${hora()} Carregando cardápio e abrindo o WhatsApp...`);
 conectar();

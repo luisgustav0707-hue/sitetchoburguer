@@ -254,6 +254,13 @@ async function main() {
     pronto: () => whatsappPronto,
     enviar: enviarAviso,
     resolverChat: async (numero) => { const w = await client.getNumberId(numero); return w ? w._serialized : null; },
+    // Cancelado: pausa o bot na conversa (pelo número e pelo @lid, que é como
+    // a resposta do cliente pode chegar) e marca como não lida.
+    aoCancelar: async (chatId, p) => {
+      const ids = new Set([chatId]);
+      try { const [r] = await client.getContactLidAndPhone([chatId]); if (r && r.lid) ids.add(String(r.lid)); } catch (e) {}
+      ids.forEach((id) => atendente.pausarAposAviso(id, `pedido ${p.num || ''} cancelado`));
+    },
     log: (t) => console.log(`${hora()} ${t}`),
   });
 

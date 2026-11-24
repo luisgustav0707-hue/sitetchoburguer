@@ -100,9 +100,10 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['impresso']);
       // Atendente de WhatsApp: avisa o cliente quando o pedido muda de etapa
       // (bot-whatsapp/avisos.js). Só enxerga pedidos que mudaram nas últimas
-      // 12 h (`hora` é regravada a cada etapa) e só marca quais avisos já
-      // mandou — nunca status, preço ou dados do cliente.
-      allow list: if isBot() && resource.data.hora > request.time - duration.value(12, 'h');
+      // 12 h (`hora` é regravada a cada etapa; `canceladoEm`, ao cancelar) e
+      // só marca quais avisos já mandou — nunca status, preço ou dados do cliente.
+      allow list: if isBot() && (resource.data.hora > request.time - duration.value(12, 'h')
+        || resource.data.canceladoEm > request.time - duration.value(12, 'h'));
       allow update: if isBot()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['avisosWa']);
     }

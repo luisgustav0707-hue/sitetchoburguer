@@ -437,6 +437,15 @@
           </div>
           <textarea id="aviso-txt-entrega" rows="2" maxlength="500"
             style="width:100%;box-sizing:border-box;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:8px;padding:8px 10px;font-size:.76rem;outline:none;resize:vertical;margin-bottom:6px;font-family:inherit"></textarea>
+          <div class="toggle-row" style="margin-top:4px">
+            <div class="toggle-info">
+              <div class="toggle-label">❌ Pedido cancelado</div>
+              <div class="toggle-desc">Quando você cancela o pedido. Depois do aviso o robô fica 30 min quieto nessa conversa para a loja responder</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="aviso-on-cancelado" checked><span class="slider"></span></label>
+          </div>
+          <textarea id="aviso-txt-cancelado" rows="2" maxlength="500"
+            style="width:100%;box-sizing:border-box;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:8px;padding:8px 10px;font-size:.76rem;outline:none;resize:vertical;margin-bottom:6px;font-family:inherit"></textarea>
           <button onclick="salvarAvisosWhatsApp()" style="padding:9px 14px;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:8px;font-size:.78rem;cursor:pointer">💾 Salvar avisos</button>
         </div>
       </div>

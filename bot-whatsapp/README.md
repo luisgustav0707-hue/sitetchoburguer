@@ -31,8 +31,9 @@ A IA **nunca** define preço nem total: ela só diz o que o cliente escolheu. O 
 - **Avisos de status.** Quando o pedido muda de etapa no Kanban, o bot manda uma mensagem no WhatsApp do cliente:
   - **aceito:** saiu de "Novos";
   - **pronto:** chegou em "Prontos" (só retirada);
-  - **saiu para entrega:** chegou em "Entrega" (só delivery).
-  Vale para pedidos do site, do balcão e do WhatsApp; mesa não recebe. Cada aviso sai uma vez só por pedido (marca em `pedidos/{id}.avisosWa`). Mudança com mais de 30 minutos (bot desligado) não gera aviso atrasado. Textos e liga/desliga: painel → Configurações → WhatsApp → Avisos automáticos.
+  - **saiu para entrega:** chegou em "Entrega" (só delivery);
+  - **cancelado:** cancelado no painel, em qualquer etapa. Depois desse aviso o bot fica 30 minutos quieto na conversa e marca como não lida, para a loja explicar o motivo.
+  Vale para pedidos do site, do balcão e do WhatsApp; mesa não recebe. Cada aviso sai uma vez só por pedido (marca em `pedidos/{id}.avisosWa`). Mudança (ou cancelamento, por `canceladoEm`) com mais de 30 minutos (bot desligado) não gera aviso atrasado. Textos e liga/desliga: painel → Configurações → WhatsApp → Avisos automáticos.
 
 ## Instalação (uma vez, no PC da loja)
 

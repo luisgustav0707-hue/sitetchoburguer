@@ -240,7 +240,8 @@ async function caso(nome, fn) {
     assert.strictEqual(AV.eventoDo({ status: 'pronto', tipo: 'delivery' }), 'aceito');
     assert.strictEqual(AV.eventoDo({ status: 'pronto', tipo: 'retirada' }), 'pronto');
     assert.strictEqual(AV.eventoDo({ status: 'entrega', tipo: 'delivery' }), 'entrega');
-    assert.strictEqual(AV.eventoDo({ status: 'cancelado', tipo: 'delivery' }), null);
+    assert.strictEqual(AV.eventoDo({ status: 'cancelado', tipo: 'delivery' }), 'cancelado');
+    assert.strictEqual(AV.eventoDo({ status: 'finalizado', tipo: 'delivery' }), null);
     assert.strictEqual(AV.numeroWhatsApp('(31) 98309-4152'), '5531983094152');
     assert.strictEqual(AV.numeroWhatsApp('123'), '');
     assert.strictEqual(AV.montarTexto(AV.PADRAO.aceito.texto, { nome: 'joão vitor', num: '#581' }),
@@ -269,12 +270,13 @@ async function caso(nome, fn) {
         update: (ref, campos) => { docs[ref._id] = { ...docs[ref._id], ...campos }; },
       }),
     };
-    const env = [];
+    const env = [], pausados = [];
     let conectado = false;
     const av = AV.iniciarAvisos({
       db: fdb, FieldValue: { serverTimestamp: () => 'TS' }, pronto: () => conectado, log: () => {},
       resolverChat: async (n) => `${n}@c.us`,
       enviar: async (chat, txt) => { env.push([chat, txt]); },
+      aoCancelar: async (chat) => { pausados.push(chat); },
     });
     const mudar = async (id, campos) => {
       docs[id] = { ...docs[id], ...campos };
@@ -301,6 +303,17 @@ async function caso(nome, fn) {
     opCb({ exists: true, data: () => ({ avisosWhatsApp: { entrega: { on: false } } }) });
     await mudar('d', { num: '#5', tel: '31966665555', tipo: 'delivery', origem: 'site', status: 'entrega', hora: ts(agora) });
     assert.strictEqual(env.length, 3, 'aviso desligado no painel');
+    // Cancelado (até depois de "saiu para entrega"): usa canceladoEm e pausa a conversa.
+    await mudar('a', { status: 'cancelado', canceladoEm: ts(agora) });
+    assert.strictEqual(env.length, 4);
+    assert.match(env[3][1], /Ana.*#1.*cancelado/);
+    assert.deepStrictEqual(pausados, ['5531988887777@c.us']);
+    await mudar('a', { status: 'cancelado', canceladoEm: ts(agora) });
+    assert.strictEqual(env.length, 4, 'cancelamento repetido não avisa de novo');
+    // Cancelado direto de "Novos", com a última etapa antiga: vale o canceladoEm.
+    await mudar('n', { num: '#6', tel: '31955554444', tipo: 'delivery', origem: 'site', status: 'cancelado', hora: ts(agora - 2 * 3600000), canceladoEm: ts(agora) });
+    assert.strictEqual(env.length, 5);
+    assert.strictEqual(AV.eventoDo({ status: 'cancelado', tipo: 'mesa' }), 'cancelado');
   });
 
   await caso('texto do cardápio pra IA: sem esgotados e sem sabor fora do painel', async () => {

@@ -192,7 +192,12 @@ function criarAtendente({ db, FieldValue, ia, enviar, aoPausar }) {
     } else CONV.pausar(chatId);
   }
 
-  return { receber, humanoRespondeu };
+  // Aviso de cancelamento (avisos.js): quem explica o motivo é a loja.
+  function pausarAposAviso(chatId, motivo) {
+    pausar(CONV.obter(chatId), motivo);
+  }
+
+  return { receber, humanoRespondeu, pausarAposAviso };
 }
 
 module.exports = { criarAtendente, SIM, semAcento, MSG };

@@ -1593,6 +1593,7 @@ const AVISOS_PADRAO={
   aceito: 'Oi, {nome}! 👋 Seu pedido {num} foi aceito e já está sendo preparado. 🍔',
   pronto: '{nome}, seu pedido {num} está pronto! Pode vir retirar. 😋',
   entrega:'{nome}, seu pedido {num} saiu para entrega! 🛵 Já já chega aí.',
+  cancelado:'{nome}, seu pedido {num} foi cancelado. 😕 Se tiver qualquer dúvida, é só responder aqui que a gente te explica.',
 };
 function carregarAvisosWhatsApp(){
   const pintar=cfg=>Object.keys(AVISOS_PADRAO).forEach(ev=>{
@@ -1839,7 +1840,8 @@ function avisoEstorno(p){
 function cancelar(id){
   const p=pedidos.find(x=>x._id===id);
   if(!p||!confirm(`Cancelar pedido ${p.num||('#'+p.id)}?${avisoEstorno(p)}`))return;
-  db.collection('pedidos').doc(id).update({status:'cancelado'}).catch(console.error);
+  // canceladoEm: o atendente de WhatsApp usa pra avisar o cliente (bot-whatsapp/avisos.js).
+  db.collection('pedidos').doc(id).update({status:'cancelado', canceladoEm:firebase.firestore.FieldValue.serverTimestamp()}).catch(console.error);
   pedidos=pedidos.filter(x=>x._id!==id);
   totalHoje=Math.max(0,totalHoje-1);
   renderAll();renderHistorico();

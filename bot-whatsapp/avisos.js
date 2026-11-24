@@ -6,6 +6,9 @@
 //   • aceito   → saiu de "Novos" para qualquer etapa de trabalho
 //   • pronto   → chegou em "Prontos" (só retirada; delivery espera a entrega)
 //   • entrega  → chegou em "Entrega" (saiu para entrega)
+//   • cancelado → cancelado no painel (em qualquer etapa). Depois dele o bot
+//     fica quieto 30 min na conversa e marca como não lida: quem explica o
+//     motivo é a loja, não a IA.
 // Liga/desliga e textos: painel → Configurações → WhatsApp → Avisos
 // (config/operacao.avisosWhatsApp). Sem config, usa os padrões abaixo.
 //
@@ -18,6 +21,7 @@ const PADRAO = {
   aceito:  { on: true, texto: 'Oi, {nome}! 👋 Seu pedido {num} foi aceito e já está sendo preparado. 🍔' },
   pronto:  { on: true, texto: '{nome}, seu pedido {num} está pronto! Pode vir retirar. 😋' },
   entrega: { on: true, texto: '{nome}, seu pedido {num} saiu para entrega! 🛵 Já já chega aí.' },
+  cancelado: { on: true, texto: '{nome}, seu pedido {num} foi cancelado. 😕 Se tiver qualquer dúvida, é só responder aqui que a gente te explica.' },
 };
 const EVENTOS = Object.keys(PADRAO);
 
@@ -29,12 +33,13 @@ const JANELA_MS = 30 * 60 * 1000;
 const ESCUTA_MS = 6 * 60 * 60 * 1000;
 
 const ORIGENS_SEM_AVISO = new Set(['mesa', 'mesa-rodada']);
-const FINAIS = new Set(['novo', 'finalizado', 'cancelado']);
+const SEM_AVISO = new Set(['novo', 'finalizado']);
 
 // Qual aviso corresponde à etapa atual do pedido (null = nenhum).
 function eventoDo(p) {
   const s = p.status;
-  if (!s || FINAIS.has(s)) return null;
+  if (s === 'cancelado') return 'cancelado';
+  if (!s || SEM_AVISO.has(s)) return null;
   if (s === 'entrega') return p.tipo === 'delivery' ? 'entrega' : 'aceito';
   if (s === 'pronto' && p.tipo !== 'delivery') return 'pronto';
   return 'aceito';   // prep, pronto (delivery) ou etapa personalizada
@@ -81,7 +86,8 @@ function lerConfig(op) {
 
 // db/FieldValue: Firebase compat. resolverChat(numero) → chatId ou null.
 // enviar(chatId, texto). pronto() → true quando o WhatsApp está conectado.
-function iniciarAvisos({ db, FieldValue, resolverChat, enviar, pronto, log = console.log }) {
+// aoCancelar(chatId, pedido): depois do aviso de cancelamento (pausa o bot).
+function iniciarAvisos({ db, FieldValue, resolverChat, enviar, pronto, aoCancelar, log = console.log }) {
   let config = lerConfig(null);
   db.collection('config').doc('operacao').onSnapshot(
     (d) => { config = lerConfig(d.exists ? d.data() : null); },
@@ -99,7 +105,10 @@ function iniciarAvisos({ db, FieldValue, resolverChat, enviar, pronto, log = con
     const ja = p.avisosWa || {};
     if (ja[ev]) { vistos.set(chave, Date.now()); return; }
     if (!config[ev].on) return;
-    const quando = p.hora && p.hora.toMillis ? p.hora.toMillis() : 0;
+    // Cancelar não regrava `hora`: o painel grava `canceladoEm` (painel antigo,
+    // ainda aberto sem recarregar, não grava — aí vale a última etapa).
+    const marcaTempo = ev === 'cancelado' && p.canceladoEm ? p.canceladoEm : p.hora;
+    const quando = marcaTempo && marcaTempo.toMillis ? marcaTempo.toMillis() : 0;
     if (!quando || Date.now() - quando > JANELA_MS) { vistos.set(chave, Date.now()); return; }
     const numero = numeroWhatsApp(p.tel);
     if (!numero) { vistos.set(chave, Date.now()); return; }
@@ -116,7 +125,7 @@ function iniciarAvisos({ db, FieldValue, resolverChat, enviar, pronto, log = con
         if (eventoDo(atual) !== ev || (atual.avisosWa || {})[ev]) return;   // mudou de etapa ou outro PC já mandou
         const marca = { ...(atual.avisosWa || {}), [ev]: FieldValue.serverTimestamp() };
         // Pulou direto para pronto/entrega: o "aceito" não sai mais depois.
-        if (ev !== 'aceito' && !marca.aceito) marca.aceito = FieldValue.serverTimestamp();
+        if ((ev === 'pronto' || ev === 'entrega') && !marca.aceito) marca.aceito = FieldValue.serverTimestamp();
         t.update(ref, { avisosWa: marca });
         ganhou = true;
       });
@@ -131,19 +140,24 @@ function iniciarAvisos({ db, FieldValue, resolverChat, enviar, pronto, log = con
     if (!chatId) { log(`📭 ${p.num || id}: ${numero} não tem WhatsApp — aviso "${ev}" não enviado`); return; }
     await enviar(chatId, montarTexto(config[ev].texto, p));
     log(`📣 ${p.num || id}: aviso "${ev}" enviado para ${numero}`);
+    if (ev === 'cancelado' && aoCancelar) await Promise.resolve(aoCancelar(chatId, p)).catch(() => {});
   }
 
+  // Duas consultas: etapas (`hora`) e cancelamentos (`canceladoEm`) — um
+  // pedido antigo cancelado agora não aparece na primeira.
   function escutar() {
     const desde = new Date(Date.now() - ESCUTA_MS);
-    return db.collection('pedidos').where('hora', '>=', desde).onSnapshot((snap) => {
+    const ouvir = (campo) => db.collection('pedidos').where(campo, '>=', desde).onSnapshot((snap) => {
       snap.docChanges().forEach((ch) => {
         if (ch.type === 'removed') return;
         tratar(ch.doc.id, ch.doc.data()).catch((e) => console.error('[avisos]', e.message));
       });
     }, (e) => {
-      console.warn('[avisos] parou de escutar os pedidos:', e.message, '— tentando de novo em 1 min');
+      console.warn(`[avisos] parou de escutar os pedidos (${campo}):`, e.message, '— tentando de novo em 1 min');
       setTimeout(reabrir, 60000);
     });
+    const pararHora = ouvir('hora'), pararCancel = ouvir('canceladoEm');
+    return () => { pararHora(); pararCancel(); };
   }
   // O filtro "últimas 6 h" é fixo na consulta: reabre a cada hora para andar junto.
   let parar = escutar();

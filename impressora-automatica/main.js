@@ -127,12 +127,12 @@ function abrirPareamento() {
 // da bandeja só oferece "padrão" ou "não imprimir esta via".
 function navegadorParaImpressao() {
   const candidatos = [
-    process.env['PROGRAMFILES'] + '\Google\Chrome\Application\chrome.exe',
-    process.env['PROGRAMFILES(X86)'] + '\Google\Chrome\Application\chrome.exe',
-    (process.env['LOCALAPPDATA'] || '') + '\Google\Chrome\Application\chrome.exe',
+    process.env['PROGRAMFILES'] + '\\Google\\Chrome\\Application\\chrome.exe',
+    process.env['PROGRAMFILES(X86)'] + '\\Google\\Chrome\\Application\\chrome.exe',
+    (process.env['LOCALAPPDATA'] || '') + '\\Google\\Chrome\\Application\\chrome.exe',
     // O Edge já vem no Windows 10/11 — é a garantia de que sempre há um.
-    process.env['PROGRAMFILES(X86)'] + '\Microsoft\Edge\Application\msedge.exe',
-    process.env['PROGRAMFILES'] + '\Microsoft\Edge\Application\msedge.exe',
+    process.env['PROGRAMFILES(X86)'] + '\\Microsoft\\Edge\\Application\\msedge.exe',
+    process.env['PROGRAMFILES'] + '\\Microsoft\\Edge\\Application\\msedge.exe',
   ];
   for (const c of candidatos) {
     try { if (c && fs.existsSync(c)) return c; } catch (e) { /* caminho inválido */ }

@@ -271,6 +271,89 @@ exports.revogarImpressora = onCall({ region: REGION }, async (request) => {
   return { ok: true };
 });
 
+// ═══════════════════════════════════════════════════════════════
+// Atendente de WhatsApp (pasta bot-whatsapp/) — mesmo pareamento do app de
+// impressão, com identidade própria (perfil:'whatsapp') e coleções próprias:
+// um código de bot não pareia impressora e vice-versa.
+//
+// O que o bot faz no banco (ler cardápio/config, criar pedido, contador,
+// estoque, CRM) já é permitido ao site sem login. O login pareado serve pra
+// duas coisas só: ler a chave do Gemini (botSegredos/gemini, que o admin
+// cadastra no painel) e publicar o próprio status/QR em bots/{uid} — é isso
+// que deixa o PC da loja sem nenhum arquivo de chave do Firebase.
+// ═══════════════════════════════════════════════════════════════
+
+// data: {} — admin logado. Código de 6 dígitos, 10 minutos.
+exports.gerarCodigoBot = onCall({ region: REGION }, async (request) => {
+  await exigirAdmin(request.auth);
+  const codigo = String(crypto.randomInt(100000, 999999));
+  const expiraEm = Date.now() + 10 * 60 * 1000;
+  await db.collection('codigosBot').doc(codigo).set({
+    criadoEm: FieldValue.serverTimestamp(), expiraEm, usado: false,
+  });
+  return { codigo, expiraEm };
+});
+
+// data: { codigo, nomeDispositivo } — SEM auth (o bot ainda não está logado).
+exports.parearBot = onCall({ region: REGION }, async (request) => {
+  const { codigo, nomeDispositivo } = request.data || {};
+  if (!codigo) throw new HttpsError('invalid-argument', 'Informe o código.');
+  const ref = db.collection('codigosBot').doc(String(codigo).replace(/\D/g, '').slice(0, 6) || 'x');
+
+  // Código vale UMA vez (mesmo motivo da transação de pareiarImpressora).
+  await db.runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Código inválido.');
+    const d = snap.data();
+    if (d.usado) throw new HttpsError('failed-precondition', 'Este código já foi usado — gere um novo no painel.');
+    if (d.expiraEm < Date.now()) throw new HttpsError('failed-precondition', 'Código expirado — gere um novo no painel.');
+    t.update(ref, { usado: true, usadoEm: FieldValue.serverTimestamp() });
+  });
+
+  const nome = String(nomeDispositivo || 'PC sem nome').slice(0, 60);
+  const email = `bot-${crypto.randomBytes(8).toString('hex')}@whatsapp.tchoburguer.invalid`;
+  const senha = crypto.randomBytes(24).toString('base64url');
+  let uid = null;
+  try {
+    const user = await admin.auth().createUser({
+      email, password: senha, displayName: `Atendente WhatsApp — ${nome}`,
+    });
+    uid = user.uid;
+    await admin.auth().setCustomUserClaims(uid, { perfil: 'whatsapp' });
+    await db.collection('bots').doc(uid).set({
+      nomeDispositivo: nome, pareadoEm: FieldValue.serverTimestamp(), estado: 'pareado',
+    });
+    logger.info(`Atendente WhatsApp pareado: uid ${uid} (${nome})`);
+    // Diferente do app de impressão (Electron guarda a sessão no IndexedDB),
+    // o bot roda em Node, sem persistência de sessão: ele guarda este login
+    // de máquina num arquivo local. Revogar = deleteUser + apagar bots/{uid}.
+    return { uid, email, senha, lojaNome: 'Tcho Burguer' };
+  } catch (e) {
+    if (uid) {
+      await admin.auth().deleteUser(uid).catch(() => {});
+      await db.collection('bots').doc(uid).delete().catch(() => {});
+    }
+    await ref.update({ usado: false, usadoEm: FieldValue.delete() }).catch(() => {});
+    if (e instanceof HttpsError) throw e;
+    logger.error('parearBot falhou:', e);
+    throw new HttpsError('internal', 'Não foi possível parear: ' + ((e && e.message) || String(e)));
+  }
+});
+
+// data: { uid } — admin. Remove um PC do atendente. Apagar bots/{uid} faz o
+// bot (que escuta o próprio doc) desligar na hora; apagar o usuário corta o
+// acesso à chave do Gemini.
+exports.revogarBot = onCall({ region: REGION }, async (request) => {
+  await exigirAdmin(request.auth);
+  const { uid } = request.data || {};
+  if (!uid) throw new HttpsError('invalid-argument', 'uid obrigatório.');
+  const ref = db.collection('bots').doc(uid);
+  if (!(await ref.get()).exists) throw new HttpsError('not-found', 'Computador não encontrado.');
+  await admin.auth().deleteUser(uid).catch(() => {});
+  await ref.delete();
+  return { ok: true };
+});
+
 // data: {} — admin. Enfileira um cupom de teste: prova a corrente inteira
 // (fila → app → impressora) sem depender de um pedido de verdade chegar.
 exports.imprimirTeste = onCall({ region: REGION }, async (request) => {

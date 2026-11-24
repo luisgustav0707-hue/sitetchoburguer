@@ -149,6 +149,7 @@ function showConfig(k){
     if(k==='entrega'){ renderBairros(); carregarConfigEntrega(); }
   } else {
     if(k==='impressao'){ carregarImpressoras(); carregarManifestoApp(); }
+    if(k==='whatsapp'){ carregarBots(); carregarChaveGemini(); carregarManifestoBot(); }
     const pg=document.getElementById('cfg-'+k)||document.getElementById('inner-'+k);
     if(pg) pg.classList.add('active');
   }
@@ -1485,6 +1486,115 @@ function carregarManifestoApp(){
     // pra não precisar editar HTML a cada versão nova.
     const btn=document.getElementById('imp-download');
     if(btn && m.url){ btn.href=m.url; btn.removeAttribute('download'); }
+  }).catch(()=>{});
+}
+
+// ── ATENDENTE DE WHATSAPP (pasta bot-whatsapp/) ──────────────────
+// Mesmo modelo do app de impressão: download por manifesto, pareamento por
+// código (functions gerarCodigoBot / parearBot / revogarBot) e o PC pareado
+// publica status e QR Code em bots/{uid}. A chave do Gemini mora em
+// botSegredos/gemini — só o admin grava e só o bot pareado lê.
+let _botCodigoTimer=null;
+function gerarCodigoBot(){
+  chamarFunction('gerarCodigoBot')().then(({data})=>{
+    const box=document.getElementById('bot-codigo-box'); if(!box) return;
+    document.getElementById('bot-codigo').textContent=String(data.codigo).match(/.{1,3}/g).join(' ');
+    box.style.display='block';
+    if(_botCodigoTimer) clearInterval(_botCodigoTimer);
+    const tick=()=>{
+      const restam=Math.max(0,Math.round((data.expiraEm-Date.now())/1000));
+      const t=document.getElementById('bot-codigo-timer');
+      if(t) t.textContent=restam>0?`Expira em ${String(Math.floor(restam/60)).padStart(2,'0')}:${String(restam%60).padStart(2,'0')}`:'Código expirado — gere outro';
+      if(restam<=0) clearInterval(_botCodigoTimer);
+    };
+    tick(); _botCodigoTimer=setInterval(tick,1000);
+  }).catch(e=>showToast('⚠️ '+(e.message||'Não foi possível gerar o código'),'tok-err'));
+}
+
+const BOT_ESTADOS={
+  pareado:     ['⏳','Pareado — esperando o atendente abrir'],
+  iniciando:   ['⏳','Abrindo o WhatsApp…'],
+  qr:          ['📱','Esperando escanear o QR Code'],
+  autenticado: ['🔐','WhatsApp conectado, carregando…'],
+  conectado:   ['✅','No ar — respondendo os clientes'],
+  desconectado:['⚠️','WhatsApp desconectado — reconectando'],
+  erro:        ['⚠️','Com problema'],
+};
+let unsubBots=null, _botsTimer=null, _botsDocs=[];
+function carregarBots(){
+  const el=document.getElementById('bots-lista'); if(!el) return;
+  if(unsubBots) unsubBots();
+  unsubBots=db.collection('bots').onSnapshot(snap=>{ _botsDocs=snap.docs; renderBots(); },()=>{
+    el.innerHTML='<div style="font-size:.68rem;color:#e74c3c">Não foi possível carregar.</div>';
+  });
+  // "Desligado" depende do relógio, não só de mudança no doc.
+  if(_botsTimer) clearInterval(_botsTimer);
+  _botsTimer=setInterval(renderBots,30000);
+}
+function renderBots(){
+  const el=document.getElementById('bots-lista'); if(!el) return;
+  if(!_botsDocs.length){ el.innerHTML='<div style="font-size:.68rem;color:var(--muted)">Nenhum computador pareado ainda.</div>'; return; }
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  el.innerHTML='';
+  _botsDocs.forEach(d=>{
+    const x=d.data();
+    const visto=x.atualizadoEm&&x.atualizadoEm.toMillis?x.atualizadoEm.toMillis():0;
+    // O bot dá sinal a cada minuto; 3 min sem notícia = PC ou janela fechada.
+    const offline=x.estado!=='pareado' && (!visto || Date.now()-visto>3*60*1000);
+    const [ic,txt]=offline?['⚫','Desligado — o PC ou a janela do atendente está fechada']:(BOT_ESTADOS[x.estado]||['❔',x.estado||'']);
+    const quando=visto?new Date(visto).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+    const box=document.createElement('div');
+    box.style.cssText='padding:10px 0;border-bottom:1px solid #2a2520;font-size:.78rem';
+    box.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <span>🖥️ ${esc(x.nomeDispositivo||'PC sem nome')}${x.versao?` <span style="color:var(--muted);font-size:.62rem">v${esc(x.versao)}</span>`:''}</span>
+        <button style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:.7rem">Remover</button>
+      </div>
+      <div style="font-size:.7rem;margin-top:3px">${ic} ${esc(txt)}${x.numero&&x.estado==='conectado'&&!offline?` · ${esc(x.numero)}`:''}</div>
+      ${x.erro&&!offline&&x.estado!=='conectado'?`<div style="font-size:.64rem;color:#e74c3c;margin-top:3px">${esc(x.erro)}</div>`:''}
+      ${quando?`<div style="font-size:.6rem;color:var(--muted);margin-top:2px">Última notícia: ${quando}</div>`:''}`;
+    box.querySelector('button').onclick=()=>revogarBot(d.id);
+    // O QR vem do PC pareado: só aceita PNG em data URL, via .src (nunca innerHTML).
+    if(x.estado==='qr' && !offline && typeof x.qr==='string' && x.qr.startsWith('data:image/png;base64,')){
+      const img=document.createElement('img');
+      img.src=x.qr; img.alt='QR Code do WhatsApp';
+      img.style.cssText='display:block;width:240px;max-width:100%;margin:10px auto 4px;background:#fff;padding:8px;border-radius:10px';
+      box.appendChild(img);
+    }
+    el.appendChild(box);
+  });
+}
+function revogarBot(uid){
+  if(!confirm('Remover este computador? O atendente de WhatsApp dele desliga na hora.')) return;
+  chamarFunction('revogarBot')({uid})
+    .then(()=>showToast('✅ Computador removido','tok-ok'))
+    .catch(e=>showToast('⚠️ '+(e.message||'Erro'),'tok-err'));
+}
+
+function carregarChaveGemini(){
+  const el=document.getElementById('bot-chave-status'); if(!el) return;
+  db.collection('botSegredos').doc('gemini').get().then(d=>{
+    const c=d.exists?String(d.data().chave||''):'';
+    el.innerHTML=c?`✅ Chave cadastrada (termina em <b>…${c.slice(-4).replace(/[<&]/g,'')}</b>)`:'⚠️ Nenhuma chave cadastrada — o atendente não consegue responder sem ela.';
+    el.style.color=c?'#2ecc71':'#e74c3c';
+  }).catch(()=>{ el.textContent='Não foi possível ler a chave.'; });
+}
+function salvarChaveGemini(){
+  const inp=document.getElementById('bot-chave'); if(!inp) return;
+  const chave=inp.value.trim();
+  if(!/^[A-Za-z0-9_-]{20,200}$/.test(chave)){ showToast('⚠️ Chave inválida — copie de novo do AI Studio','tok-err'); return; }
+  db.collection('botSegredos').doc('gemini').set({chave, atualizadoEm:firebase.firestore.FieldValue.serverTimestamp()},{merge:true})
+    .then(()=>{ inp.value=''; showToast('✅ Chave salva — o atendente passa a usar na hora','tok-ok'); carregarChaveGemini(); })
+    .catch(e=>showToast('⚠️ '+(e.message||'Erro ao salvar'),'tok-err'));
+}
+
+// Link e versão vêm do manifesto publicado junto do .zip (download/bot-whatsapp.json).
+function carregarManifestoBot(){
+  fetch('../download/bot-whatsapp.json?v='+Date.now()).then(r=>r.ok?r.json():null).then(m=>{
+    if(!m) return;
+    const el=document.getElementById('bot-versao');
+    if(el) el.textContent=`Versão ${m.versao} · ${Math.max(1,Math.round(m.tamanhoBytes/1024))} KB · publicado em ${m.publicadoEm}`;
+    const btn=document.getElementById('bot-download');
+    if(btn && m.url) btn.href=m.url;
   }).catch(()=>{});
 }
 

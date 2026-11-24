@@ -2,7 +2,8 @@
 // TCHO BURGUER — ATENDENTE AUTOMÁTICO DE WHATSAPP
 // ───────────────────────────────────────────────────────────────
 // Liga o WhatsApp (whatsapp-web.js, login por QR Code uma vez) ao atendente
-// (atendente.js). Roda no PC da loja, ao lado do servidor-impressao/.
+// (atendente.js). Roda no PC da loja, ao lado do app de impressão.
+// Firebase por pareamento com o painel (conexao.js) — sem arquivo de chave.
 // Instalação e uso: README.md desta pasta.
 // ═══════════════════════════════════════════════════════════════
 
@@ -10,31 +11,19 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true });
 
-const SA = path.join(__dirname, 'serviceAccount.json');
-if (!fs.existsSync(SA)) {
-  console.error('\n❌ Falta o arquivo serviceAccount.json nesta pasta (veja o README.md).\n');
-  process.exit(3);   // 3 = falta configuração (o INICIAR.bat não fica reiniciando)
-}
-if (!process.env.GEMINI_API_KEY) {
-  console.error('\n❌ Falta a GEMINI_API_KEY no arquivo .env (copie o .env.example e preencha).\n');
-  process.exit(3);   // 3 = falta configuração (o INICIAR.bat não fica reiniciando)
-}
-
-const { initializeApp, cert } = require('firebase-admin/app');
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
-initializeApp({ credential: cert(JSON.parse(fs.readFileSync(SA, 'utf8'))) });
-const db = getFirestore();
-
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+const QRCode = require('qrcode');
 const CD = require('./cardapio');
 const ia = require('./ia');
 const { criarAtendente } = require('./atendente');
+const conexao = require('./conexao');
 
 const hora = () => new Date().toLocaleTimeString('pt-BR', { timeZone: CD.TZ });
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
-CD.iniciar(db);
+let painel = null;   // conexão com o Firebase (pareamento)
+const status = (c) => (painel ? painel.status(c) : Promise.resolve());
 
 // Navegador que o WhatsApp Web usa: o Chrome ou o Edge já instalados no
 // Windows (o Edge vem em todo Windows 10/11). CHROME_PATH no .env força um.
@@ -82,11 +71,7 @@ async function enviar(chatId, texto) {
 }
 setInterval(() => { const t = Date.now(); for (const [k, exp] of doBot) if (exp < t) doBot.delete(k); }, 60000).unref();
 
-const atendente = criarAtendente({
-  db, FieldValue, ia, enviar,
-  // Pausou (pediu atendente / não entendeu 2x / erro): marca como não lida pra equipe ver.
-  aoPausar: async (chatId) => { const chat = await client.getChatById(chatId); await chat.markUnread(); },
-});
+let atendente = null;   // criado no main(), depois de conectar ao painel
 
 function ignorarChat(id) {
   return !id || id === 'status@broadcast' || id.endsWith('@g.us') || id.endsWith('@broadcast') || id.endsWith('@newsletter')
@@ -112,7 +97,7 @@ const MAX_AUDIO_B64 = 15 * 1024 * 1024;
 
 client.on('message', async (msg) => {
   try {
-    if (msg.fromMe || msg.isStatus || ignorarChat(msg.from)) return;
+    if (!atendente || msg.fromMe || msg.isStatus || ignorarChat(msg.from)) return;
     // Mensagens antigas que chegam ao reconectar: não responde.
     const em = (msg.timestamp || 0) * 1000;
     if (em < prontoEm - 5000 || Date.now() - em > 120000) return;
@@ -147,22 +132,36 @@ client.on('message', async (msg) => {
 // Mensagem enviada por ESTE número: se não foi o bot, alguém da loja
 // respondeu à mão → pausa o bot naquela conversa.
 client.on('message_create', (msg) => {
-  if (!msg.fromMe || ignorarChat(msg.to)) return;
+  if (!atendente || !msg.fromMe || ignorarChat(msg.to)) return;
   const k = chaveBot(msg.to, msg.body);
   if (doBot.has(k)) { doBot.delete(k); return; }
   if ((msg.timestamp || 0) * 1000 < prontoEm - 5000) return;
   atendente.humanoRespondeu(msg.to);
 });
 
-client.on('qr', (qr) => {
-  console.log(`\n${hora()} 📱 Escaneie o QR Code com o WhatsApp da loja (Aparelhos conectados → Conectar aparelho):\n`);
+// O QR aparece aqui na janela E no painel (Configurações → WhatsApp),
+// pra escanear de qualquer lugar.
+client.on('qr', async (qr) => {
+  console.log(`\n${hora()} 📱 Escaneie o QR Code com o WhatsApp da loja (Aparelhos conectados → Conectar aparelho).`);
+  console.log('   Ele também aparece no painel: Configurações → WhatsApp.\n');
   qrcode.generate(qr, { small: true });
+  try {
+    status({ estado: 'qr', qr: await QRCode.toDataURL(qr, { margin: 1, width: 280 }), erro: null });
+  } catch (e) { console.warn('[painel] QR não enviado:', e.message); }
 });
-client.on('authenticated', () => console.log(`${hora()} 🔐 WhatsApp autenticado (sessão salva em .wwebjs_auth)`));
-client.on('auth_failure', (m) => console.error(`${hora()} ❌ Falha no login do WhatsApp: ${m}\n   Apague a pasta .wwebjs_auth e escaneie o QR de novo.`));
+client.on('authenticated', () => {
+  console.log(`${hora()} 🔐 WhatsApp autenticado (sessão salva em .wwebjs_auth)`);
+  status({ estado: 'autenticado', qr: null });
+});
+client.on('auth_failure', (m) => {
+  console.error(`${hora()} ❌ Falha no login do WhatsApp: ${m}\n   Apague a pasta .wwebjs_auth e escaneie o QR de novo.`);
+  status({ estado: 'erro', qr: null, erro: `Falha no login do WhatsApp: ${m}` });
+});
 client.on('ready', () => {
   prontoEm = Date.now();
   console.log(`${hora()} ✅ Atendente no ar! Respondendo mensagens novas.`);
+  const numero = (client.info && client.info.wid && client.info.wid.user) || '';
+  status({ estado: 'conectado', qr: null, erro: null, numero });
 });
 
 // Reconexão automática
@@ -172,6 +171,9 @@ async function conectar(tentativa = 1) {
     await client.initialize();
   } catch (e) {
     try { await client.destroy(); } catch (x) {}   // fecha o navegador, senão a próxima tentativa acha a sessão "em uso"
+    status({ estado: 'erro', qr: null, erro: /Waiting failed/i.test(e.message)
+      ? 'O WhatsApp Web não respondeu (pode ser mudança do WhatsApp que a biblioteca ainda não acompanhou)'
+      : `Não conectou: ${e.message}` });
     if (/Waiting failed/i.test(e.message)) {
       console.error(`${hora()} ⚠️  O WhatsApp Web não respondeu a tempo. Se continuar, pode ser mudança do WhatsApp que a biblioteca ainda não suporta — o INICIAR.bat busca atualização a cada reinício.`);
     } else {
@@ -189,6 +191,7 @@ async function conectar(tentativa = 1) {
 }
 client.on('disconnected', async (motivo) => {
   console.warn(`${hora()} ⚠️  WhatsApp desconectado (${motivo}). Reconectando...`);
+  status({ estado: 'desconectado', qr: null, erro: `Desconectado: ${motivo}` });
   if (reconectando) return;
   reconectando = true;
   try { await client.destroy(); } catch (e) {}
@@ -200,7 +203,29 @@ client.on('disconnected', async (motivo) => {
 process.on('unhandledRejection', (e) => console.error('[erro não tratado]', e));
 process.on('SIGINT', async () => { console.log('\nDesligando...'); try { await client.destroy(); } catch (e) {} process.exit(0); });
 
-console.log(`${hora()} 🍔 Tcho Burguer — atendente de WhatsApp (modelo ${ia.MODELO})`);
-console.log(`${hora()} Navegador: ${navegador || 'Chromium do puppeteer'}`);
-console.log(`${hora()} Carregando cardápio e abrindo o WhatsApp...`);
-conectar();
+async function main() {
+  console.log(`${hora()} 🍔 Tcho Burguer — atendente de WhatsApp v${conexao.VERSAO} (modelo ${ia.MODELO})`);
+  try {
+    painel = await conexao.conectar();
+  } catch (e) {
+    console.error(`${hora()} ⚠️  ${e.message}`);
+    process.exit(1);                                 // o INICIAR.bat tenta de novo
+  }
+  const { db, FieldValue } = painel;
+  console.log(`${hora()} 🔗 Conectado ao painel como "${painel.nome}"`);
+  painel.aoChave((chave) => ia.definirChave(chave));
+  painel.aoRemover(async () => { try { await client.destroy(); } catch (e) {} process.exit(3); });
+  status({ estado: 'iniciando', qr: null, erro: null });
+
+  CD.iniciar(db);
+  atendente = criarAtendente({
+    db, FieldValue, ia, enviar,
+    // Pausou (pediu atendente / não entendeu 2x / erro): marca como não lida pra equipe ver.
+    aoPausar: async (chatId) => { const chat = await client.getChatById(chatId); await chat.markUnread(); },
+  });
+
+  console.log(`${hora()} Navegador: ${navegador || 'Chromium do puppeteer'}`);
+  console.log(`${hora()} Carregando cardápio e abrindo o WhatsApp...`);
+  conectar();
+}
+main();

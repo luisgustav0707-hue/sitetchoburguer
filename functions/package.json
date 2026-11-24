@@ -1,7 +1,7 @@
 {
   "name": "tcho-burguer-functions",
   "description": "Cloud Functions do Tcho Burguer — CRM/Marketing (automações + WhatsApp oficial)",
-  "engines": { "node": "20" },
+  "engines": { "node": "22" },
   "main": "index.js",
   "private": true,
   "scripts": {

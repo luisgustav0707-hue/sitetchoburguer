@@ -11,3 +11,5 @@ bot-whatsapp/.env
 bot-whatsapp/.wwebjs_auth/
 bot-whatsapp/.wwebjs_cache/
 bot-whatsapp/node_modules/
+bot-whatsapp/pareamento.json
+bot-whatsapp/dist/

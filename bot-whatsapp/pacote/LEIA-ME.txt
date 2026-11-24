@@ -1,0 +1,28 @@
+ATENDENTE DE WHATSAPP - TCHO BURGUER
+====================================
+
+1. Extraia este .zip (botao direito > Extrair tudo), por exemplo na
+   Area de Trabalho do PC da loja. Nao abra direto de dentro do .zip.
+
+2. De dois cliques em ABRIR-ATENDENTE.bat
+   - Se o PC nao tiver Node.js, ele instala sozinho. Depois feche a
+     janela e abra o ABRIR-ATENDENTE.bat de novo.
+   - Na primeira vez ele baixa o que precisa (alguns minutos).
+
+3. A janela pede um CODIGO. No painel do Tcho:
+   Configuracoes > WhatsApp > Gerar codigo de pareamento.
+   Digite o codigo na janela e aperte Enter. (So na primeira vez.)
+
+4. Vai aparecer um QR Code (na janela e no painel, em Configuracoes >
+   WhatsApp). No celular da loja:
+   WhatsApp > Aparelhos conectados > Conectar um aparelho > escaneie.
+
+5. Quando aparecer "Atendente no ar!", esta funcionando.
+   Deixe a janela aberta. Fechar a janela desliga o atendente.
+   O painel mostra se ele esta no ar.
+
+- Esta pasta NAO tem nenhuma senha ou chave. O acesso vem do pareamento
+  e pode ser cortado no painel (botao Remover).
+- Se alguem da loja responder um cliente pelo celular, o atendente fica
+  30 minutos quieto naquela conversa.
+- Mais detalhes: bot-whatsapp\README.md

@@ -18,10 +18,16 @@ const MODELO = MODELOS.join(' → ');
 let ai = null;
 function cliente() {
   if (!ai) {
-    if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY não definida no .env');
+    if (!process.env.GEMINI_API_KEY) throw new Error('chave do Gemini não cadastrada (painel → Configurações → WhatsApp)');
     ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   }
   return ai;
+}
+// A chave vem do painel (botSegredos/gemini) e pode mudar com o bot rodando.
+function definirChave(chave) {
+  if (!chave || chave === process.env.GEMINI_API_KEY) return;
+  process.env.GEMINI_API_KEY = chave;
+  ai = null;
 }
 
 // Formato da resposta (JSON Schema). "pedido" é SEMPRE o pedido inteiro.
@@ -220,4 +226,4 @@ async function entender(conversa, entrada, nomeWhatsApp) {
   throw ultimoErro;
 }
 
-module.exports = { entender, textoCardapio, instrucoes, ESQUEMA, MODELO };
+module.exports = { entender, textoCardapio, instrucoes, definirChave, ESQUEMA, MODELO };

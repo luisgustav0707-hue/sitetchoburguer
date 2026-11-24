@@ -30,6 +30,13 @@ service cloud.firestore {
     function isImpressora() {
       return signedIn() && request.auth.token.perfil == 'impressora';
     }
+    // Atendente de WhatsApp (pasta bot-whatsapp/), pareado pela function
+    // parearBot com o claim perfil:'whatsapp'. O que ele faz com pedidos,
+    // contador, estoque e CRM já é permitido ao site sem login (regras abaixo);
+    // este perfil só acrescenta ler a chave do Gemini e publicar o próprio status.
+    function isBot() {
+      return signedIn() && request.auth.token.perfil == 'whatsapp';
+    }
 
     // Lista de admins: só o próprio admin lê; ninguém escreve pelo app
     // (gerenciado manualmente no console).
@@ -166,6 +173,31 @@ service cloud.firestore {
     // legíveis, qualquer visitante do site leria um código válido e parearia o
     // próprio computador na loja. Só as functions tocam nisso.
     match /codigosImpressora/{codigo} {
+      allow read, write: if false;
+    }
+
+    // ── Atendente de WhatsApp ────────────────────────────────────────────────
+    // PCs pareados: o painel lista (e vê o QR Code do WhatsApp pra escanear).
+    // O bot lê o PRÓPRIO doc (sumiu = foi removido no painel → ele desliga) e
+    // atualiza só os campos de status. Criar/apagar: só as functions.
+    match /bots/{uid} {
+      allow read: if isAdmin();
+      allow get: if isBot() && request.auth.uid == uid;
+      allow update: if isBot() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['estado', 'qr', 'numero', 'versao', 'erro', 'atualizadoEm']);
+      allow create, delete: if false;
+    }
+
+    // Chave do Gemini (e afins): o admin cadastra no painel, só o bot pareado
+    // lê. Nunca público — com ela qualquer um gastaria a cota da loja.
+    match /botSegredos/{doc} {
+      allow read, write: if isAdmin();
+      allow get: if isBot();
+    }
+
+    // Códigos de pareamento do bot: fechados (mesmo motivo de codigosImpressora).
+    match /codigosBot/{codigo} {
       allow read, write: if false;
     }
 

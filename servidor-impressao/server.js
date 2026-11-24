@@ -57,6 +57,32 @@ function imprimirHTML(html, nomeArquivo) {
   });
 }
 
+// ── Papel da térmica no rolo contínuo (ajustar-papel.ps1) ─────
+// Com o driver POS-80 no papel de fábrica (80x210), cupom de entrega comum
+// passa de 210 mm, o Chrome divide em 2 páginas e a guilhotina corta no meio.
+// O script põe o papel padrão no rolo do próprio driver (80x3276). Roda ao
+// iniciar e a cada 30 min (se alguém mexer nas preferências, volta sozinho).
+function ajustarPapel() {
+  const { execFile } = require('child_process');
+  const script = path.join(__dirname, 'ajustar-papel.ps1');
+  if (!fs.existsSync(script)) return;
+  execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script],
+    { windowsHide: true, timeout: 60000, encoding: 'utf8' }, (err, saida) => {
+      if (err && !saida) { console.error('⚠️  Não ajustou o papel da impressora:', err.message); return; }
+      String(saida || '').split(/\r?\n/).filter(Boolean).forEach((linha) => {
+        try {
+          const r = JSON.parse(linha);
+          if (r.mudou) console.log(`📄 Papel da "${r.impressora}" ajustado: ${r.antes} → ${r.papel} mm (rolo contínuo, não corta mais o cupom)`);
+          else if (!r.ok) console.error(`⚠️  Papel da "${r.impressora || 'impressora'}" não ajustado: ${r.erro}`);
+          else if (r.impressora) console.log(`📄 Papel da "${r.impressora}": ${r.antes} mm — ok`);
+          else console.log(`📄 ${r.motivo}`);
+        } catch (e) { /* linha que não é JSON */ }
+      });
+    });
+}
+ajustarPapel();
+setInterval(ajustarPapel, 30 * 60 * 1000);
+
 // ── Servidor HTTP ─────────────────────────────────────────────
 const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');

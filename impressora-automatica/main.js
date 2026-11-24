@@ -8,7 +8,7 @@ const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell } = require(
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 
 // Segunda instância: em vez de morrer calada (o usuário clica no atalho e "não
 // acontece nada", e conclui que o app não abre), a instância que já está
@@ -186,6 +186,27 @@ function imprimirHTML(html, tipo) {
   // imprimir; 20s é folga suficiente até pra impressora lenta.
   setTimeout(() => fs.unlink(arquivo, () => {}), 20000);
   return Promise.resolve(true);
+}
+
+// ── Papel da térmica no rolo contínuo (ajustar-papel.ps1) ────────────
+// O kiosk imprime no papel PADRÃO do driver. No POS-80 o padrão de fábrica é
+// 80x210, e cupom de entrega comum passa de 210 mm: o Chrome divide em 2
+// páginas e a guilhotina corta no meio. O script põe o padrão no rolo do
+// próprio driver (80x3276) — opção do driver, nunca tamanho livre, que é o
+// que deixava o cupom em branco. Roda ao abrir e a cada 30 min.
+// O .ps1 vive dentro do asar, onde o PowerShell não enxerga: vai pro temp.
+function ajustarPapel() {
+  try {
+    const script = path.join(app.getPath('temp'), 'tcho-ajustar-papel.ps1');
+    fs.writeFileSync(script, fs.readFileSync(path.join(__dirname, 'ajustar-papel.ps1')));
+    execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script],
+      { windowsHide: true, timeout: 60000, encoding: 'utf8' }, (err, saida) => {
+        if (err && !saida) { log('papel: não ajustou:', err.message); return; }
+        String(saida || '').split(/\r?\n/).filter(Boolean).forEach((linha) => log('papel:', linha.trim()));
+      });
+  } catch (e) {
+    log('papel: erro:', e && e.message);
+  }
 }
 
 ipcMain.on('imprimir', async (event, { id, pedidoId, vias }) => {
@@ -399,6 +420,8 @@ app.whenReady().then(() => {
   }
   criarEngine();
   criarTray();
+  ajustarPapel();
+  setInterval(ajustarPapel, 30 * 60 * 1000);
 });
 
 // App de bandeja: fechar a janela de pareamento não pode encerrar o app.

@@ -1,0 +1,4 @@
+
+# .bat baixado pelo painel: o GitHub Pages serve o que está no repo, e o cmd
+# precisa de CRLF. Sem conversão automática de fim de linha.
+download/*.bat -text

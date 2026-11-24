@@ -241,7 +241,8 @@ async function caso(nome, fn) {
     assert.strictEqual(AV.eventoDo({ status: 'pronto', tipo: 'retirada' }), 'pronto');
     assert.strictEqual(AV.eventoDo({ status: 'entrega', tipo: 'delivery' }), 'entrega');
     assert.strictEqual(AV.eventoDo({ status: 'cancelado', tipo: 'delivery' }), 'cancelado');
-    assert.strictEqual(AV.eventoDo({ status: 'finalizado', tipo: 'delivery' }), null);
+    assert.strictEqual(AV.eventoDo({ status: 'finalizado', tipo: 'delivery', horaFim: '21:40' }), 'finalizado');
+    assert.strictEqual(AV.eventoDo({ status: 'finalizado', tipo: 'retirada' }), null, 'balcão retroativo (sem horaFim)');
     assert.strictEqual(AV.numeroWhatsApp('(31) 98309-4152'), '5531983094152');
     assert.strictEqual(AV.numeroWhatsApp('123'), '');
     assert.strictEqual(AV.montarTexto(AV.PADRAO.aceito.texto, { nome: 'joão vitor', num: '#581' }),
@@ -314,6 +315,13 @@ async function caso(nome, fn) {
     await mudar('n', { num: '#6', tel: '31955554444', tipo: 'delivery', origem: 'site', status: 'cancelado', hora: ts(agora - 2 * 3600000), canceladoEm: ts(agora) });
     assert.strictEqual(env.length, 5);
     assert.strictEqual(AV.eventoDo({ status: 'cancelado', tipo: 'mesa' }), 'cancelado');
+    // Finalizado no Kanban: avisa uma vez; lançado já finalizado (sem horaFim) não.
+    await mudar('r', { status: 'finalizado', horaFim: '21:40', hora: ts(agora) });
+    assert.strictEqual(env.length, 6);
+    assert.match(env[5][1], /Obrigado.*Bia.*#4.*finalizado/);
+    await mudar('r', { status: 'finalizado', horaFim: '21:40', hora: ts(agora) });
+    await mudar('b', { num: '#7', tel: '31944443333', tipo: 'retirada', origem: 'manual', status: 'finalizado', hora: ts(agora) });
+    assert.strictEqual(env.length, 6, 'repetido e balcão retroativo não avisam');
   });
 
   await caso('texto do cardápio pra IA: sem esgotados e sem sabor fora do painel', async () => {

@@ -1593,6 +1593,7 @@ const AVISOS_PADRAO={
   aceito: 'Oi, {nome}! 👋 Seu pedido {num} foi aceito e já está sendo preparado. 🍔',
   pronto: '{nome}, seu pedido {num} está pronto! Pode vir retirar. 😋',
   entrega:'{nome}, seu pedido {num} saiu para entrega! 🛵 Já já chega aí.',
+  finalizado:'Obrigado pela preferência, {nome}! 🧡 Seu pedido {num} foi finalizado. Bom apetite! 🍔',
   cancelado:'{nome}, seu pedido {num} foi cancelado. 😕 Se tiver qualquer dúvida, é só responder aqui que a gente te explica.',
 };
 function carregarAvisosWhatsApp(){

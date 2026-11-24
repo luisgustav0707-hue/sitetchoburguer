@@ -6,6 +6,9 @@
 //   • aceito   → saiu de "Novos" para qualquer etapa de trabalho
 //   • pronto   → chegou em "Prontos" (só retirada; delivery espera a entrega)
 //   • entrega  → chegou em "Entrega" (saiu para entrega)
+//   • finalizado → finalizado no Kanban (entregue / retirado). Pedido do
+//     balcão lançado já finalizado (data passada) não avisa: só o Kanban
+//     grava `horaFim`.
 //   • cancelado → cancelado no painel (em qualquer etapa). Depois dele o bot
 //     fica quieto 30 min na conversa e marca como não lida: quem explica o
 //     motivo é a loja, não a IA.
@@ -21,6 +24,7 @@ const PADRAO = {
   aceito:  { on: true, texto: 'Oi, {nome}! 👋 Seu pedido {num} foi aceito e já está sendo preparado. 🍔' },
   pronto:  { on: true, texto: '{nome}, seu pedido {num} está pronto! Pode vir retirar. 😋' },
   entrega: { on: true, texto: '{nome}, seu pedido {num} saiu para entrega! 🛵 Já já chega aí.' },
+  finalizado: { on: true, texto: 'Obrigado pela preferência, {nome}! 🧡 Seu pedido {num} foi finalizado. Bom apetite! 🍔' },
   cancelado: { on: true, texto: '{nome}, seu pedido {num} foi cancelado. 😕 Se tiver qualquer dúvida, é só responder aqui que a gente te explica.' },
 };
 const EVENTOS = Object.keys(PADRAO);
@@ -33,12 +37,13 @@ const JANELA_MS = 30 * 60 * 1000;
 const ESCUTA_MS = 6 * 60 * 60 * 1000;
 
 const ORIGENS_SEM_AVISO = new Set(['mesa', 'mesa-rodada']);
-const SEM_AVISO = new Set(['novo', 'finalizado']);
+const SEM_AVISO = new Set(['novo']);
 
 // Qual aviso corresponde à etapa atual do pedido (null = nenhum).
 function eventoDo(p) {
   const s = p.status;
   if (s === 'cancelado') return 'cancelado';
+  if (s === 'finalizado') return p.horaFim ? 'finalizado' : null;
   if (!s || SEM_AVISO.has(s)) return null;
   if (s === 'entrega') return p.tipo === 'delivery' ? 'entrega' : 'aceito';
   if (s === 'pronto' && p.tipo !== 'delivery') return 'pronto';
@@ -125,7 +130,7 @@ function iniciarAvisos({ db, FieldValue, resolverChat, enviar, pronto, aoCancela
         if (eventoDo(atual) !== ev || (atual.avisosWa || {})[ev]) return;   // mudou de etapa ou outro PC já mandou
         const marca = { ...(atual.avisosWa || {}), [ev]: FieldValue.serverTimestamp() };
         // Pulou direto para pronto/entrega: o "aceito" não sai mais depois.
-        if ((ev === 'pronto' || ev === 'entrega') && !marca.aceito) marca.aceito = FieldValue.serverTimestamp();
+        if (ev !== 'aceito' && ev !== 'cancelado' && !marca.aceito) marca.aceito = FieldValue.serverTimestamp();
         t.update(ref, { avisosWa: marca });
         ganhou = true;
       });

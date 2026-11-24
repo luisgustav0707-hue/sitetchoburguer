@@ -1,6 +1,6 @@
 {
   "name": "tcho-burguer-bot-whatsapp",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "description": "Atendente automático de WhatsApp do Tcho Burguer (pedidos pelo Gemini, gravados no Firestore)",
   "main": "index.js",

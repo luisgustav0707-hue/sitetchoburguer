@@ -400,6 +400,46 @@
           <div id="bots-lista"></div>
         </div>
       </div>
+
+      <div style="display:flex;gap:10px;margin-top:18px;padding-top:14px;border-top:1px solid #2a2520">
+        <div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--card);border:1px solid #3a3530;display:flex;align-items:center;justify-content:center;font-size:.8rem">📣</div>
+        <div style="flex:1">
+          <div style="font-size:.82rem;font-weight:700;margin-bottom:4px">Avisos automáticos do pedido</div>
+          <div style="font-size:.64rem;color:var(--muted);margin-bottom:7px;line-height:1.5">
+            Quando você move o pedido no Kanban, o atendente manda a mensagem no WhatsApp do cliente
+            (pedidos do site, do balcão e do WhatsApp; mesa não recebe). Cada aviso sai uma vez só por pedido.
+            Use <b>{nome}</b> (primeiro nome), <b>{num}</b> (número do pedido) e <b>{total}</b>.
+          </div>
+          <div class="toggle-row" style="margin-top:4px">
+            <div class="toggle-info">
+              <div class="toggle-label">✅ Pedido aceito</div>
+              <div class="toggle-desc">Quando o pedido sai de "Novos" no Kanban</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="aviso-on-aceito" checked><span class="slider"></span></label>
+          </div>
+          <textarea id="aviso-txt-aceito" rows="2" maxlength="500"
+            style="width:100%;box-sizing:border-box;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:8px;padding:8px 10px;font-size:.76rem;outline:none;resize:vertical;margin-bottom:6px;font-family:inherit"></textarea>
+          <div class="toggle-row" style="margin-top:4px">
+            <div class="toggle-info">
+              <div class="toggle-label">🟢 Pronto para retirar</div>
+              <div class="toggle-desc">Quando um pedido de retirada chega em "Prontos"</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="aviso-on-pronto" checked><span class="slider"></span></label>
+          </div>
+          <textarea id="aviso-txt-pronto" rows="2" maxlength="500"
+            style="width:100%;box-sizing:border-box;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:8px;padding:8px 10px;font-size:.76rem;outline:none;resize:vertical;margin-bottom:6px;font-family:inherit"></textarea>
+          <div class="toggle-row" style="margin-top:4px">
+            <div class="toggle-info">
+              <div class="toggle-label">🛵 Saiu para entrega</div>
+              <div class="toggle-desc">Quando um pedido de delivery chega em "Entrega"</div>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="aviso-on-entrega" checked><span class="slider"></span></label>
+          </div>
+          <textarea id="aviso-txt-entrega" rows="2" maxlength="500"
+            style="width:100%;box-sizing:border-box;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:8px;padding:8px 10px;font-size:.76rem;outline:none;resize:vertical;margin-bottom:6px;font-family:inherit"></textarea>
+          <button onclick="salvarAvisosWhatsApp()" style="padding:9px 14px;background:var(--card);border:1px solid #3a3530;color:var(--cream);border-radius:8px;font-size:.78rem;cursor:pointer">💾 Salvar avisos</button>
+        </div>
+      </div>
     </div>
     <div class="section cfg-panel" id="cfg-prazo">
       <div class="sec-title">⏱ Prazo de entrega</div>

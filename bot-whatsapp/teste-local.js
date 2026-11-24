@@ -233,6 +233,76 @@ async function caso(nome, fn) {
     assert.strictEqual(PED.telefoneLimpo('5531983094152'), '31983094152');
   });
 
+  await caso('avisos: etapa do Kanban → aviso certo (retirada x delivery)', async () => {
+    const AV = require('./avisos');
+    assert.strictEqual(AV.eventoDo({ status: 'novo', tipo: 'delivery' }), null);
+    assert.strictEqual(AV.eventoDo({ status: 'prep', tipo: 'delivery' }), 'aceito');
+    assert.strictEqual(AV.eventoDo({ status: 'pronto', tipo: 'delivery' }), 'aceito');
+    assert.strictEqual(AV.eventoDo({ status: 'pronto', tipo: 'retirada' }), 'pronto');
+    assert.strictEqual(AV.eventoDo({ status: 'entrega', tipo: 'delivery' }), 'entrega');
+    assert.strictEqual(AV.eventoDo({ status: 'cancelado', tipo: 'delivery' }), null);
+    assert.strictEqual(AV.numeroWhatsApp('(31) 98309-4152'), '5531983094152');
+    assert.strictEqual(AV.numeroWhatsApp('123'), '');
+    assert.strictEqual(AV.montarTexto(AV.PADRAO.aceito.texto, { nome: 'joão vitor', num: '#581' }),
+      'Oi, João! 👋 Seu pedido #581 foi aceito e já está sendo preparado. 🍔');
+    assert.strictEqual(AV.montarTexto(AV.PADRAO.entrega.texto, { nome: '', num: '#9' }),
+      'Seu pedido #9 saiu para entrega! 🛵 Já já chega aí.');
+  });
+
+  await caso('avisos: 1 vez por etapa; pula mesa, mudança antiga e aviso desligado', async () => {
+    const AV = require('./avisos');
+    const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+    const docs = {};
+    let ouvinte = null, opCb = null;
+    const ts = (ms) => ({ toMillis: () => ms });
+    const fdb = {
+      collection: () => ({
+        doc: (id) => ({
+          _id: id,
+          onSnapshot: (cb) => { opCb = cb; cb({ exists: false }); return () => {}; },
+          get: async () => ({ exists: !!docs[id], data: () => docs[id] }),
+        }),
+        where: () => ({ onSnapshot: (cb) => { ouvinte = cb; return () => {}; } }),
+      }),
+      runTransaction: async (fn) => fn({
+        get: async (ref) => ({ exists: !!docs[ref._id], data: () => docs[ref._id] }),
+        update: (ref, campos) => { docs[ref._id] = { ...docs[ref._id], ...campos }; },
+      }),
+    };
+    const env = [];
+    let conectado = false;
+    const av = AV.iniciarAvisos({
+      db: fdb, FieldValue: { serverTimestamp: () => 'TS' }, pronto: () => conectado, log: () => {},
+      resolverChat: async (n) => `${n}@c.us`,
+      enviar: async (chat, txt) => { env.push([chat, txt]); },
+    });
+    const mudar = async (id, campos) => {
+      docs[id] = { ...docs[id], ...campos };
+      ouvinte({ docChanges: () => [{ type: 'modified', doc: { id, data: () => docs[id] } }] });
+      await espera(20);
+    };
+    const agora = Date.now();
+    await mudar('a', { num: '#1', nome: 'Ana', tel: '(31) 98888-7777', tipo: 'delivery', origem: 'site', status: 'prep', hora: ts(agora) });
+    assert.strictEqual(env.length, 0, 'WhatsApp desconectado: espera');
+    conectado = true; await av.aoConectar(); await espera(20);
+    assert.deepStrictEqual(env.map((e) => e[0]), ['5531988887777@c.us']);
+    assert.match(env[0][1], /Ana.*#1.*aceito/);
+    await mudar('a', { status: 'pronto', hora: ts(agora) });   // delivery em "pronto": nada novo
+    await mudar('a', { status: 'entrega', hora: ts(agora) });
+    await mudar('a', { status: 'entrega', hora: ts(agora) });  // snapshot repetido
+    assert.strictEqual(env.length, 2);
+    assert.match(env[1][1], /saiu para entrega/);
+    await mudar('m', { num: '#2', tel: '31988887777', tipo: 'mesa', origem: 'mesa', status: 'prep', hora: ts(agora) });
+    await mudar('v', { num: '#3', tel: '31988887777', tipo: 'retirada', origem: 'site', status: 'pronto', hora: ts(agora - 2 * 3600000) });
+    assert.strictEqual(env.length, 2, 'mesa e mudança antiga não avisam');
+    await mudar('r', { num: '#4', nome: 'Bia', tel: '31977776666', tipo: 'retirada', origem: 'whatsapp', status: 'pronto', hora: ts(agora) });
+    assert.match(env[2][1], /Bia.*#4.*pronto/);
+    assert.strictEqual(docs.r.avisosWa.aceito, 'TS', 'pulou direto pra pronto: "aceito" não sai depois');
+    opCb({ exists: true, data: () => ({ avisosWhatsApp: { entrega: { on: false } } }) });
+    await mudar('d', { num: '#5', tel: '31966665555', tipo: 'delivery', origem: 'site', status: 'entrega', hora: ts(agora) });
+    assert.strictEqual(env.length, 3, 'aviso desligado no painel');
+  });
+
   await caso('texto do cardápio pra IA: sem esgotados e sem sabor fora do painel', async () => {
     const t = require('./ia').textoCardapio();
     assert.match(t, /ESGOTADO AGORA.*X-Bacon Triplo/);

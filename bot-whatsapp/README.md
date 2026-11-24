@@ -15,6 +15,7 @@ Ele roda no PC da loja, junto com o `servidor-impressao/`.
 | Fluxo da conversa (resumo, "sim", pausas) | `atendente.js` |
 | Histórico e estado de cada cliente | `conversas.js` (em memória, expira em 2h) |
 | Conexão com o WhatsApp | `index.js` (`whatsapp-web.js`) |
+| Avisar o cliente quando o pedido muda no Kanban | `avisos.js` |
 
 A IA **nunca** define preço nem total: ela só diz o que o cliente escolheu. O bot recalcula tudo com o cardápio do Firestore. Na hora do "sim", ele confere o estoque de novo antes de gravar.
 
@@ -27,6 +28,11 @@ A IA **nunca** define preço nem total: ela só diz o que o cliente escolheu. O 
   - alguém da loja responde à mão pelo celular ou pelo WhatsApp Web.
 - Grupos, status e mensagens antigas (que chegam quando ele reconecta) são ignorados.
 - **Cupom de desconto** não existe pelo bot. Quem quiser usar cupom faz o pedido pelo site.
+- **Avisos de status.** Quando o pedido muda de etapa no Kanban, o bot manda uma mensagem no WhatsApp do cliente:
+  - **aceito:** saiu de "Novos";
+  - **pronto:** chegou em "Prontos" (só retirada);
+  - **saiu para entrega:** chegou em "Entrega" (só delivery).
+  Vale para pedidos do site, do balcão e do WhatsApp; mesa não recebe. Cada aviso sai uma vez só por pedido (marca em `pedidos/{id}.avisosWa`). Mudança com mais de 30 minutos (bot desligado) não gera aviso atrasado. Textos e liga/desliga: painel → Configurações → WhatsApp → Avisos automáticos.
 
 ## Instalação (uma vez, no PC da loja)
 

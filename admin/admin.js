@@ -149,7 +149,7 @@ function showConfig(k){
     if(k==='entrega'){ renderBairros(); carregarConfigEntrega(); }
   } else {
     if(k==='impressao'){ carregarImpressoras(); carregarManifestoApp(); }
-    if(k==='whatsapp'){ carregarBots(); carregarChaveGemini(); carregarManifestoBot(); }
+    if(k==='whatsapp'){ carregarBots(); carregarChaveGemini(); carregarManifestoBot(); carregarAvisosWhatsApp(); }
     const pg=document.getElementById('cfg-'+k)||document.getElementById('inner-'+k);
     if(pg) pg.classList.add('active');
   }
@@ -1584,6 +1584,36 @@ function salvarChaveGemini(){
   if(!/^[A-Za-z0-9_-]{20,200}$/.test(chave)){ showToast('⚠️ Chave inválida — copie de novo do AI Studio','tok-err'); return; }
   db.collection('botSegredos').doc('gemini').set({chave, atualizadoEm:firebase.firestore.FieldValue.serverTimestamp()},{merge:true})
     .then(()=>{ inp.value=''; showToast('✅ Chave salva — o atendente passa a usar na hora','tok-ok'); carregarChaveGemini(); })
+    .catch(e=>showToast('⚠️ '+(e.message||'Erro ao salvar'),'tok-err'));
+}
+
+// Avisos de status pro cliente (bot-whatsapp/avisos.js lê config/operacao.avisosWhatsApp).
+// Padrões iguais aos do bot: mudou lá, mude aqui.
+const AVISOS_PADRAO={
+  aceito: 'Oi, {nome}! 👋 Seu pedido {num} foi aceito e já está sendo preparado. 🍔',
+  pronto: '{nome}, seu pedido {num} está pronto! Pode vir retirar. 😋',
+  entrega:'{nome}, seu pedido {num} saiu para entrega! 🛵 Já já chega aí.',
+};
+function carregarAvisosWhatsApp(){
+  const pintar=cfg=>Object.keys(AVISOS_PADRAO).forEach(ev=>{
+    const c=(cfg||{})[ev]||{};
+    const on=document.getElementById('aviso-on-'+ev), tx=document.getElementById('aviso-txt-'+ev);
+    if(on) on.checked=c.on!==false;
+    if(tx) tx.value=String(c.texto||'').trim()||AVISOS_PADRAO[ev];
+  });
+  pintar(null);
+  db.collection('config').doc('operacao').get().then(d=>pintar(d.exists?d.data().avisosWhatsApp:null)).catch(()=>{});
+}
+function salvarAvisosWhatsApp(){
+  const cfg={};
+  for(const ev of Object.keys(AVISOS_PADRAO)){
+    const texto=(document.getElementById('aviso-txt-'+ev).value||'').trim();
+    const on=document.getElementById('aviso-on-'+ev).checked;
+    if(on && !texto){ showToast('⚠️ Escreva o texto do aviso ou desligue ele','tok-err'); return; }
+    cfg[ev]={on, texto:texto||AVISOS_PADRAO[ev]};
+  }
+  db.collection('config').doc('operacao').set({avisosWhatsApp:cfg},{merge:true})
+    .then(()=>showToast('✅ Avisos salvos — o atendente passa a usar na hora','tok-ok'))
     .catch(e=>showToast('⚠️ '+(e.message||'Erro ao salvar'),'tok-err'));
 }
 

@@ -17,6 +17,7 @@ const QRCode = require('qrcode');
 const CD = require('./cardapio');
 const ia = require('./ia');
 const { criarAtendente } = require('./atendente');
+const { iniciarAvisos } = require('./avisos');
 const conexao = require('./conexao');
 
 const hora = () => new Date().toLocaleTimeString('pt-BR', { timeZone: CD.TZ });
@@ -52,8 +53,15 @@ const client = new Client({
 
 // Mensagens que o PRÓPRIO bot está mandando — pra não confundir com resposta
 // manual da loja (que pausa o bot naquela conversa).
+// O texto também entra sem o chat ("*|texto"): o aviso de status vai para
+// número@c.us, mas o WhatsApp pode devolver a mesma conversa como @lid.
 const doBot = new Map();   // "chatId|texto" → expira em
 const chaveBot = (chatId, texto) => `${chatId}|${String(texto).trim()}`;
+const marcarDoBot = (chatId, texto) => {
+  const exp = Date.now() + 120000;
+  doBot.set(chaveBot(chatId, texto), exp);
+  doBot.set(chaveBot('*', texto), exp);
+};
 
 async function enviar(chatId, texto) {
   try {
@@ -62,13 +70,26 @@ async function enviar(chatId, texto) {
     await chat.sendStateTyping().catch(() => {});
     // "digitando..." proporcional ao tamanho (parece gente e evita rajada)
     await espera(Math.min(1200 + texto.length * 20, 4500) + Math.random() * 700);
-    doBot.set(chaveBot(chatId, texto), Date.now() + 120000);
+    marcarDoBot(chatId, texto);
     await client.sendMessage(chatId, texto);
     await chat.clearState().catch(() => {});
   } catch (e) {
     console.error(`[whatsapp] erro ao enviar: ${e.message}`);
   }
 }
+
+// Aviso de status (avisos.js): o cliente pode nunca ter conversado com a
+// loja, então não depende do chat existir nem simula "digitando".
+async function enviarAviso(chatId, texto) {
+  try {
+    marcarDoBot(chatId, texto);
+    await client.sendMessage(chatId, texto);
+  } catch (e) {
+    console.error(`[whatsapp] erro ao enviar aviso: ${e.message}`);
+  }
+}
+let whatsappPronto = false;
+let avisos = null;   // criado no main()
 setInterval(() => { const t = Date.now(); for (const [k, exp] of doBot) if (exp < t) doBot.delete(k); }, 60000).unref();
 
 let atendente = null;   // criado no main(), depois de conectar ao painel
@@ -133,8 +154,8 @@ client.on('message', async (msg) => {
 // respondeu à mão → pausa o bot naquela conversa.
 client.on('message_create', (msg) => {
   if (!atendente || !msg.fromMe || ignorarChat(msg.to)) return;
-  const k = chaveBot(msg.to, msg.body);
-  if (doBot.has(k)) { doBot.delete(k); return; }
+  const k = chaveBot(msg.to, msg.body), k2 = chaveBot('*', msg.body);
+  if (doBot.has(k) || doBot.has(k2)) { doBot.delete(k); doBot.delete(k2); return; }
   if ((msg.timestamp || 0) * 1000 < prontoEm - 5000) return;
   atendente.humanoRespondeu(msg.to);
 });
@@ -159,6 +180,8 @@ client.on('auth_failure', (m) => {
 });
 client.on('ready', () => {
   prontoEm = Date.now();
+  whatsappPronto = true;
+  if (avisos) avisos.aoConectar().catch((e) => console.error('[avisos]', e.message));
   console.log(`${hora()} ✅ Atendente no ar! Respondendo mensagens novas.`);
   const numero = (client.info && client.info.wid && client.info.wid.user) || '';
   status({ estado: 'conectado', qr: null, erro: null, numero });
@@ -191,6 +214,7 @@ async function conectar(tentativa = 1) {
 }
 client.on('disconnected', async (motivo) => {
   console.warn(`${hora()} ⚠️  WhatsApp desconectado (${motivo}). Reconectando...`);
+  whatsappPronto = false;
   status({ estado: 'desconectado', qr: null, erro: `Desconectado: ${motivo}` });
   if (reconectando) return;
   reconectando = true;
@@ -222,6 +246,15 @@ async function main() {
     db, FieldValue, ia, enviar,
     // Pausou (pediu atendente / não entendeu 2x / erro): marca como não lida pra equipe ver.
     aoPausar: async (chatId) => { const chat = await client.getChatById(chatId); await chat.markUnread(); },
+  });
+
+  // Avisos de status do pedido (aceito / pronto / saiu para entrega).
+  avisos = iniciarAvisos({
+    db, FieldValue,
+    pronto: () => whatsappPronto,
+    enviar: enviarAviso,
+    resolverChat: async (numero) => { const w = await client.getNumberId(numero); return w ? w._serialized : null; },
+    log: (t) => console.log(`${hora()} ${t}`),
   });
 
   console.log(`${hora()} Navegador: ${navegador || 'Chromium do puppeteer'}`);

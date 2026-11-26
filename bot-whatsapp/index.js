@@ -122,9 +122,24 @@ const TIPOS_AUDIO = new Set(['ptt', 'audio']);
 const TIPOS_OUTROS = new Set(['image', 'video', 'sticker', 'document', 'location', 'vcard', 'multi_vcard']);
 const MAX_AUDIO_B64 = 15 * 1024 * 1024;
 
+// A mesma mensagem pode chegar duas vezes: o WhatsApp Web novo passa por
+// /login/ e depois troca de tela sem recarregar, e a biblioteca se liga de
+// novo aos eventos. Sem isto o atendente responde tudo em dobro.
+const vistas = new Map();   // id da mensagem → expira em
+function jaVista(msg) {
+  const id = msg.id && (msg.id.id || msg.id._serialized);
+  if (!id) return false;
+  const agora = Date.now();
+  for (const [k, exp] of vistas) if (exp < agora) vistas.delete(k);
+  if (vistas.has(id)) return true;
+  vistas.set(id, agora + 10 * 60000);
+  return false;
+}
+
 client.on('message', async (msg) => {
   try {
     if (!atendente || msg.fromMe || msg.isStatus || ignorarChat(msg.from)) return;
+    if (jaVista(msg)) return;
     // Mensagens antigas que chegam ao reconectar: não responde.
     const em = (msg.timestamp || 0) * 1000;
     if (em < prontoEm - 5000 || Date.now() - em > 120000) return;
@@ -236,6 +251,25 @@ client.on('disconnected', async (motivo) => {
   reconectando = false;
   conectar();
 });
+
+// Versão nova publicada: sai com código 1 e o INICIAR.bat reinicia, roda o
+// atualizar.ps1 e abre a versão nova (a sessão do WhatsApp fica, sem QR).
+function maiorQue(a, b) {
+  const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
+  for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  return false;
+}
+setInterval(async () => {
+  try {
+    const r = await fetch(`https://tchoburguer.com/download/bot-whatsapp.json?v=${Date.now()}`);
+    const m = r.ok ? await r.json() : null;
+    if (m && m.versao && maiorQue(m.versao, conexao.VERSAO)) {
+      console.log(`${hora()} ⬆️  Versão ${m.versao} disponível. Reiniciando para atualizar...`);
+      try { await client.destroy(); } catch (e) {}
+      process.exit(1);
+    }
+  } catch (e) { /* sem internet: tenta na próxima */ }
+}, 30 * 60000).unref();
 
 process.on('unhandledRejection', (e) => console.error('[erro não tratado]', e));
 process.on('SIGINT', async () => { console.log('\nDesligando...'); try { await client.destroy(); } catch (e) {} process.exit(0); });

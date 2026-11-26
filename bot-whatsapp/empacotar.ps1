@@ -25,7 +25,7 @@ New-Item -ItemType Directory -Force (Join-Path $stage 'shared') | Out-Null
 $arquivosBot = @(
   'index.js', 'conexao.js', 'firebase-config.js', 'atendente.js', 'cardapio.js', 'conversas.js',
   'ia.js', 'pedido.js', 'avisos.js', 'teste-local.js', 'package.json', 'package-lock.json',
-  'INICIAR.bat', 'README.md', '.env.example'
+  'INICIAR.bat', 'atualizar.ps1', 'README.md', '.env.example'
 )
 foreach ($a in $arquivosBot) { Copy-Item (Join-Path $aqui $a) (Join-Path $stage "bot-whatsapp\$a") }
 Copy-Item (Join-Path $raiz 'functions\conferencia.js') (Join-Path $stage 'functions\conferencia.js')

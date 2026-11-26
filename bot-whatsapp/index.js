@@ -45,9 +45,15 @@ function caminhoNavegador() {
 }
 const navegador = caminhoNavegador();
 
+// Sessão do WhatsApp (perfil do navegador) num caminho CURTO, fora da pasta
+// do bot. Desde 11/2026 o WhatsApp Web grava cache em pastas bem fundas do
+// perfil; com o bot extraído em Downloads/Área de Trabalho o caminho passa
+// de 260 caracteres, a gravação falha no Windows e o QR Code nunca aparece.
+const PASTA_DADOS = path.join(process.env.LOCALAPPDATA || require('os').homedir(), 'TchoBot');
+
 const client = new Client({
-  authStrategy: new LocalAuth({ clientId: 'tcho', dataPath: path.join(__dirname, '.wwebjs_auth') }),
-  webVersionCache: { type: 'local', path: path.join(__dirname, '.wwebjs_cache') },
+  authStrategy: new LocalAuth({ clientId: 'tcho', dataPath: path.join(PASTA_DADOS, 'auth') }),
+  webVersionCache: { type: 'local', path: path.join(PASTA_DADOS, 'cache') },
   puppeteer: { headless: true, executablePath: navegador, args: ['--no-sandbox', '--disable-setuid-sandbox'] },
 });
 
@@ -162,7 +168,14 @@ client.on('message_create', (msg) => {
 
 // O QR aparece aqui na janela E no painel (Configurações → WhatsApp),
 // pra escanear de qualquer lugar.
-client.on('qr', async (qr) => {
+client.on('qr', async (qrLib) => {
+  // O WhatsApp Web novo desenha o QR com prefixo (https://wa.me/settings/
+  // linked_devices#...). Usa o que está na tela; o da biblioteca é reserva.
+  await espera(1500);
+  const qr = await client.pupPage.evaluate(() => {
+    const el = document.querySelector('[data-ref]');
+    return el ? el.getAttribute('data-ref') : null;
+  }).catch(() => null) || qrLib;
   console.log(`\n${hora()} 📱 Escaneie o QR Code com o WhatsApp da loja (Aparelhos conectados → Conectar aparelho).`);
   console.log('   Ele também aparece no painel: Configurações → WhatsApp.\n');
   qrcode.generate(qr, { small: true });
@@ -171,11 +184,11 @@ client.on('qr', async (qr) => {
   } catch (e) { console.warn('[painel] QR não enviado:', e.message); }
 });
 client.on('authenticated', () => {
-  console.log(`${hora()} 🔐 WhatsApp autenticado (sessão salva em .wwebjs_auth)`);
+  console.log(`${hora()} 🔐 WhatsApp autenticado (sessão salva em ${PASTA_DADOS})`);
   status({ estado: 'autenticado', qr: null });
 });
 client.on('auth_failure', (m) => {
-  console.error(`${hora()} ❌ Falha no login do WhatsApp: ${m}\n   Apague a pasta .wwebjs_auth e escaneie o QR de novo.`);
+  console.error(`${hora()} ❌ Falha no login do WhatsApp: ${m}\n   Apague a pasta ${path.join(PASTA_DADOS, 'auth')} e escaneie o QR de novo.`);
   status({ estado: 'erro', qr: null, erro: `Falha no login do WhatsApp: ${m}` });
 });
 client.on('ready', () => {

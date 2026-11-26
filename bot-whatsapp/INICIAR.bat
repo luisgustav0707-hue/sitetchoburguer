@@ -13,15 +13,21 @@ if errorlevel 1 (
   exit /b
 )
 
-if not exist node_modules (
-  echo  Instalando dependencias ^(so na primeira vez, demora uns minutos^)...
-  call npm install --omit=dev
-)
-
 :inicio
+rem Versao nova baixada pelo atualizar.ps1: troca este .bat e reabre.
+rem (O bloco inteiro e lido antes de rodar, entao trocar o arquivo aqui e seguro.)
+if exist "%~dp0INICIAR.novo" (
+  move /y "%~dp0INICIAR.novo" "%~dp0INICIAR.bat" >NUL
+  start "" "%~dp0INICIAR.bat"
+  exit
+)
 echo.
-echo  Buscando atualizacao da biblioteca do WhatsApp...
-call npm update whatsapp-web.js --omit=dev --no-fund --no-audit
+echo  Procurando versao nova do atendente...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0atualizar.ps1"
+if exist "%~dp0INICIAR.novo" goto inicio
+echo.
+echo  Conferindo dependencias ^(na primeira vez demora uns minutos^)...
+call npm install --omit=dev --no-fund --no-audit
 echo.
 echo  Iniciando o atendente de WhatsApp... Nao feche esta janela!
 echo.

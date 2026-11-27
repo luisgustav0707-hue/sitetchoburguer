@@ -170,22 +170,24 @@ function imprimirHTML(html, tipo) {
   const arquivo = path.join(app.getPath('temp'), `tcho-${tipo}-${Date.now()}.html`);
   fs.writeFileSync(arquivo, htmlParaKiosk(html), 'utf8');
 
-  // EXATAMENTE as flags do servidor-impressao/server.js, que imprimiu por meses
-  // na operação. Eu já tentei "melhorar" isto duas vezes e as duas custaram caro:
+  // Perfil próprio e fixo do Chrome só para imprimir. Sem ele, com o Chrome
+  // do dono aberto (painel, WhatsApp Web — o normal na loja), o comando vira
+  // só mais uma aba na janela dele, o --kiosk-printing é ignorado e cada
+  // cupom abre a janela de imprimir esperando clique (visto em 26/11/2026).
   //
-  //  • --user-data-dir (perfil separado): resolveria o caso de o dono estar com
-  //    o Chrome aberto — aí o comando vira só mais uma aba e o kiosk é ignorado.
-  //    Mas perfil novo abre tela de boas-vindas/escolha de buscador, e aí a
-  //    página nem chega a chamar window.print(). Trocar um problema raro por um
-  //    que acontece sempre é péssimo negócio.
-  //  • --window-position fora da tela: cosmético, e janela totalmente oculta
-  //    pode ser tratada como ocluída e não pintar.
+  // Da primeira vez que tentei isto (set/2026) o perfil novo abria a tela de
+  // boas-vindas/escolha de buscador e a página nem chamava window.print().
+  // --no-first-run + --disable-search-engine-choice-screen eliminam as duas:
+  // testado no Chrome 158 com outro Chrome aberto, o perfil novo abre direto
+  // no cupom, e a 2ª via entra no mesmo Chrome dedicado (ainda em kiosk).
   //
-  // Se algum dia o "Chrome já aberto" incomodar de verdade, a saída é detectar
-  // e avisar o dono — não inventar flag sem ter como testar impressão.
+  // --window-position fora da tela continua de fora: janela totalmente
+  // oculta pode ser tratada como ocluída e não pintar.
+  const perfil = path.join(app.getPath('userData'), 'perfil-impressao');
   const args = [
     '--kiosk-printing', '--no-first-run', '--no-default-browser-check',
-    '--disable-extensions', arquivo,
+    '--disable-search-engine-choice-screen', '--disable-extensions',
+    `--user-data-dir=${perfil}`, arquivo,
   ];
   log(`imprimindo via ${path.basename(navegador)} (${tipo}, ${html.length} bytes)`);
   const proc = spawn(navegador, args, { detached: true, stdio: 'ignore' });

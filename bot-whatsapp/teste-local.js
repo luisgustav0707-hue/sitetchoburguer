@@ -331,5 +331,28 @@ async function caso(nome, fn) {
     assert.doesNotMatch(t, /Fanta/);
   });
 
+  await caso('boas-vindas: só "oi" → só a mensagem da loja; pedido junto → IA continua; 1 vez por conversa', async () => {
+    CD._carregarParaTeste(TCHO, DOCS(), { ...ABERTA, boasVindasWhatsApp: { on: true, texto: 'Olá, {nome}! 👋 Bem-vindo ao Tcho!' } });
+    const antes = chamadasIA;
+    await fala('bv1@c.us', 'Boa noite!! 😊', { numero: '5531999990101', nomeWhatsApp: 'maria souza' });
+    assert.strictEqual(ultima('bv1@c.us'), 'Olá, Maria! 👋 Bem-vindo ao Tcho!');
+    assert.strictEqual(chamadasIA, antes, 'só cumprimento não chama a IA');
+    roteiro.push({ transcricao: '', acao: 'conversar', resposta: 'Qual o ponto da carne?', pedido: pedidoBase({ lanches: [lanche({})] }) });
+    await fala('bv1@c.us', 'quero um x-salada', { numero: '5531999990101' });
+    assert.strictEqual(enviadas.filter((e) => e.chatId === 'bv1@c.us' && /Bem-vindo/.test(e.texto)).length, 1, 'boas-vindas uma vez só');
+    assert.strictEqual(ultima('bv1@c.us'), 'Qual o ponto da carne?');
+
+    roteiro.push({ transcricao: '', acao: 'conversar', resposta: 'Show! Qual o ponto?', pedido: pedidoBase({ lanches: [lanche({})] }) });
+    await fala('bv2@c.us', 'oi, quero um x-salada', { numero: '5531999990102' });
+    const bv2 = enviadas.filter((e) => e.chatId === 'bv2@c.us').map((e) => e.texto);
+    assert.deepStrictEqual(bv2, ['Olá! 👋 Bem-vindo ao Tcho!', 'Show! Qual o ponto?'], 'sem nome: "Olá!" + resposta da IA');
+
+    CD._carregarParaTeste(TCHO, DOCS(), { ...ABERTA, boasVindasWhatsApp: { on: false, texto: 'Olá!' } });
+    roteiro.push({ transcricao: '', acao: 'conversar', resposta: 'Oi! O que vai ser?', pedido: pedidoBase({}) });
+    await fala('bv3@c.us', 'oi', { numero: '5531999990103' });
+    assert.deepStrictEqual(enviadas.filter((e) => e.chatId === 'bv3@c.us').map((e) => e.texto), ['Oi! O que vai ser?'], 'desligado: só a IA');
+    CD._carregarParaTeste(TCHO, DOCS(), ABERTA);
+  });
+
   console.log(`\n${ok} casos ok${process.exitCode ? ' — HÁ FALHAS' : ''}\n`);
 })();

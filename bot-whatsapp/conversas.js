@@ -21,6 +21,7 @@ function novo(chatId) {
     naoEntendeu: 0,         // vezes seguidas que a IA não entendeu
     pausadoAte: 0,
     avisoFechadoEm: 0,
+    boasVindas: false,      // já mandou a mensagem de boas-vindas nesta conversa
     cliente: undefined,     // cadastro do CRM (undefined = ainda não buscou)
     numero: '',             // telefone (só dígitos, com 55)
     ultimaEm: Date.now(),

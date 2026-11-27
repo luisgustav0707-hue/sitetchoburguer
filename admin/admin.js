@@ -149,7 +149,7 @@ function showConfig(k){
     if(k==='entrega'){ renderBairros(); carregarConfigEntrega(); }
   } else {
     if(k==='impressao'){ carregarImpressoras(); carregarManifestoApp(); }
-    if(k==='whatsapp'){ carregarBots(); carregarChaveGemini(); carregarManifestoBot(); carregarAvisosWhatsApp(); }
+    if(k==='whatsapp'){ carregarBots(); carregarChaveGemini(); carregarManifestoBot(); carregarAvisosWhatsApp(); carregarBoasVindasWhatsApp(); }
     const pg=document.getElementById('cfg-'+k)||document.getElementById('inner-'+k);
     if(pg) pg.classList.add('active');
   }
@@ -1616,6 +1616,23 @@ function salvarAvisosWhatsApp(){
   }
   db.collection('config').doc('operacao').set({avisosWhatsApp:cfg},{merge:true})
     .then(()=>showToast('✅ Avisos salvos — o atendente passa a usar na hora','tok-ok'))
+    .catch(e=>showToast('⚠️ '+(e.message||'Erro ao salvar'),'tok-err'));
+}
+
+// Boas-vindas do atendente (bot-whatsapp/atendente.js lê config/operacao.boasVindasWhatsApp).
+function carregarBoasVindasWhatsApp(){
+  db.collection('config').doc('operacao').get().then(d=>{
+    const bv=(d.exists&&d.data().boasVindasWhatsApp)||{};
+    document.getElementById('boasvindas-on').checked=bv.on===true;
+    document.getElementById('boasvindas-txt').value=String(bv.texto||'');
+  }).catch(()=>{});
+}
+function salvarBoasVindasWhatsApp(){
+  const texto=(document.getElementById('boasvindas-txt').value||'').trim();
+  const on=document.getElementById('boasvindas-on').checked;
+  if(on && !texto){ showToast('⚠️ Escreva a mensagem de boas-vindas ou desligue','tok-err'); return; }
+  db.collection('config').doc('operacao').set({boasVindasWhatsApp:{on, texto}},{merge:true})
+    .then(()=>showToast(on?'✅ Boas-vindas salvas — o atendente passa a usar na hora':'✅ Boas-vindas desligadas','tok-ok'))
     .catch(e=>showToast('⚠️ '+(e.message||'Erro ao salvar'),'tok-err'));
 }
 

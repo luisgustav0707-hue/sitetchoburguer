@@ -12,6 +12,7 @@
 const CD = require('./cardapio');
 const PED = require('./pedido');
 const CONV = require('./conversas');
+const { montarTexto } = require('./avisos');
 
 const AVISO_FECHADO_MS = 30 * 60000;   // não repete o "estamos fechados" a cada mensagem
 
@@ -28,6 +29,22 @@ const MSG = {
 // "sim" de verdade: a mensagem inteira é uma confirmação curta (sem "mas...").
 const SIM = /^(sim+|s|ss|isso( mesmo)?|confirm[oa]|confirmad[oa]|confirmar|pode( sim)?( mandar| confirmar| ser| fechar)?|fechad[oa]|fecha|ok|okay|beleza|blz|manda( ver)?|bora|perfeito|certo|ta certo|esta certo|tudo certo|correto|isso ai|sim pode|sim por favor|sim obrigad[oa])[\s!.👍✅🙏😊😁]*$/i;
 const semAcento = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+// Mensagem só de cumprimento ("oi", "boa noite!", "olá, tudo bem? 😊"): depois
+// das boas-vindas não precisa de resposta da IA, senão o cliente recebe dois "oi".
+const SAUDACAO = /^((oi+e?|ola+|opa|e a[ie]|eae|eai|bom dia|boa tarde|boa noite|boa|hey|salve|alo|tudo bem|td bem|tudo bom|tudo certo|como vai|beleza|blz)\s*)+$/;
+function soCumprimento(texto) {
+  const t = semAcento(texto).replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  return !t || SAUDACAO.test(t);
+}
+
+// Boas-vindas do painel (Configurações → WhatsApp): config/operacao.boasVindasWhatsApp.
+function boasVindasConfig() {
+  const op = (CD.cardapio() || {}).operacao || {};
+  const bv = op.boasVindasWhatsApp || {};
+  const texto = String(bv.texto || '').trim();
+  return bv.on === true && texto ? texto : '';
+}
 
 function mascara(numero) { const d = String(numero || '').replace(/\D/g, ''); return d ? '…' + d.slice(-4) : '?'; }
 function log(chatId, numero, ...a) { console.log(new Date().toLocaleTimeString('pt-BR', { timeZone: CD.TZ }), `[${mascara(numero || chatId)}]`, ...a); }
@@ -114,6 +131,16 @@ function criarAtendente({ db, FieldValue, ia, enviar, aoPausar }) {
       }
       log(m.chatId, c.numero, '(loja fechada — não aceita pedido)');
       return;
+    }
+
+    // Primeira mensagem de uma conversa nova: a mensagem de boas-vindas da loja.
+    const boasVindas = boasVindasConfig();
+    if (boasVindas && !c.boasVindas && c.historico.length === 0) {
+      c.boasVindas = true;
+      if (c.cliente === undefined) c.cliente = await PED.buscarCliente(db, c.numero);
+      await responder(c, montarTexto(boasVindas, { nome: (c.cliente && c.cliente.nome) || m.nomeWhatsApp || '' }));
+      log(m.chatId, c.numero, '👋 boas-vindas enviadas');
+      if (m.tipo === 'texto' && soCumprimento(m.texto)) { CONV.registrar(c, 'cliente', m.texto); return; }
     }
 
     if (m.tipo === 'outro') { await responder(c, MSG.soTexto); return; }

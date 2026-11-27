@@ -39,6 +39,16 @@ function salvarConfigLocal(patch) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify({ ...atual, ...patch }, null, 2));
 }
 
+// Via desligada pelo dono no menu da bandeja (cozinha / entrega / caixa).
+// Estas duas definições sumiram na troca para o kiosk do Chrome (c6656c2) e
+// o app passou a falhar em TODO pedido com "impressoraDe is not defined" —
+// e, como o finally fecha o trabalho, marcava "impresso" sem imprimir nada.
+const NAO_IMPRIMIR = '__nenhuma__';
+function impressoraDe(tipo) {
+  const mapa = lerConfigLocal().impressoras || {};
+  return mapa[tipo] === NAO_IMPRIMIR ? NAO_IMPRIMIR : undefined;
+}
+
 let engineWin = null;
 let engineProntoP = null;      // resolve quando o motor termina de carregar
 let pairWin = null;

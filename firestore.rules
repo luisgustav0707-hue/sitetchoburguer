@@ -144,7 +144,25 @@ service cloud.firestore {
     match /mesas/{d}     { allow read, write: if isAdmin(); }
     match /garcons/{d}   { allow read, write: if isAdmin(); }
     match /usuarios/{d}  { allow read, write: if isAdmin(); }
-    match /campanhas/{d} { allow read, write: if isAdmin(); }
+    // Campanhas de marketing. Com bot:true o atendente de WhatsApp dispara
+    // sozinho (bot-whatsapp/campanhas.js): ele lê a campanha e os envios, mas
+    // só escreve o andamento (`progresso`) e o status de cada envio — nunca a
+    // mensagem, o destinatário ou o comando (enviar/pausar/cancelar), que são
+    // do painel.
+    match /campanhas/{d} {
+      allow read, write: if isAdmin();
+      allow get, list: if isBot() && resource.data.bot == true;
+      allow update: if isBot() && resource.data.bot == true
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['progresso']);
+
+      match /envios/{e} {
+        allow read, write: if isAdmin();
+        allow get, list: if isBot();
+        allow update: if isBot()
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'bot', 'erro', 'enviadoEm', 'atualizadoEm']);
+      }
+    }
     match /despesas/{d}  { allow read, write: if isAdmin(); }
 
     // Tokens de push do admin (aparelhos que recebem notificação de pedido).

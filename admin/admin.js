@@ -3693,6 +3693,8 @@ function renderInativos(){
     <div style="font-size:.75rem;color:var(--muted);margin-bottom:10px;padding:0 2px">
       ${lista.length} cliente${lista.length!==1?'s':''} inativo${lista.length!==1?'s':''}
     </div>
+    <button onclick="enviarInativosPeloBot()" style="display:block;width:100%;padding:12px;margin-bottom:6px;background:#25d366;color:#000;border:none;border-radius:8px;font-weight:800;font-size:.85rem;cursor:pointer">🤖 Enviar para todos pelo atendente do WhatsApp</button>
+    <div style="font-size:.64rem;color:var(--muted);margin-bottom:12px;padding:0 2px">Ele manda sozinho, um por vez (até 60 por dia, das 9h às 21h). Quem respondeu SAIR ou recebeu promoção nos últimos 7 dias fica de fora. Ou envie um por um nos botões abaixo.</div>
     ${lista.map(c=>{
       const diasInativo=Math.floor((agora-new Date(c.ultimoPedido))/86400000);
       const cor=diasInativo>30?'#e74c3c':'#f39c12';
@@ -3718,6 +3720,31 @@ function renderInativos(){
         </a>
       </div>`;
     }).join('')}`;
+}
+
+// Um clique: vira uma campanha que o atendente do WhatsApp dispara sozinho
+// (mesmo caminho de Campanhas → bot-whatsapp/campanhas.js).
+async function enviarInativosPeloBot(){
+  const lista=clientesInativos||[];
+  if(!lista.length){ showToast('⚠️ Busque os clientes inativos primeiro','tok-err'); return; }
+  const msgTpl=(document.getElementById('rec-msg')?.value||'').trim();
+  if(!msgTpl){ showToast('⚠️ Escreva a mensagem','tok-err'); return; }
+  const dias=parseInt(document.getElementById('rec-dias')?.value)||14;
+  const cupom=cupons.find(c=>c._id===document.getElementById('rec-cupom')?.value);
+  if(!confirm(`O atendente do WhatsApp vai mandar esta mensagem para ${lista.length} cliente(s), sozinho, um por vez (até 60 por dia, das 9h às 21h).\n\nConfirmar o envio?`)) return;
+  try{
+    const campRef=db.collection('campanhas').doc();
+    const ops=lista.filter(c=>idSeguro(c.telLimpo)).map(c=>b=>b.set(campRef.collection('envios').doc(c.telLimpo),{
+      nome:c.nome||'',tel:c.telLimpo,clienteId:c.telLimpo,mensagem:montarMsgCampanha(msgTpl,{nome:c.nome}),codigo:cupom?cupom.codigo:'',status:'pendente'}));
+    await gravarEmLotes(ops);
+    await campRef.set({nome:`Recuperação — parados ${dias}d+`,dias,minPedidos:0,minGasto:0,mensagem:msgTpl,gerarCupom:false,cupomCodigo:cupom?cupom.codigo:'',
+      totalClientes:ops.length,criadoEm:dataLocalHoje(),ts:Date.now(),...campanhaBotInicial()});
+    showToast(`🤖 O atendente vai mandar para ${ops.length} cliente(s)`,'tok-ok');
+    showCrm('campanhas');
+  }catch(e){
+    console.error('enviarInativosPeloBot:',e);
+    showToast('❌ Não consegui criar o envio: '+(e.message||e),'tok-err');
+  }
 }
 
 // ── CRM / MARKETING (aba própria) ──────────────────────────────
@@ -3873,11 +3900,18 @@ function renderCrmOverview(){
 // ── CRM Campanhas (Fase 2) ────────────────────────────────────
 let campanhas=[];
 
+const CAMP_MSG_PADRAO='Oi, {nome}! Faz um tempinho que você não pede na Tcho Burguer e a gente sentiu sua falta 🍔🧡\n\nSeparei um cupom só pra você: *{cupom}*, com {desconto} de desconto, válido até {validade}.\n\nÉ só colar o código no carrinho do site: https://tchoburguer.com/cliente/';
 function abrirFormCampanha(){
   document.getElementById('camp-form').style.display='block';
   ['camp-nome','camp-dias','camp-minped','camp-mingasto','camp-cupompct','camp-cupomval'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
-  document.getElementById('camp-msg').value='Olá {nome}, sentimos sua falta! 🍔\n\nUse o cupom {cupom} e volte a pedir pelo nosso site.';
-  document.getElementById('camp-gerarcupom').checked=false;
+  // Padrão: quem sumiu há 15 dias ou mais, cupom de 10% por 7 dias, enviado pelo atendente.
+  document.getElementById('camp-nome').value='Volta pra Tcho — '+new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+  document.getElementById('camp-dias').value='15';
+  document.getElementById('camp-cupompct').value='10';
+  document.getElementById('camp-cupomval').value='7';
+  document.getElementById('camp-msg').value=CAMP_MSG_PADRAO;
+  document.getElementById('camp-gerarcupom').checked=true;
+  const bot=document.getElementById('camp-bot'); if(bot) bot.checked=true;
   toggleCampCupom();
   document.getElementById('camp-resultado').innerHTML='';
   previewCampanha();
@@ -3888,8 +3922,18 @@ function toggleCampCupom(){
   document.getElementById('camp-cupom-cfg').style.display=on?'grid':'none';
 }
 
+// Fica de fora de toda campanha: quem respondeu SAIR no WhatsApp (semPromo)
+// e quem recebeu promoção nos últimos 7 dias (o atendente confere de novo
+// na hora de enviar — bot-whatsapp/campanhas.js).
+const PROMO_A_CADA_DIAS=7;
+function clienteForaDePromo(c){
+  if(c.semPromo) return true;
+  const d=crmDiasDesde(c.ultimaPromoEm);
+  return d!=null && d<PROMO_A_CADA_DIAS;
+}
+
 // Filtra os clientes (já carregados no CRM) pela regra da campanha.
-function filtrarClientesCampanha(){
+function filtrarClientesCampanha(incluirForaDePromo=false){
   const dias=parseInt(document.getElementById('camp-dias').value)||0;
   const minPed=parseInt(document.getElementById('camp-minped').value)||0;
   const minGasto=parseFloat(document.getElementById('camp-mingasto').value)||0;
@@ -3898,13 +3942,46 @@ function filtrarClientesCampanha(){
     if(dias>0 && !(d!=null && d>=dias)) return false;
     if(minPed>0 && (c.quantidadePedidos||0)<minPed) return false;
     if(minGasto>0 && (c.valorTotalGasto||0)<minGasto) return false;
+    if(!incluirForaDePromo && clienteForaDePromo(c)) return false;
     return true;
   });
 }
 function previewCampanha(){
   const el=document.getElementById('camp-preview'); if(!el) return;
   const n=filtrarClientesCampanha().length;
-  el.innerHTML=`🎯 <b style="color:var(--cream)">${n}</b> cliente${n!==1?'s':''} nesse filtro`;
+  const fora=filtrarClientesCampanha(true).length-n;
+  el.innerHTML=`🎯 <b style="color:var(--cream)">${n}</b> cliente${n!==1?'s':''} nesse filtro`+
+    (fora?` <span style="font-size:.68rem">(${fora} de fora: pediram SAIR ou já receberam promoção nos últimos ${PROMO_A_CADA_DIAS} dias)</span>`:'');
+}
+
+// Primeiro nome com a inicial maiúscula ("JOÃO DA SILVA" → "João").
+function primeiroNomeCamp(n){
+  const p=String(n||'').trim().split(/\s+/)[0]||'';
+  return p?p.charAt(0).toUpperCase()+p.slice(1).toLowerCase():'';
+}
+// Troca {nome} {cupom} {desconto} {validade}. Sem nome, "Oi, {nome}!" vira "Oi!".
+function montarMsgCampanha(tpl,v){
+  return String(tpl||'')
+    .replace(/\{nome\}/g,primeiroNomeCamp(v.nome))
+    .replace(/\{cupom\}/g,v.cupom||'')
+    .replace(/\{desconto\}/g,v.desconto||'')
+    .replace(/\{validade\}/g,v.validade||'')
+    .replace(/[ \t]+,/g,',').replace(/,[ \t]*!/g,'!').replace(/[ \t]{2,}/g,' ')
+    .trim();
+}
+
+// Grava em lotes (o Firestore aceita até 500 operações por lote).
+async function gravarEmLotes(ops){
+  for(let i=0;i<ops.length;i+=400){
+    const b=db.batch();
+    ops.slice(i,i+400).forEach(f=>f(b));
+    await b.commit();
+  }
+}
+// Campos de uma campanha que o atendente do WhatsApp dispara sozinho.
+// O painel manda em `comando`; o atendente só escreve `progresso`.
+function campanhaBotInicial(){
+  return {bot:true,comando:'enviar',progresso:{estado:'aguardando',obs:'',enviados:0,falhas:0,semWhatsapp:0,pulados:0}};
 }
 
 // Gera um código de cupom individual a partir do nome (sem acento) + % + aleatório.
@@ -3926,37 +4003,58 @@ async function gerarCampanha(){
   const valDias=parseInt(document.getElementById('camp-cupomval').value)||7;
   if(gerarCupom && (pct<1||pct>100)){ showToast('⚠️ Desconto entre 1 e 100%','tok-err'); return; }
 
+  if(!gerarCupom && /\{(cupom|desconto|validade)\}/.test(msgTpl)){ showToast('⚠️ A mensagem fala do cupom: marque "Gerar cupom" ou tire {cupom}, {desconto} e {validade}','tok-err'); return; }
+  const peloBot=!!document.getElementById('camp-bot')?.checked;
+  if(peloBot && !confirm(`O atendente do WhatsApp vai mandar esta mensagem para ${alvo.length} cliente(s), sozinho, um por vez (até 60 por dia, das 9h às 21h).\n\nConfirmar o envio?`)) return;
+
   const dias=parseInt(document.getElementById('camp-dias').value)||0;
   const minPed=parseInt(document.getElementById('camp-minped').value)||0;
   const minGasto=parseFloat(document.getElementById('camp-mingasto').value)||0;
   const hojeStr=dataLocalHoje();
-
-  // Salva a campanha
-  const campanha={nome,dias,minPedidos:minPed,minGasto,mensagem:msgTpl,gerarCupom,cupomPct:gerarCupom?pct:0,cupomValidadeDias:gerarCupom?valDias:0,totalClientes:alvo.length,criadoEm:hojeStr,ts:Date.now()};
-  let campId=null;
-  try{ const ref=await db.collection('campanhas').add(campanha); campId=ref.id; }catch(e){ console.error('campanha:',e); }
-
   const val=dataLocalHoje(new Date(Date.now()+valDias*86400000));
+  const valBR=val.split('-').reverse().slice(0,2).join('/');
 
-  // Gera cupom + link por cliente
-  const linhas=[];
-  for(const c of alvo){
-    let codigo='';
-    if(gerarCupom){
-      codigo=gerarCodigoCupom(c.nome,pct);
-      const cupom={codigo,tipo:'pct',valor:pct,minimo:0,usosMax:1,usosFeitos:0,validade:val,descricao:`Campanha: ${nome}`,item:'',ativo:true,criadoEm:hojeStr,clienteId:c._id,campanhaId:campId};
-      try{ await db.collection('cupons').add(cupom); }catch(e){ console.error('cupom:',e); }
+  const btn=document.getElementById('camp-btn-gerar');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Gerando...'; }
+  try{
+    const campRef=db.collection('campanhas').doc();
+    // Cupom + mensagem por cliente
+    const linhas=alvo.map(c=>{
+      const codigo=gerarCupom?gerarCodigoCupom(c.nome,pct):'';
+      const msg=montarMsgCampanha(msgTpl,{nome:c.nome,cupom:codigo,desconto:pct+'%',validade:valBR});
+      const tel=crmTelLimpo(c.telefone||c._id);
+      return {id:c._id,nome:c.nome||'',tel,codigo,msg,wa:`https://wa.me/55${tel}?text=${encodeURIComponent(msg)}`};
+    });
+    const ops=[];
+    linhas.forEach(l=>{
+      if(l.codigo) ops.push(b=>b.set(db.collection('cupons').doc(),{codigo:l.codigo,tipo:'pct',valor:pct,minimo:0,usosMax:1,usosFeitos:0,validade:val,descricao:`Campanha: ${nome}`,item:'',ativo:true,criadoEm:hojeStr,clienteId:l.id,campanhaId:campRef.id}));
+      if(peloBot) ops.push(b=>b.set(campRef.collection('envios').doc(l.id),{nome:l.nome,tel:l.tel,clienteId:l.id,mensagem:l.msg,codigo:l.codigo,status:'pendente'}));
+    });
+    await gravarEmLotes(ops);
+    // A campanha por último: o atendente só a enxerga com todos os envios já gravados.
+    const campanha={nome,dias,minPedidos:minPed,minGasto,mensagem:msgTpl,gerarCupom,cupomPct:gerarCupom?pct:0,cupomValidadeDias:gerarCupom?valDias:0,totalClientes:alvo.length,criadoEm:hojeStr,ts:Date.now()};
+    await campRef.set(peloBot?{...campanha,...campanhaBotInicial()}:campanha);
+
+    fecharFormCampanha();
+    if(peloBot){
+      showToast(`🤖 Campanha "${nome}" criada — o atendente começa a enviar sozinho`,'tok-ok');
+      const el=document.getElementById('camp-resultado');
+      if(el) el.innerHTML=`<div style="background:var(--card);border:1px solid #25d366;border-radius:10px;padding:12px;margin-bottom:12px">
+        <div style="font-weight:700;color:#25d366;margin-bottom:4px">🤖 O atendente vai mandar para ${linhas.length} cliente(s)</div>
+        <div style="font-size:.72rem;color:var(--muted)">Um por vez, até 60 por dia, das 9h às 21h${gerarCupom?', cada um com o cupom dele':''}. Acompanhe o andamento abaixo. Dá pra pausar ou cancelar quando quiser.</div>
+      </div>`;
+    }else{
+      showToast(`🚀 Campanha "${nome}" gerada — ${alvo.length} cliente(s)`,'tok-ok');
+      renderResultadoCampanha(nome,linhas,gerarCupom);
     }
-    const msg=msgTpl.replace(/\{nome\}/g,c.nome||'cliente').replace(/\{cupom\}/g,codigo||'');
-    const tel=crmTelLimpo(c.telefone||c._id);
-    linhas.push({nome:c.nome,tel,codigo,wa:`https://wa.me/55${tel}?text=${encodeURIComponent(msg)}`});
+    try{ renderCupons(); }catch(e){}
+    carregarCampanhas();
+  }catch(e){
+    console.error('gerarCampanha:',e);
+    showToast('❌ Não consegui criar a campanha: '+(e.message||e),'tok-err');
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='🚀 Gerar campanha'; }
   }
-
-  showToast(`🚀 Campanha "${nome}" gerada — ${alvo.length} cliente(s)`,'tok-ok');
-  fecharFormCampanha();
-  renderResultadoCampanha(nome,linhas,gerarCupom);
-  try{ renderCupons(); }catch(e){}
-  carregarCampanhas();
 }
 
 function renderResultadoCampanha(nome,linhas,comCupom){
@@ -3974,22 +4072,68 @@ function renderResultadoCampanha(nome,linhas,comCupom){
     </div>`).join('');
 }
 
+// Ao vivo: o andamento das campanhas do atendente muda a cada envio.
+let unsubCampanhas=null, _campBots=[];
 function carregarCampanhas(){
-  db.collection('campanhas').get().then(snap=>{
-    campanhas=snap.docs.map(d=>({_id:d.id,...d.data()})).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  if(unsubCampanhas){ renderCampanhas(); return; }
+  unsubCampanhas=db.collection('campanhas').onSnapshot(snap=>{
+    campanhas=snap.docs.filter(d=>idSeguro(d.id)).map(d=>({_id:d.id,...d.data()})).sort((a,b)=>(b.ts||0)-(a.ts||0));
     renderCampanhas();
-  }).catch(e=>console.error('carregarCampanhas:',e));
+  },e=>{ console.error('carregarCampanhas:',e); unsubCampanhas=null; });
+  // Atendente ligado? (o bot dá sinal a cada minuto em bots/{uid})
+  db.collection('bots').onSnapshot(snap=>{ _campBots=snap.docs.map(d=>d.data()); renderCampanhas(); },()=>{});
+  setInterval(renderCampanhas,60000);
+}
+function campBotLigado(){
+  return _campBots.some(x=>{ const v=x.atualizadoEm&&x.atualizadoEm.toMillis?x.atualizadoEm.toMillis():0; return v && Date.now()-v<3*60*1000; });
+}
+const CAMP_ESTADOS={aguardando:['⏳','Na fila'],enviando:['📤','Enviando'],pausada:['⏸️','Pausada'],concluida:['✅','Concluída'],cancelada:['✖️','Cancelada']};
+function progressoCampanhaHtml(c){
+  if(!c.bot) return '';
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const p=c.progresso||{};
+  const total=c.totalClientes||0;
+  const feitos=(p.enviados||0)+(p.falhas||0)+(p.semWhatsapp||0)+(p.pulados||0);
+  const fim=p.estado==='concluida'||p.estado==='cancelada';
+  let [ic,txt]=CAMP_ESTADOS[p.estado]||CAMP_ESTADOS.aguardando;
+  if(!fim && c.comando==='pausar' && p.estado!=='pausada') [ic,txt]=['⏸️','Pausando…'];
+  if(!fim && c.comando==='cancelar') [ic,txt]=['✖️','Cancelando…'];
+  if(!fim && c.comando==='enviar' && p.estado==='pausada') [ic,txt]=['▶️','Retomando…'];
+  const pct=total?Math.min(100,Math.round(feitos/total*100)):0;
+  const det=[`<b style="color:#27ae60">${p.enviados||0}</b> enviada${(p.enviados||0)!==1?'s':''}`,
+    p.pulados?`${p.pulados} pulada${p.pulados!==1?'s':''} (SAIR ou promoção recente)`:'',
+    p.semWhatsapp?`${p.semWhatsapp} sem WhatsApp`:'',
+    p.falhas?`<span style="color:#e74c3c">${p.falhas} ${p.falhas===1?'falhou':'falharam'}</span>`:''].filter(Boolean).join(' · ');
+  const off=!fim && c.comando==='enviar' && !campBotLigado()
+    ? `<div style="font-size:.66rem;color:#f39c12;margin-top:4px">⚫ O atendente está desligado. Os envios continuam quando ele for ligado no PC da loja.</div>`:'';
+  const b=(cmd,t)=>`<button onclick="comandoCampanha('${c._id}','${cmd}')" style="flex:1;padding:7px;background:var(--card);color:var(--cream);border:1px solid #3a3530;border-radius:8px;font-size:.72rem;cursor:pointer">${t}</button>`;
+  const botoes=fim?'':`<div style="display:flex;gap:6px;margin-top:8px">${c.comando==='enviar'?b('pausar','⏸️ Pausar'):b('enviar','▶️ Continuar')}${c.comando!=='cancelar'?b('cancelar','✖️ Cancelar'):''}</div>`;
+  return `<div style="margin-top:8px;border-top:1px solid #2a2520;padding-top:8px">
+      <div style="font-size:.74rem;color:var(--cream)">🤖 ${ic} ${txt} — ${feitos}/${total}</div>
+      <div style="background:#2a2520;border-radius:10px;height:5px;overflow:hidden;margin:5px 0"><div style="height:100%;background:#25d366;border-radius:10px;width:${pct}%"></div></div>
+      <div style="font-size:.66rem;color:var(--muted)">${det}</div>
+      ${p.obs&&!fim?`<div style="font-size:.66rem;color:var(--muted);margin-top:3px">${esc(p.obs)}</div>`:''}
+      ${off}${botoes}
+    </div>`;
+}
+function comandoCampanha(id,cmd){
+  const c=campanhas.find(x=>x._id===id); if(!c) return;
+  if(cmd==='cancelar' && !confirm(`Cancelar a campanha "${c.nome}"? Quem ainda não recebeu não vai receber.`)) return;
+  db.collection('campanhas').doc(id).update({comando:cmd})
+    .then(()=>showToast(cmd==='pausar'?'⏸️ Campanha pausada':cmd==='cancelar'?'✖️ Campanha cancelada':'▶️ Campanha retomada','tok-info'))
+    .catch(e=>{ console.error('comandoCampanha:',e); showToast('❌ Não consegui mudar a campanha','tok-err'); });
 }
 function renderCampanhas(){
   const el=document.getElementById('camp-lista'); if(!el) return;
   if(!campanhas.length){ el.innerHTML=''; return; }
-  el.innerHTML=`<div style="font-size:.7rem;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px">Campanhas anteriores</div>`+campanhas.map(c=>`
+  el.innerHTML=`<div style="font-size:.7rem;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px">Campanhas</div>`+campanhas.map(c=>`
     <div style="background:var(--surface);border:1px solid #2a2520;border-radius:10px;padding:11px;margin-bottom:7px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
         <div style="font-weight:700;font-size:.85rem;color:var(--cream)">📣 ${c.nome}</div>
         <div style="font-size:.66rem;color:var(--muted)">${c.criadoEm||''}</div>
       </div>
-      <div style="font-size:.68rem;color:var(--muted);margin-top:4px">${c.totalClientes||0} cliente(s)${c.gerarCupom?` · cupom ${c.cupomPct}% (${c.cupomValidadeDias}d)`:''}${c.dias?` · parados ${c.dias}d+`:''}${c.minPedidos?` · ${c.minPedidos}+ pedidos`:''}${c.minGasto?` · gastou R$${c.minGasto}+`:''}</div>
+      <div style="font-size:.68rem;color:var(--muted);margin-top:4px">${c.totalClientes||0} cliente(s)${c.gerarCupom?` · cupom ${c.cupomPct}% (${c.cupomValidadeDias}d)`:''}${c.cupomCodigo?` · cupom ${c.cupomCodigo}`:''}${c.dias?` · parados ${c.dias}d+`:''}${c.minPedidos?` · ${c.minPedidos}+ pedidos`:''}${c.minGasto?` · gastou R$${c.minGasto}+`:''}</div>
+      ${progressoCampanhaHtml(c)}
     </div>`).join('');
 }
 

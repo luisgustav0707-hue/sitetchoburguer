@@ -37,7 +37,15 @@ const MSG = {
   pixCancelado: 'Beleza, cancelei aquele Pix 👍',
   pixJaPago: 'Opa, o seu Pix já tinha caído aqui, então o pedido foi pra cozinha do jeito que estava 🔥 Se precisar mudar alguma coisa, me fala que eu chamo alguém da equipe.',
   pixNaoCancelou: 'Não consegui cancelar o Pix agora 😕 Se você já pagou, fica tranquilo que eu confirmo aqui. Se ainda não pagou, não pague aquele código e me manda a mensagem de novo daqui a pouco.',
+  semPromo: 'Pronto! Você não vai mais receber promoções da Tcho Burguer por aqui 👍 Se quiser pedir, é só chamar!',
 };
+
+// "SAIR" das promoções (campanhas.js põe "responda SAIR" em toda mensagem de
+// campanha). A mensagem inteira tem que ser o pedido: "sair pra buscar" não entra.
+const SAIR = /^(sair|parar|pare|stop|descadastrar|sem promocao|sem promocoes|(nao quero|nao quero mais|nao desejo|quero parar de|parar de|para de|pare de) (receber |mandar |enviar |me mandar |me enviar )?(promocao|promocoes|mensagem|mensagens|propaganda|propagandas)|nao quero mais receber)$/;
+function querSair(texto) {
+  return SAIR.test(semAcento(texto).replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim());
+}
 
 // "sim" de verdade: a mensagem inteira é uma confirmação curta (sem "mas...").
 const SIM = /^(sim+|s|ss|isso( mesmo)?|confirm[oa]|confirmad[oa]|confirmar|pode( sim)?( mandar| confirmar| ser| fechar)?|fechad[oa]|fecha|ok|okay|beleza|blz|manda( ver)?|bora|perfeito|certo|ta certo|esta certo|tudo certo|correto|isso ai|sim pode|sim por favor|sim obrigad[oa])[\s!.👍✅🙏😊😁]*$/i;
@@ -301,6 +309,18 @@ function criarAtendente({ db, FieldValue, ia, enviar, enviarImagem, chamar, arqu
     const c = CONV.obter(m.chatId);
     c.numero = m.numero || c.numero;
     if (CONV.pausado(m.chatId)) { log(m.chatId, c.numero, '(pausado — mensagem ignorada)'); return; }
+    // "SAIR": não recebe mais campanhas (vale com a loja aberta ou fechada).
+    if (m.tipo === 'texto' && querSair(m.texto)) {
+      CONV.registrar(c, 'cliente', m.texto);
+      const tel = PED.telefoneLimpo(c.numero);
+      if (tel.length >= 10) {
+        await db.collection('clientes').doc(tel).update({ semPromo: true, semPromoEm: FieldValue.serverTimestamp() })
+          .catch((e) => { if (!/not-found|no document/i.test(`${e.code} ${e.message}`)) log(m.chatId, c.numero, `⚠️ não marcou o SAIR (${e.message})`); });
+      }
+      log(m.chatId, c.numero, '🔕 não quer mais receber promoções');
+      await responder(c, MSG.semPromo);
+      return;
+    }
     if (c.pix && PIX && await tratarPixPendente(c, m)) return;
 
     // Loja fechada ou sem nenhuma modalidade: avisa (no máximo a cada 30 min) e não aceita pedido.
@@ -425,10 +445,20 @@ function criarAtendente({ db, FieldValue, ia, enviar, enviarImagem, chamar, arqu
     pausar(CONV.obter(chatId), motivo);
   }
 
+  // Mensagem de campanha enviada (campanhas.js): entra no histórico, pra IA
+  // saber do que o cliente está falando se ele responder, e já conta como o
+  // "oi" da conversa (sem boas-vindas por cima).
+  function campanhaEnviada(chatId, numero, texto) {
+    const c = CONV.obter(chatId);
+    if (numero) c.numero = numero;
+    c.boasVindas = true;
+    CONV.registrar(c, 'bot', texto);
+  }
+
   // Teste: espera terminar o que está na fila desse cliente.
   const ocioso = (chatId) => filas.get(chatId) || Promise.resolve();
 
-  return { receber, humanoRespondeu, pausarAposAviso, retomarPix, ocioso };
+  return { receber, humanoRespondeu, pausarAposAviso, retomarPix, campanhaEnviada, ocioso };
 }
 
-module.exports = { criarAtendente, SIM, PAGUEI, PEDE_PIX, semAcento, MSG };
+module.exports = { criarAtendente, SIM, PAGUEI, PEDE_PIX, SAIR, querSair, semAcento, MSG };

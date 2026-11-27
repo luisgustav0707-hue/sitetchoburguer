@@ -806,7 +806,7 @@
     <!-- CAMPANHAS -->
     <div class="cfg-panel" id="crm-campanhas">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div style="font-size:.8rem;color:var(--muted)">Dispare mensagens segmentadas no WhatsApp</div>
+        <div style="font-size:.8rem;color:var(--muted)">Mande cupom pra quem sumiu: o atendente do WhatsApp dispara sozinho</div>
         <button class="btn-criar" onclick="abrirFormCampanha()">+ Nova campanha</button>
       </div>
 
@@ -833,12 +833,18 @@
         </div>
 
         <div style="font-size:.7rem;color:var(--orange);text-transform:uppercase;letter-spacing:1px;margin:12px 0 4px">Mensagem</div>
-        <div style="font-size:.66rem;color:var(--muted);margin-bottom:4px">Use <b>{nome}</b> e <b>{cupom}</b> — trocados por cliente no disparo.</div>
-        <textarea id="camp-msg" class="edit-inp" rows="5" style="resize:vertical" placeholder="Olá {nome}, sentimos sua falta! 🍔 Use o cupom {cupom} e volte a pedir."></textarea>
+        <div style="font-size:.66rem;color:var(--muted);margin-bottom:4px">Use <b>{nome}</b>, <b>{cupom}</b>, <b>{desconto}</b> e <b>{validade}</b> — trocados por cliente no disparo.</div>
+        <textarea id="camp-msg" class="edit-inp" rows="7" style="resize:vertical" placeholder="Oi, {nome}! Sentimos sua falta 🍔 Use o cupom {cupom} e volte a pedir."></textarea>
+
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:.78rem;cursor:pointer;margin-top:12px">
+          <input type="checkbox" id="camp-bot" checked style="margin-top:3px">
+          <span>🤖 <b>Enviar sozinho pelo atendente do WhatsApp</b><br>
+            <span style="font-size:.66rem;color:var(--muted)">Um cliente por vez, das 9h às 21h, até 60 por dia, pra o WhatsApp não bloquear o número da loja. Quem responder SAIR não recebe mais, e ninguém recebe mais de uma promoção por semana. O atendente precisa estar ligado no PC da loja. Desmarcado: você envia um por um pelos links.</span></span>
+        </label>
 
         <div style="display:flex;gap:8px;margin-top:14px">
           <button onclick="fecharFormCampanha()" style="flex:1;padding:10px;background:var(--card);color:var(--muted);border:1px solid #3a3530;border-radius:8px;cursor:pointer">Cancelar</button>
-          <button onclick="gerarCampanha()" style="flex:2;padding:10px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;font-weight:700;cursor:pointer">🚀 Gerar campanha</button>
+          <button id="camp-btn-gerar" onclick="gerarCampanha()" style="flex:2;padding:10px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#000;border:none;border-radius:8px;font-weight:700;cursor:pointer">🚀 Gerar campanha</button>
         </div>
       </div>
 

@@ -16,6 +16,7 @@ Ele roda no PC da loja, junto com o `servidor-impressao/`.
 | Histórico e estado de cada cliente | `conversas.js` (em memória, expira em 2h) |
 | Conexão com o WhatsApp | `index.js` (`whatsapp-web.js`) |
 | Avisar o cliente quando o pedido muda no Kanban | `avisos.js` |
+| Mandar as campanhas de marketing do painel (cupom pra quem sumiu) | `campanhas.js` |
 
 A IA **nunca** define preço nem total: ela só diz o que o cliente escolheu. O bot recalcula tudo com o cardápio do Firestore. Na hora do "sim", ele confere o estoque de novo antes de gravar.
 
@@ -41,6 +42,25 @@ A IA **nunca** define preço nem total: ela só diz o que o cliente escolheu. O 
   - **finalizado:** finalizado no Kanban (entregue ou retirado); pedido do balcão lançado já finalizado não avisa;
   - **cancelado:** cancelado no painel, em qualquer etapa. Depois desse aviso o bot fica 30 minutos quieto na conversa e marca como não lida, para a loja explicar o motivo.
   Vale para pedidos do site, do balcão e do WhatsApp; mesa não recebe. Cada aviso sai uma vez só por pedido (marca em `pedidos/{id}.avisosWa`). Mudança (ou cancelamento, por `canceladoEm`) com mais de 30 minutos (bot desligado) não gera aviso atrasado. Textos e liga/desliga: painel → Configurações → WhatsApp → Avisos automáticos.
+- **Campanhas de marketing** (`campanhas.js`). Elas são criadas no painel em **Marketing → Campanhas** (com "Enviar sozinho pelo atendente" marcado) ou em **Recuperação de Clientes → Enviar para todos pelo atendente**. O painel faz o seguinte:
+  - grava um envio por cliente em `campanhas/{id}/envios/{clienteId}`, com a mensagem pronta e o cupom individual;
+  - grava a campanha por último, com `bot: true`.
+
+  O bot manda **uma mensagem por vez**, para o WhatsApp não bloquear o número:
+  - só das **9h às 21h**;
+  - de **40 a 90 s** entre uma mensagem e outra;
+  - **no máximo 60 por dia** neste PC, contadas em `%LOCALAPPDATA%\TchoBot\campanhas-hoje.json`.
+
+  Quem fica de fora:
+  - quem tem `clientes/{id}.semPromo`, ou seja, respondeu **SAIR**;
+  - quem recebeu promoção nos últimos **7 dias** (`ultimaPromoEm`);
+  - número sem WhatsApp.
+
+  Toda mensagem termina com "responda SAIR". Respondeu SAIR (ou "parar", "não quero mais receber promoções"): o bot marca no CRM e confirma.
+
+  A mensagem enviada entra no histórico da conversa, então a IA sabe da promoção se o cliente responder. Pelo WhatsApp o cupom não é aplicado: a IA manda o cliente colar o código no site.
+
+  O painel controla a campanha por `comando` (`enviar`, `pausar` ou `cancelar`). O bot só escreve `progresso` (estado e contadores) e o status de cada envio. Antes de enviar para um cliente, o bot reserva esse envio numa transação; assim, com dois PCs, ninguém recebe duas vezes.
 
 ## Instalação (uma vez, no PC da loja)
 

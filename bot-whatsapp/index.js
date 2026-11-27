@@ -18,6 +18,7 @@ const CD = require('./cardapio');
 const ia = require('./ia');
 const { criarAtendente } = require('./atendente');
 const { iniciarAvisos } = require('./avisos');
+const { iniciarCampanhas } = require('./campanhas');
 const conexao = require('./conexao');
 
 const hora = () => new Date().toLocaleTimeString('pt-BR', { timeZone: CD.TZ });
@@ -109,8 +110,23 @@ async function enviarAviso(chatId, texto) {
     console.error(`[whatsapp] erro ao enviar aviso: ${e.message}`);
   }
 }
+// Promoção de campanha (campanhas.js): sem "digitando" e o erro sobe, pra
+// campanha marcar aquele cliente como falhou.
+async function enviarCampanha(chatId, texto) {
+  marcarDoBot(chatId, texto);
+  await client.sendMessage(chatId, texto);
+}
+
+// Mesmo cliente pelo número (@c.us) e pelo @lid, que é como a resposta dele
+// pode chegar.
+async function idsDoChat(chatId) {
+  const ids = new Set([chatId]);
+  try { const [r] = await client.getContactLidAndPhone([chatId]); if (r && r.lid) ids.add(String(r.lid)); } catch (e) {}
+  return [...ids];
+}
 let whatsappPronto = false;
 let avisos = null;   // criado no main()
+let campanhas = null;   // criado no main()
 setInterval(() => { const t = Date.now(); for (const [k, exp] of doBot) if (exp < t) doBot.delete(k); }, 60000).unref();
 
 let atendente = null;   // criado no main(), depois de conectar ao painel
@@ -228,6 +244,7 @@ client.on('ready', () => {
   // Pix que estavam esperando pagamento quando o bot desligou (pix.js).
   if (atendente && !pixRetomado) { pixRetomado = true; try { atendente.retomarPix(); } catch (e) { console.error('[pix]', e.message); } }
   if (avisos) avisos.aoConectar().catch((e) => console.error('[avisos]', e.message));
+  if (campanhas) campanhas.acordar();
   console.log(`${hora()} ✅ Atendente no ar! Respondendo mensagens novas.`);
   const numero = (client.info && client.info.wid && client.info.wid.user) || '';
   status({ estado: 'conectado', qr: null, erro: null, numero });
@@ -325,10 +342,23 @@ async function main() {
     // Cancelado: pausa o bot na conversa (pelo número e pelo @lid, que é como
     // a resposta do cliente pode chegar) e marca como não lida.
     aoCancelar: async (chatId, p) => {
-      const ids = new Set([chatId]);
-      try { const [r] = await client.getContactLidAndPhone([chatId]); if (r && r.lid) ids.add(String(r.lid)); } catch (e) {}
-      ids.forEach((id) => atendente.pausarAposAviso(id, `pedido ${p.num || ''} cancelado`));
+      (await idsDoChat(chatId)).forEach((id) => atendente.pausarAposAviso(id, `pedido ${p.num || ''} cancelado`));
     },
+    log: (t) => console.log(`${hora()} ${t}`),
+  });
+
+  // Campanhas de marketing do painel (Marketing → Campanhas): manda sozinho,
+  // devagar, só das 9h às 21h e no máximo 60 por dia (campanhas.js).
+  campanhas = iniciarCampanhas({
+    db, FieldValue, uid: painel.uid,
+    pronto: () => whatsappPronto,
+    resolverChat: async (numero) => { const w = await client.getNumberId(numero); return w ? w._serialized : null; },
+    enviar: enviarCampanha,
+    // Se o cliente responder, a IA sabe da promoção que ele recebeu.
+    aoEnviar: async (chatId, texto, numero) => {
+      (await idsDoChat(chatId)).forEach((id) => atendente.campanhaEnviada(id, numero, texto));
+    },
+    arquivo: path.join(PASTA_DADOS, 'campanhas-hoje.json'),
     log: (t) => console.log(`${hora()} ${t}`),
   });
 

@@ -63,7 +63,8 @@ function montarTexto(modelo, p) {
     .replace(/\{num\}/g, p.num || '')
     .replace(/\{total\}/g, 'R$' + total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
     // "{nome}" vazio não pode deixar "Oi, !" ou ", seu pedido"
-    .replace(/^\s*,\s*/, '').replace(/,\s*!/g, '!').replace(/\s{2,}/g, ' ')
+    // Só espaços repetidos: as quebras de linha (boas-vindas em parágrafos) ficam.
+    .replace(/^\s*,\s*/, '').replace(/,[ \t]*!/g, '!').replace(/[ \t]{2,}/g, ' ')
     .trim()
     .replace(/^./, (c) => c.toUpperCase());
 }

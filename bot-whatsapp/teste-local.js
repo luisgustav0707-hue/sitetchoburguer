@@ -347,6 +347,10 @@ async function caso(nome, fn) {
     const bv2 = enviadas.filter((e) => e.chatId === 'bv2@c.us').map((e) => e.texto);
     assert.deepStrictEqual(bv2, ['Olá! 👋 Bem-vindo ao Tcho!', 'Show! Qual o ponto?'], 'sem nome: "Olá!" + resposta da IA');
 
+    CD._carregarParaTeste(TCHO, DOCS(), { ...ABERTA, boasVindasWhatsApp: { on: true, texto: 'Olá, {nome}! 👋\n\nLinha 2' } });
+    await fala('bv4@c.us', 'oi', { numero: '5531999990104' });
+    assert.strictEqual(ultima('bv4@c.us'), 'Olá! 👋\n\nLinha 2', 'quebras de linha mantidas');
+
     CD._carregarParaTeste(TCHO, DOCS(), { ...ABERTA, boasVindasWhatsApp: { on: false, texto: 'Olá!' } });
     roteiro.push({ transcricao: '', acao: 'conversar', resposta: 'Oi! O que vai ser?', pedido: pedidoBase({}) });
     await fala('bv3@c.us', 'oi', { numero: '5531999990103' });

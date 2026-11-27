@@ -102,6 +102,11 @@ async function carregarCardapio(db) {
 
 const txt = (v) => String(v == null ? '' : v).slice(0, 40);
 
+// Observação de UM hambúrguer (campo do modal no site). Mesma regra do
+// limparObsItem() de cliente/cliente.js: sai dentro do parêntese do item.
+const limparObsItem = (s) => String(s == null ? '' : s)
+  .replace(/[()•—<>"'`]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+
 // Remonta itens, subtotal e consumo de estoque a partir do carrinho.
 // Devolve null se o carrinho nem tem o formato esperado.
 function montarDoCarrinho(car, C) {
@@ -134,11 +139,13 @@ function montarDoCarrinho(car, C) {
       precoAdic += Number(ad.preco) || 0;
       adicNomes.push(ad.nome);
     }
+    const obs = limparObsItem(inst.obs);
     const det = [
       ponto ? ponto.nome : '',
       sache && sache.id !== 'sn' ? 'sachê ' + sache.nome : '',
       removidos.length ? 'sem ' + removidos.join(', ') : '',
       adicNomes.length ? adicNomes.map((n) => '+' + n).join(', ') : '',
+      obs ? 'obs: ' + obs : '',
     ].filter(Boolean).join(' • ');
     const precoBurguer = (Number(b.preco) || 0) + precoAdic;
     itens.push(`${b.nome}${det ? ' (' + det + ')' : ''} — R$${precoBurguer}`);

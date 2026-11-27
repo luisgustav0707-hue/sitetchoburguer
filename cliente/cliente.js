@@ -355,7 +355,7 @@ function renderBurguers(){
   document.getElementById('menu-burguers').innerHTML=BURGUERS.filter(b=>!b.customCat&&produtoDisponivel(b.id)).map(b=>{
     const insts=cartBurguers[b.id]||[],qty=insts.length;
     const resumo=insts.map((inst,i)=>{
-      const pts=[inst.ponto?`${inst.ponto.emoji} ${inst.ponto.nome}`:'',inst.sache?`🧴 ${inst.sache.nome}`:'',inst.removidos.length?'sem '+inst.removidos.join(', '):'',inst.adicionais.length?'+ '+inst.adicionais.map(a=>a.nome).join(', '):''].filter(Boolean).join(' • ');
+      const pts=[inst.ponto?`${inst.ponto.emoji} ${inst.ponto.nome}`:'',inst.sache?`🧴 ${inst.sache.nome}`:'',inst.removidos.length?'sem '+inst.removidos.join(', '):'',inst.adicionais.length?'+ '+inst.adicionais.map(a=>a.nome).join(', '):'',inst.obs?'📝 '+inst.obs:''].filter(Boolean).join(' • ');
       return`<div class="cart-item-resumo"><span>#${i+1} ${pts||'padrão'}</span><span class="rm" onclick="remInst('${b.id}',${i})">✕</span></div>`;
     }).join('');
     const foto = getFotoCliente(b.id);
@@ -565,6 +565,9 @@ function abrirModal(id){
       <div class="modal-sep"></div>
       <div class="person-section"><div class="person-label">➕ Acréscimos <span class="opt-lbl">(opcional)</span></div>
         <div class="adic-grid">${ADICIONAIS.map(a=>`<div class="adic-item" id="adi-${a.id}" onclick="togAdic('${a.id}',${a.preco},'${a.nome}')"><span class="adic-name">${a.nome}</span><span class="adic-price">+R$${a.preco}</span></div>`).join('')}</div></div>
+      <div class="modal-sep"></div>
+      <div class="person-section"><div class="person-label">📝 Observação deste hambúrguer <span class="opt-lbl">(opcional)</span></div>
+        <textarea id="obs-burguer" rows="2" maxlength="${OBS_ITEM_MAX}" placeholder="Ex.: pão bem tostado, cortar ao meio..."></textarea></div>
     </div>
     <div class="modal-footer"><div id="adic-total" style="font-size:.76rem;color:var(--muted)"></div><button class="btn-primary" style="margin:0;max-width:200px;padding:10px" onclick="confirmarModal()">✓ ADICIONAR</button></div>`;
   document.getElementById('modal-overlay').style.display='flex';
@@ -618,6 +621,14 @@ function atualizarTotalModal(comboPreco){
   document.getElementById('adic-total').textContent=t>0?`Total extras: +R$${t}`:'';
 }
 
+// Observação de UM hambúrguer: vai dentro do parêntese do item ("obs: ..."),
+// então tira o que quebraria o texto do item (parênteses, "•", "—") ou o HTML
+// do painel/cupom. Mesma regra do limparObsItem() de functions/conferencia.js.
+const OBS_ITEM_MAX=100;
+function limparObsItem(s){
+  return String(s||'').replace(/[()•—<>"'`]/g,' ').replace(/\s+/g,' ').trim().slice(0,OBS_ITEM_MAX);
+}
+
 function confirmarModal(){
   let ok=true;
   if(!pontoAtual){document.getElementById('err-ponto').style.display='block';ok=false;}
@@ -630,7 +641,8 @@ function confirmarModal(){
   const comboPreco=comboAtual===true?(comboItem?.preco||15)+(comboSuco?COMBO_SUCO_EXTRA:0):0;
   const precoExtra=Object.values(adicionaisAtual).reduce((a,x)=>a+x.preco,0)+comboPreco;
   if(!cartBurguers[modalId])cartBurguers[modalId]=[];
-  cartBurguers[modalId].push({ponto:pontoAtual,sache:sacheAtual,removidos:[...removidosAtual],adicionais:Object.values(adicionaisAtual),precoExtra,combo:comboAtual===true?comboSaborAtual:null,comboSuco});
+  const obs=limparObsItem((document.getElementById('obs-burguer')||{}).value);
+  cartBurguers[modalId].push({ponto:pontoAtual,sache:sacheAtual,removidos:[...removidosAtual],adicionais:Object.values(adicionaisAtual),precoExtra,combo:comboAtual===true?comboSaborAtual:null,comboSuco,obs});
   fecharModal();renderBurguers();updateFloat();
 }
 
@@ -910,7 +922,7 @@ function renderResumo(){
     const b=BURGUERS.find(x=>x.id===id);if(!b)return;
     insts.forEach(inst=>{
       html+=`<div class="resumo-linha"><span>${b.emoji} ${b.nome}</span><span>R$${b.preco+inst.precoExtra}</span></div>`;
-      const det=[inst.ponto?`🥩 ${inst.ponto.emoji} ${inst.ponto.nome}`:'',inst.sache?`🧴 ${inst.sache.emoji} ${inst.sache.nome}`:'',inst.combo?`🍟🥤 Combo — ${inst.comboSuco?'Suco':'Refri'} ${inst.combo}`:'',inst.removidos.length?`➖ sem ${inst.removidos.join(', ')}`:'',inst.adicionais.length?`➕ ${inst.adicionais.map(a=>a.nome).join(', ')}`:''].filter(Boolean);
+      const det=[inst.ponto?`🥩 ${inst.ponto.emoji} ${inst.ponto.nome}`:'',inst.sache?`🧴 ${inst.sache.emoji} ${inst.sache.nome}`:'',inst.combo?`🍟🥤 Combo — ${inst.comboSuco?'Suco':'Refri'} ${inst.combo}`:'',inst.removidos.length?`➖ sem ${inst.removidos.join(', ')}`:'',inst.adicionais.length?`➕ ${inst.adicionais.map(a=>a.nome).join(', ')}`:'',inst.obs?`📝 ${inst.obs}`:''].filter(Boolean);
       if(det.length)html+=`<div class="resumo-sub">${det.join(' • ')}</div>`;
     });
   });
@@ -1129,6 +1141,7 @@ function montarCarrinhoServidor(){
     removidos:[...(inst.removidos||[])],
     adicionais:(inst.adicionais||[]).map(a=>a.id||a.nome),   // pedido repetido antigo não tem id
     combo:inst.combo||null, suco:!!inst.comboSuco,
+    obs:inst.obs||'',
   })));
   const extras={};
   [...EXTRAS,...COMBO,...PROMOCOES].forEach(e=>{
@@ -1529,7 +1542,8 @@ function montarItensTexto(){
     const b=BURGUERS.find(x=>x.id===id);if(!b)return;
     insts.forEach((inst,i)=>{
       // Combo sai como item PRÓPRIO (com o "•"), não dentro do hambúrguer.
-      const det=[inst.ponto?inst.ponto.nome:'',inst.sache&&inst.sache.id!=='sn'?'sachê '+inst.sache.nome:'',inst.removidos.length?'sem '+inst.removidos.join(', '):'',inst.adicionais.length?inst.adicionais.map(a=>'+'+a.nome).join(', '):''].filter(Boolean).join(' • ');
+      const obs=limparObsItem(inst.obs);
+      const det=[inst.ponto?inst.ponto.nome:'',inst.sache&&inst.sache.id!=='sn'?'sachê '+inst.sache.nome:'',inst.removidos.length?'sem '+inst.removidos.join(', '):'',inst.adicionais.length?inst.adicionais.map(a=>'+'+a.nome).join(', '):'',obs?'obs: '+obs:''].filter(Boolean).join(' • ');
       const comboTotal=comboPreco+(inst.comboSuco?COMBO_SUCO_EXTRA:0);
       const precoBurguer=b.preco+inst.precoExtra-(inst.combo?comboTotal:0);
       lista.push(`${b.nome}${det?' ('+det+')':''} — R$${precoBurguer}`);

@@ -47,8 +47,17 @@ function limparDados(v) {
 }
 
 // Realça "sem <ingredientes>" (removidos) no cupom pra cozinha não errar.
+// A observação própria do hambúrguer ("obs: ...", sempre a última parte do
+// parêntese) sai em negrito e como o cliente escreveu — o realce de "sem" vale
+// só para as escolhas do modal, senão "sem gergelim, cortar ao meio" viraria
+// "NÃO GERGELIM, CORTAR AO MEIO".
 function destacaRemocao(item) {
-  return String(item).replace(/\bsem\s+([^•)—]+)/gi, (m, p1) => `<span class="rem">⚠ NÃO ${p1.trim().toUpperCase()}</span>`);
+  const s = String(item);
+  const i = s.search(/\bobs: /);
+  const escolhas = i < 0 ? s : s.slice(0, i);
+  const obs = i < 0 ? '' : s.slice(i);
+  return escolhas.replace(/\bsem\s+([^•)—]+)/gi, (m, p1) => `<span class="rem">⚠ NÃO ${p1.trim().toUpperCase()}</span>`)
+    + obs.replace(/^obs: ([^•)]+)/, (m, p1) => `<b>📝 OBS: ${p1.trim()}</b>`);
 }
 
 function enderecoCompleto(p) {

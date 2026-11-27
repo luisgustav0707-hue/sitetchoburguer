@@ -1641,8 +1641,15 @@ function abrirJanelaImpressao(html, largura=420){
 }
 
 // Realça "sem <ingredientes>" (removidos) no cupom pra cozinha não errar.
+// A observação própria do hambúrguer ("obs: ...", última parte do parêntese)
+// sai em negrito e como o cliente escreveu; o realce de "sem" vale só para as
+// escolhas do modal. Mesmo código do destacaRemocao() de functions/cupons-srv.js.
 function destacaRemocao(item){
-  return String(item).replace(/\bsem\s+([^•)—]+)/gi, (m,p1)=>`<span class="rem">⚠ NÃO ${p1.trim().toUpperCase()}</span>`);
+  const s=String(item);
+  const i=s.search(/\bobs: /);
+  const escolhas=i<0?s:s.slice(0,i), obs=i<0?'':s.slice(i);
+  return escolhas.replace(/\bsem\s+([^•)—]+)/gi, (m,p1)=>`<span class="rem">⚠ NÃO ${p1.trim().toUpperCase()}</span>`)
+    + obs.replace(/^obs: ([^•)]+)/, (m,p1)=>`<b>📝 OBS: ${p1.trim()}</b>`);
 }
 // Nº do pedido do cliente (como no iFood). Gravado pela function
 // enfileirarImpressao contando o histórico pelo telefone; só a loja vê.

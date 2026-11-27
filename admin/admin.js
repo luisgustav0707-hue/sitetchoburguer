@@ -1644,6 +1644,14 @@ function abrirJanelaImpressao(html, largura=420){
 function destacaRemocao(item){
   return String(item).replace(/\bsem\s+([^•)—]+)/gi, (m,p1)=>`<span class="rem">⚠ NÃO ${p1.trim().toUpperCase()}</span>`);
 }
+// Nº do pedido do cliente (como no iFood). Gravado pela function
+// enfileirarImpressao contando o histórico pelo telefone; só a loja vê.
+// Mesmo texto do linhaPedidoDoCliente() de functions/cupons-srv.js.
+function linhaPedidoDoCliente(p){
+  const n=Number(p.pedidoDoCliente)||0;
+  if(!n) return '';
+  return `<div class="c b" style="margin-top:3px">${n===1?'★ 1º PEDIDO — CLIENTE NOVO ★':`${n}º PEDIDO DO CLIENTE`}</div>`;
+}
 function cupomCozinha(p){
   const obsBloco = p.obs
     ? `<div class="line"></div><div class="obs-box">⚠ OBS: ${p.obs.toUpperCase()} ⚠</div>`
@@ -1654,6 +1662,7 @@ function cupomCozinha(p){
     <div class="line"></div>
     <div class="row"><span class="big">${p.num||'#'+p.id}</span><span>${p.horaStr||''}</span></div>
     <div class="row"><span class="b">${p.tipo==='delivery'?'🛵 DELIVERY':'🏃 RETIRADA'}</span><span>${p.nome}</span></div>
+    ${linhaPedidoDoCliente(p)}
     <div class="line"></div>
     ${p.itens.map(i=>`<div style="margin:3px 0">• ${destacaRemocao(i)}</div>`).join('')}
     ${obsBloco}
@@ -1976,6 +1985,7 @@ function renderCard(p){
   return`<div class="card" id="card-${fid}" draggable="true" ondragstart="onDragStart(event,'${fid}','${p.status}')" ondragend="onDragEnd()">
     <div class="card-hdr"><span class="card-num">${p.num||('#'+p.id)}${pb}</span>${tipoEl}</div>
     <div class="card-cli">${p.nome}${p.bairro?` · ${p.bairro}`:''}</div>
+    ${p.pedidoDoCliente?`<div style="font-size:.66rem;font-weight:800;color:${p.pedidoDoCliente===1?'#27ae60':'#f1c40f'};margin:2px 0" title="Quantos pedidos este cliente já fez (pelo telefone, sem cancelados)">${p.pedidoDoCliente===1?'🆕 1º pedido':`⭐ ${p.pedidoDoCliente}º pedido`}</div>`:''}
     ${p.pagamentoOnline?`<div style="font-size:.66rem;font-weight:800;color:#27ae60;margin:2px 0" title="Pago pelo Mercado Pago — não cobrar na entrega">✅ ${p.pag||'Pago online'}</div>`:''}
     ${p.conferirValor?`<div style="font-size:.66rem;font-weight:800;color:#e74c3c;margin:2px 0" title="${textoConferir(p)}">⚠ CONFERIR VALOR</div>`:''}
     ${p.troco&&(p.pag||'').toLowerCase()==='dinheiro'?`<div style="font-size:.66rem;font-weight:800;color:#f39c12;margin:2px 0">💵 Troco p/ R$${p.troco} · levar R$${Math.max(0,p.troco-(p.total||0))}</div>`:''}

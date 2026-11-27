@@ -367,14 +367,44 @@ exports.imprimirTeste = onCall({ region: REGION }, async (request) => {
   return { ok: true };
 });
 
-// Roda a cada pedido novo. Só enfileira quando a loja optou pelo app
-// (impressaoModo:'app') — senão segue tudo como antes, com a aba imprimindo.
+// ── "Nº pedido do cliente" (como no iFood: 1º pedido, 5º pedido...) ──
+// Conta no HISTÓRICO de pedidos pelo telefone, não no clientes.quantidadePedidos:
+// o site e o painel atualizam esse contador em paralelo com a gravação do
+// pedido, então lê-lo aqui às vezes já incluiria este pedido, às vezes não.
+// Só para a loja (card do Kanban + cupom da cozinha); o cliente não vê.
+// Mesma normalização do telefoneLimpo() de bot-whatsapp/pedido.js.
+function telDigitos(tel) {
+  let d = String(tel || '').replace(/\D/g, '');
+  if (d.length >= 12 && d.startsWith('55')) d = d.slice(2);
+  if (d.length === 10 && /[6-9]/.test(d[2])) d = d.slice(0, 2) + '9' + d.slice(2);   // celular sem o 9
+  return d;
+}
+async function marcarPedidoDoCliente(ref, p) {
+  const tel = telDigitos(p.tel);
+  if (tel.length < 10) return null;                  // mesa / balcão sem telefone
+  const snap = await db.collection('pedidos').where('telDigitos', '==', tel).select('status').get();
+  let n = 1;                                         // este pedido (ainda sem telDigitos)
+  snap.forEach((d) => { if (d.id !== ref.id && d.data().status !== 'cancelado') n++; });
+  await ref.update({ telDigitos: tel, pedidoDoCliente: n });
+  return n;
+}
+
+// Roda a cada pedido novo: marca o nº do pedido do cliente e, se a loja
+// optou pelo app (impressaoModo:'app'), enfileira o cupom — senão segue tudo
+// como antes, com a aba imprimindo.
 exports.enfileirarImpressao = onDocumentCreated(
   { region: REGION, document: 'pedidos/{pedidoId}' },
   async (event) => {
     const snap = event.data;
     const p = snap && snap.data();
-    if (!p || p.status !== 'novo') return;
+    if (!p) return;
+    try {
+      const n = await marcarPedidoDoCliente(snap.ref, p);
+      if (n) p.pedidoDoCliente = n;
+    } catch (e) {
+      logger.warn('pedidoDoCliente:', e.message);       // nunca segura a impressão
+    }
+    if (p.status !== 'novo') return;
     const { pedidoId } = event.params;
 
     const opSnap = await db.collection('config').doc('operacao').get();

@@ -70,6 +70,14 @@ function blocoObs(p) {
     : '';
 }
 
+// Nº do pedido do cliente (gravado pela function enfileirarImpressao).
+// Mesmo texto do linhaPedidoDoCliente() de admin/admin.js.
+function linhaPedidoDoCliente(p) {
+  const n = Number(p.pedidoDoCliente) || 0;
+  if (!n) return '';
+  return `<div class="c b" style="margin-top:3px">${n === 1 ? '★ 1º PEDIDO — CLIENTE NOVO ★' : `${n}º PEDIDO DO CLIENTE`}</div>`;
+}
+
 function cupomCozinhaSrv(p) {
   p = limparDados(p);
   const itens = Array.isArray(p.itens) ? p.itens : [];
@@ -79,6 +87,7 @@ function cupomCozinhaSrv(p) {
     <div class="line"></div>
     <div class="row"><span class="big">${p.num || '#' + p.id}</span><span>${p.horaStr || ''}</span></div>
     <div class="row"><span class="b">${p.tipo === 'delivery' ? '🛵 DELIVERY' : '🏃 RETIRADA'}</span><span>${p.nome || ''}</span></div>
+    ${linhaPedidoDoCliente(p)}
     <div class="line"></div>
     ${itens.map((i) => `<div style="margin:3px 0">• ${destacaRemocao(i)}</div>`).join('')}
     ${blocoObs(p)}

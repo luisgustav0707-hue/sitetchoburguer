@@ -11,7 +11,7 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true });
 
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const QRCode = require('qrcode');
 const CD = require('./cardapio');
@@ -81,6 +81,21 @@ async function enviar(chatId, texto) {
     await chat.clearState().catch(() => {});
   } catch (e) {
     console.error(`[whatsapp] erro ao enviar: ${e.message}`);
+  }
+}
+
+// QR code do Pix com as instruções na legenda. Falhou a imagem → só o texto.
+async function enviarImagem(chatId, base64, legenda) {
+  try {
+    const chat = await client.getChatById(chatId);
+    await chat.sendStateTyping().catch(() => {});
+    await espera(1500 + Math.random() * 700);
+    marcarDoBot(chatId, legenda);
+    await client.sendMessage(chatId, new MessageMedia('image/png', base64, 'pix.png'), { caption: legenda });
+    await chat.clearState().catch(() => {});
+  } catch (e) {
+    console.error(`[whatsapp] QR do Pix não enviado (${e.message}) — mandando só o texto`);
+    await enviar(chatId, legenda);
   }
 }
 
@@ -206,9 +221,12 @@ client.on('auth_failure', (m) => {
   console.error(`${hora()} ❌ Falha no login do WhatsApp: ${m}\n   Apague a pasta ${path.join(PASTA_DADOS, 'auth')} e escaneie o QR de novo.`);
   status({ estado: 'erro', qr: null, erro: `Falha no login do WhatsApp: ${m}` });
 });
+let pixRetomado = false;
 client.on('ready', () => {
   prontoEm = Date.now();
   whatsappPronto = true;
+  // Pix que estavam esperando pagamento quando o bot desligou (pix.js).
+  if (atendente && !pixRetomado) { pixRetomado = true; try { atendente.retomarPix(); } catch (e) { console.error('[pix]', e.message); } }
   if (avisos) avisos.aoConectar().catch((e) => console.error('[avisos]', e.message));
   console.log(`${hora()} ✅ Atendente no ar! Respondendo mensagens novas.`);
   const numero = (client.info && client.info.wid && client.info.wid.user) || '';
@@ -290,7 +308,10 @@ async function main() {
 
   CD.iniciar(db);
   atendente = criarAtendente({
-    db, FieldValue, ia, enviar,
+    db, FieldValue, ia, enviar, enviarImagem,
+    // Pix pelo Mercado Pago (o mesmo do site): functions de functions/pagamentos.js.
+    chamar: painel.chamar,
+    arquivoPix: path.join(PASTA_DADOS, 'pix-pendentes.json'),
     // Pausou (pediu atendente / não entendeu 2x / erro): marca como não lida pra equipe ver.
     aoPausar: async (chatId) => { const chat = await client.getChatById(chatId); await chat.markUnread(); },
   });

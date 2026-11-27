@@ -21,7 +21,13 @@ A IA **nunca** define preço nem total: ela só diz o que o cliente escolheu. O 
 
 **Regras do atendimento:**
 - **Fora do horário** (ou com a loja fechada no admin), o bot avisa o horário e não aceita pedido.
-- **Pix e cartão online** não são cobrados pelo bot. Com o pagamento online ligado no admin, ele manda o link do site. Com ele desligado, aceita Pix por chave e manda a chave depois de gravar o pedido.
+- **Pix com o pagamento online ligado no admin** (`pix.js`): no "sim" o bot **não grava o pedido**. Ele grava `pagamentos/{id}` como `aguardando` (igual ao site) e pede o Pix ao Mercado Pago (`criarPixMP`). Depois manda o QR code e, numa mensagem separada, o copia e cola. Quando o pagamento cai, `functions/pagamentos.js` cria o pedido já pago. Ele entra no Kanban, imprime e o bot confirma ao cliente. Enquanto espera:
+  - "paguei" ou comprovante: o bot consulta o Mercado Pago na hora;
+  - "PIX": o bot manda o código de novo, ou gera outro se venceu (o Pix vale 30 min);
+  - mudou o pedido ou a forma de pagamento: o bot cancela o Pix antes.
+
+  Os Pix em andamento ficam em `%LOCALAPPDATA%\TchoBot\pix-pendentes.json`. Se o bot reiniciar, ele continua acompanhando e confirmando.
+- **Cartão online** não é cobrado pelo bot: ele manda o link do site. Com o pagamento online desligado, o bot aceita Pix por chave e manda a chave depois de gravar o pedido.
 - **Atendimento humano.** O bot fica **30 minutos em silêncio** naquela conversa e marca o chat como não lido quando:
   - o cliente pede um atendente;
   - a IA não entende 2 vezes seguidas;

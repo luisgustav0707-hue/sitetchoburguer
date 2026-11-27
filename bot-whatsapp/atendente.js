@@ -7,12 +7,17 @@
 //
 //   mensagem → loja aberta? → (resumo pendente + "sim") → grava
 //            → IA entende → pedido.js confere → responde / resume / grava
+//
+// Pix com o pagamento online ligado: o "sim" não grava o pedido — gera o Pix
+// do Mercado Pago (pix.js) e manda o copia e cola. O pedido só entra no
+// Kanban quando o pagamento cai, e aí o bot confirma pro cliente.
 // ═══════════════════════════════════════════════════════════════
 
 const CD = require('./cardapio');
 const PED = require('./pedido');
 const CONV = require('./conversas');
 const { montarTexto } = require('./avisos');
+const { criarPix } = require('./pix');
 
 const AVISO_FECHADO_MS = 30 * 60000;   // não repete o "estamos fechados" a cada mensagem
 
@@ -24,6 +29,14 @@ const MSG = {
   naoEntendi2: 'Acho que não tô conseguindo te entender 😅 Vou chamar alguém da equipe pra te ajudar, só um instante!',
   erroGravar: 'Ih, não consegui registrar o pedido agora 😕 Já chamei alguém da equipe pra finalizar com você!',
   semPedidos: 'Oi! 😊 No momento não estamos aceitando pedidos por aqui. Volta mais tarde!',
+  erroPix: 'Ih, não consegui gerar o Pix agora 😕 Quer pagar em dinheiro ou cartão na entrega?',
+  pixLimite: 'Já gerei Pix demais pra esse pedido 😅 Quer pagar em dinheiro ou cartão na entrega?',
+  pixAguardando: 'Ainda não apareceu o pagamento aqui 👀 Às vezes o banco leva alguns segundinhos. Assim que cair, eu confirmo e o pedido vai direto pra cozinha!',
+  pixComprovante: 'Recebi! 👀 O pagamento ainda não apareceu aqui, às vezes o banco leva alguns segundinhos. Assim que cair, eu confirmo e o pedido vai pra cozinha (não precisa mandar comprovante 😉).',
+  pixVenceu: '⌛ O Pix venceu e o pedido ainda não foi pra cozinha. Responde *PIX* que eu gero um novo, ou me fala se prefere pagar em dinheiro ou cartão na entrega.',
+  pixCancelado: 'Beleza, cancelei aquele Pix 👍',
+  pixJaPago: 'Opa, o seu Pix já tinha caído aqui, então o pedido foi pra cozinha do jeito que estava 🔥 Se precisar mudar alguma coisa, me fala que eu chamo alguém da equipe.',
+  pixNaoCancelou: 'Não consegui cancelar o Pix agora 😕 Se você já pagou, fica tranquilo que eu confirmo aqui. Se ainda não pagou, não pague aquele código e me manda a mensagem de novo daqui a pouco.',
 };
 
 // "sim" de verdade: a mensagem inteira é uma confirmação curta (sem "mas...").
@@ -38,6 +51,12 @@ function soCumprimento(texto) {
   return !t || SAUDACAO.test(t);
 }
 
+// Com Pix esperando pagamento: "paguei", "pronto", "fiz o pix"... (a mensagem
+// inteira). "Pago na entrega" ou "pronto, muda o endereço" não entram: vão pra IA.
+const PAGUEI = /^(ja\s+)?(paguei|pago|ta pago|esta pago|pix feito|fiz o pix|fiz o pagamento|feito|pronto|transferi|enviei|mandei|caiu|comprovante|segue o comprovante|ja foi)(\s+(o pix|o pagamento|ja|agora|ai|aqui|viu|ta|blz|beleza|obrigad[oa]|vlw|valeu))*[\s!.?,👍✅🙏😊😁]*$/;
+// "PIX" depois que venceu, ou pra receber o código de novo.
+const PEDE_PIX = /^((gera|gerar|manda|mandar|me manda|quero|pode gerar|pode mandar|reenvia)\s+)?((o|um|outro|um novo|novo)\s+)?(pix|codigo|codigo do pix|copia e cola)(\s+(de novo|novo|novamente|por favor|pf|pfv))?[\s!.?👍✅🙏😊😁]*$|^(gera outro|outro|gera|pode gerar|pode mandar|sim)[\s!.👍✅🙏😊😁]*$/;
+
 // Boas-vindas do painel (Configurações → WhatsApp): config/operacao.boasVindasWhatsApp.
 function boasVindasConfig() {
   const op = (CD.cardapio() || {}).operacao || {};
@@ -49,12 +68,176 @@ function boasVindasConfig() {
 function mascara(numero) { const d = String(numero || '').replace(/\D/g, ''); return d ? '…' + d.slice(-4) : '?'; }
 function log(chatId, numero, ...a) { console.log(new Date().toLocaleTimeString('pt-BR', { timeZone: CD.TZ }), `[${mascara(numero || chatId)}]`, ...a); }
 
-function criarAtendente({ db, FieldValue, ia, enviar, aoPausar }) {
+// chamar(nome, data): Cloud Functions do Pix (conexao.js). Sem ele, o Pix fica
+// como antes (chave da loja + comprovante). enviarImagem: QR code do Pix.
+// arquivoPix: onde guardar os Pix em andamento (sobrevive a um reinício).
+function criarAtendente({ db, FieldValue, ia, enviar, enviarImagem, chamar, arquivoPix, pixIntervaloMs, aoPausar }) {
   const filas = new Map();   // chatId → Promise (uma mensagem por vez por cliente)
 
   async function responder(c, texto) {
     CONV.registrar(c, 'bot', texto);
     await enviar(c.chatId, texto);
+  }
+
+  // Uma coisa por vez por cliente: mensagens dele e avisos do Pix não se atropelam.
+  function naFila(chatId, fn) {
+    const anterior = filas.get(chatId) || Promise.resolve();
+    const atual = anterior.then(fn).catch((e) => console.error('[atendente] erro:', e));
+    filas.set(chatId, atual);
+    atual.finally(() => { if (filas.get(chatId) === atual) filas.delete(chatId); });
+    return atual;
+  }
+
+  // ── PIX (Mercado Pago) ─────────────────────────────────────────
+  const PIX = chamar ? criarPix({
+    db, FieldValue, chamar, arquivo: arquivoPix, intervaloMs: pixIntervaloMs,
+    aoPagar: (chatId, x) => pixPago(chatId, x),
+    aoVencer: (chatId, x) => pixVencido(chatId, x),
+    log: (t) => log('', '', t),
+  }) : null;
+  const pixOnline = () => !!PIX && CD.pagamentoOnlineAtivo();
+
+  // O que não pode mudar depois do Pix gerado (senão o valor ou o pedido pago não batem).
+  function chavePix(v) {
+    const r = v.rascunho;
+    return JSON.stringify([v.montado ? v.montado.itens : [], v.total, r.tipo, r.pagamento, r.bairro, r.rua, r.numero, r.complemento, r.obs]);
+  }
+
+  // Manda o Pix: QR code com as instruções e, separado, o copia e cola (fácil
+  // de copiar no celular). Venceu ou sem código → pede outro ao Mercado Pago.
+  async function mandarPix(c) {
+    const p = c.pix;
+    if (p.vencido || !p.qr || p.venceMs <= Date.now()) {
+      try {
+        const pix = await PIX.novoPix(p.id, c.chatId, p.info);
+        Object.assign(p, { qr: pix.qr, qrBase64: pix.qrBase64 || '', venceMs: Number(pix.venceMs) || Date.now() + 30 * 60000, vencido: false });
+        p.info = { ...p.info, qr: pix.qr };
+        log(c.chatId, c.numero, `⚡ Pix novo gerado [${p.id}]`);
+      } catch (e) {
+        const st = await PIX.verificar(p.id).catch(() => null);
+        if (st === 'pago') return;                              // a confirmação sai pelo pixPago
+        console.warn('[atendente] Pix não gerado:', e.code || '', e.message);
+        const limite = /resource-exhausted|muitas tentativas/i.test(`${e.code} ${e.message}`);
+        PIX.esquecer(p.id);
+        c.pix = null; c.resumo = null;
+        if (c.rascunho) c.rascunho.pagamento = '';
+        await responder(c, limite ? MSG.pixLimite : MSG.erroPix);
+        return;
+      }
+    }
+    const min = Math.max(1, Math.round((p.venceMs - Date.now()) / 60000));
+    const texto = `⚡ *Pix de ${PED.brl(p.total)}*\n\nCopie o código da próxima mensagem e cole no app do banco em *Pix → Pix Copia e Cola*. Vale por ${min} min.\n\nAssim que o pagamento cair, eu confirmo aqui e o pedido vai direto pra cozinha 🔥 Não precisa mandar comprovante.`;
+    CONV.registrar(c, 'bot', texto);
+    if (enviarImagem && /^[A-Za-z0-9+/=]{100,}$/.test(p.qrBase64 || '')) await enviarImagem(c.chatId, p.qrBase64, texto);
+    else await enviar(c.chatId, texto);
+    CONV.registrar(c, 'bot', '(código Pix copia e cola)');
+    await enviar(c.chatId, p.qr);
+  }
+
+  // "Sim" no resumo com Pix: grava o pendente e manda o Pix. O pedido de
+  // verdade só nasce quando o Mercado Pago confirmar (functions/pagamentos.js).
+  async function pedirPix(c, v) {
+    const chave = chavePix(v);
+    if (c.pix && c.pix.chave === chave) return mandarPix(c);   // mesmo pedido: reenvia
+    const info = { nome: v.rascunho.nome, tipo: v.rascunho.tipo, total: v.total };
+    const pedido = PED.dadosPedido(v, c.numero, 'online_pix');
+    info.endereco = pedido.endereco;
+    let r;
+    try {
+      r = await PIX.gerar({ chatId: c.chatId, pedido, total: v.total, consumo: v.montado.consumo, carrinho: v.carrinho, info });
+    } catch (e) {
+      console.error('[atendente] Pix não gerado:', e.code || '', e.message);
+      c.resumo = null;
+      c.rascunho.pagamento = '';
+      await responder(c, MSG.erroPix);
+      return;
+    }
+    log(c.chatId, c.numero, `⚡ Pix gerado (${PED.brl(v.total)}, ${v.rascunho.tipo}) — esperando o pagamento [${r.id}]`);
+    c.resumo = null;
+    c.pix = {
+      id: r.id, chave, total: v.total, qr: r.pix.qr, qrBase64: r.pix.qrBase64 || '',
+      venceMs: Number(r.pix.venceMs) || Date.now() + 30 * 60000, vencido: false, info: { ...info, qr: r.pix.qr },
+    };
+    await mandarPix(c);
+  }
+
+  // Cliente mudou o pedido/forma de pagamento: cancela o Pix antes.
+  // 'ok' = cancelado; 'pago' = já tinha pago; 'erro' = não deu pra cancelar.
+  async function cancelarPix(c) {
+    const id = c.pix.id;
+    let st;
+    try { st = await PIX.cancelar(id); } catch (e) {
+      console.warn('[atendente] Pix não cancelado:', e.code || '', e.message);
+      await responder(c, MSG.pixNaoCancelou);
+      return 'erro';
+    }
+    if (st === 'pago') { await responder(c, MSG.pixJaPago); return 'pago'; }   // a confirmação sai pelo pixPago
+    log(c.chatId, c.numero, `⚡ Pix cancelado [${id}]`);
+    c.pix = null;
+    return 'ok';
+  }
+
+  // Mensagem do cliente com Pix esperando: "paguei"/comprovante → pergunta ao
+  // Mercado Pago agora; "PIX" → manda (ou gera de novo). true = já respondeu.
+  async function tratarPixPendente(c, m) {
+    const t = m.tipo === 'texto' ? semAcento(m.texto) : '';
+    const comprovante = m.tipo === 'outro';
+    const pedePix = !!t && PEDE_PIX.test(t);
+    const paguei = !!t && !pedePix && PAGUEI.test(t);
+    if (!comprovante && !pedePix && !paguei) {
+      PIX.verificar(c.pix.id).catch(() => {});                // de carona: pode ter caído agora
+      return false;
+    }
+    CONV.registrar(c, 'cliente', comprovante ? '(mandou uma imagem/arquivo)' : m.texto);
+    log(c.chatId, c.numero, comprovante ? '📎 comprovante?' : `💬 ${String(m.texto).slice(0, 120)}`);
+    if (pedePix) { await mandarPix(c); return true; }
+    const st = await PIX.verificar(c.pix.id).catch(() => null);
+    if (st === 'pago') return true;                            // a confirmação sai pelo pixPago
+    await responder(c, comprovante ? MSG.pixComprovante : MSG.pixAguardando);
+    return true;
+  }
+
+  // Mercado Pago confirmou: o pedido já está no Kanban. Confirma pro cliente.
+  function pixPago(chatId, { id, num, info }) {
+    return naFila(chatId, async () => {
+      const c = CONV.obter(chatId);
+      const inf = info || {};
+      const op = (CD.cardapio() || {}).operacao || {};
+      const prazo = `${op.prazoMin || 30}–${op.prazoMax || 45} min`;
+      const L = [`✅ Pagamento recebido! Pedido${num ? ` *${num}*` : ''} confirmado e já foi pra cozinha 🔥`];
+      L.push(inf.tipo === 'delivery' ? `Previsão de entrega: ${prazo} 🛵` : `Pode vir buscar em uns ${prazo} 🏃`);
+      if (inf.nome) L.push(`Valeu, ${inf.nome}! 🍔`);
+      log(chatId, c.numero, `✅ Pix pago — pedido ${num || '?'} no Kanban [${id}]`);
+      if (c.pix && c.pix.id === id) {
+        c.cliente = { nome: inf.nome || (c.cliente && c.cliente.nome) || '', endereco: inf.endereco || (c.cliente && c.cliente.endereco) || '' };
+        CONV.zerarPedido(c);
+      }
+      await responder(c, L.join('\n'));
+    });
+  }
+
+  // Venceu sem pagamento: avisa uma vez (o cliente pode pedir outro).
+  function pixVencido(chatId, { id }) {
+    return naFila(chatId, async () => {
+      const c = CONV.obter(chatId);
+      if (!c.pix || c.pix.id !== id || CONV.pausado(chatId)) return;
+      c.pix.vencido = true;
+      log(chatId, c.numero, `⌛ Pix venceu sem pagamento [${id}]`);
+      await responder(c, MSG.pixVenceu);
+    });
+  }
+
+  // Bot reiniciou com Pix em andamento: volta a acompanhar (e a confirmar).
+  function retomarPix() {
+    if (!PIX) return;
+    const lista = PIX.retomar();
+    lista.forEach((x) => {
+      const c = CONV.obter(x.chatId);
+      if (c.pix) return;
+      const inf = x.info || {};
+      c.pix = { id: x.id, chave: null, total: inf.total, qr: inf.qr || '', qrBase64: '', venceMs: Number(x.venceMs), vencido: Number(x.venceMs) <= Date.now(), info: inf };
+    });
+    if (lista.length) console.log(`[pix] acompanhando ${lista.length} Pix de antes do reinício`);
   }
 
   function pausar(c, motivo) {
@@ -88,6 +271,7 @@ function criarAtendente({ db, FieldValue, ia, enviar, aoPausar }) {
       log(c.chatId, c.numero, 'cardápio mudou antes da confirmação — novo resumo');
       return mostrarResumo(c, c.rascunho, 'Opa, mudou uma coisinha no cardápio agora 👀');   // rascunho original: assim o aviso diz o que saiu
     }
+    if (v.rascunho.pagamento === 'pix' && pixOnline()) return pedirPix(c, v);
     let r;
     try {
       r = await PED.gravarPedido(db, FieldValue, v, c.numero);
@@ -117,6 +301,7 @@ function criarAtendente({ db, FieldValue, ia, enviar, aoPausar }) {
     const c = CONV.obter(m.chatId);
     c.numero = m.numero || c.numero;
     if (CONV.pausado(m.chatId)) { log(m.chatId, c.numero, '(pausado — mensagem ignorada)'); return; }
+    if (c.pix && PIX && await tratarPixPendente(c, m)) return;
 
     // Loja fechada ou sem nenhuma modalidade: avisa (no máximo a cada 30 min) e não aceita pedido.
     const mod = CD.modalidades();
@@ -168,6 +353,26 @@ function criarAtendente({ db, FieldValue, ia, enviar, aoPausar }) {
     log(m.chatId, c.numero, `🤖 ${r.acao}`);
 
     if (r.acao !== 'nao_entendi') c.naoEntendeu = 0;
+
+    // Pix esperando pagamento: mudou o pedido ou a forma de pagamento → cancela
+    // o Pix antes; pediu o resumo / confirmou de novo o mesmo pedido → reenvia.
+    // Depois de um reinício não há chave (o rascunho se perdeu): só um pedido
+    // novo ou outra forma de pagamento cancela.
+    let prefixo = '';
+    if (c.pix && PIX && r.acao !== 'atendente' && r.acao !== 'nao_entendi') {
+      const v0 = PED.conferir(r.pedido);
+      const rr = v0.rascunho;
+      const mudou = r.acao === 'cancelar' || (c.pix.chave
+        ? chavePix(v0) !== c.pix.chave
+        : rr.lanches.length > 0 || rr.extras.length > 0 || rr.pagamento === 'dinheiro' || rr.pagamento === 'cartao');
+      if (mudou) {
+        if ((await cancelarPix(c)) !== 'ok') return;
+        if (r.acao !== 'cancelar') prefixo = MSG.pixCancelado;
+      } else if (r.acao === 'confirmar' || r.acao === 'mostrar_resumo') {
+        return mandarPix(c);
+      }
+    }
+
     switch (r.acao) {
       case 'atendente':
         await responder(c, MSG.atendente);
@@ -183,19 +388,19 @@ function criarAtendente({ db, FieldValue, ia, enviar, aoPausar }) {
         await responder(c, r.resposta || 'Tranquilo, pedido cancelado! Quando quiser é só chamar 😉');
         return;
       case 'mostrar_resumo':
-        return mostrarResumo(c, r.pedido);
+        return mostrarResumo(c, r.pedido, prefixo);
       case 'confirmar':
         if (c.resumo) {
           const v = PED.conferir(r.pedido);
           if (JSON.stringify(v.rascunho) !== c.resumo.chave) return mostrarResumo(c, r.pedido);   // mudou algo junto com o "sim"
           return confirmar(c);
         }
-        return mostrarResumo(c, r.pedido);
+        return mostrarResumo(c, r.pedido, prefixo);
       default: {   // conversar
         const v = PED.conferir(r.pedido);
         c.rascunho = v.rascunho;
         if (c.resumo && JSON.stringify(v.rascunho) !== c.resumo.chave) c.resumo = null;   // mudou → precisa de resumo novo
-        let texto = r.resposta || 'Me conta o que vai querer 😊';
+        let texto = [prefixo, r.resposta || 'Me conta o que vai querer 😊'].filter(Boolean).join('\n\n');
         if (v.indisponiveis.length) texto += `\n\n😕 Só avisando: não temos agora ${v.indisponiveis.join(', ')}.`;
         await responder(c, texto);
       }
@@ -204,11 +409,7 @@ function criarAtendente({ db, FieldValue, ia, enviar, aoPausar }) {
 
   // Uma mensagem por vez por cliente (áudio + texto seguidos não se atropelam).
   function receber(m) {
-    const anterior = filas.get(m.chatId) || Promise.resolve();
-    const atual = anterior.then(() => processar(m)).catch((e) => console.error('[atendente] erro:', e));
-    filas.set(m.chatId, atual);
-    atual.finally(() => { if (filas.get(m.chatId) === atual) filas.delete(m.chatId); });
-    return atual;
+    return naFila(m.chatId, () => processar(m));
   }
 
   // Alguém da loja respondeu à mão nessa conversa → bot fica quieto 30 min.
@@ -224,7 +425,10 @@ function criarAtendente({ db, FieldValue, ia, enviar, aoPausar }) {
     pausar(CONV.obter(chatId), motivo);
   }
 
-  return { receber, humanoRespondeu, pausarAposAviso };
+  // Teste: espera terminar o que está na fila desse cliente.
+  const ocioso = (chatId) => filas.get(chatId) || Promise.resolve();
+
+  return { receber, humanoRespondeu, pausarAposAviso, retomarPix, ocioso };
 }
 
-module.exports = { criarAtendente, SIM, semAcento, MSG };
+module.exports = { criarAtendente, SIM, PAGUEI, PEDE_PIX, semAcento, MSG };

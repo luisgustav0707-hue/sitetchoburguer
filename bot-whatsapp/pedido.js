@@ -185,9 +185,13 @@ function conferir(rascunhoIA) {
   // 5) pagamento
   const online = CD.pagamentoOnlineAtivo();
   const linkSite = `${CD.SITE}/cliente/`;
-  if (!limpo.pagamento) pendente(online ? 'Vai pagar como? Dinheiro ou cartão na entrega? (Pix e cartão online, só pelo site)' : 'Vai pagar como? Dinheiro, cartão na entrega ou Pix?');
-  else if (limpo.pagamento === 'online' || (limpo.pagamento === 'pix' && online)) {
-    pendente(`Pagamento online (Pix ou cartão) é feito pelo nosso site 👉 ${linkSite}\nPor aqui eu fecho com dinheiro ou cartão na entrega. Qual prefere?`);
+  // Com o pagamento online ligado, o Pix é o do Mercado Pago: o código vai aqui
+  // no WhatsApp depois do "sim" (atendente.js → pedirPix). Cartão online, só no site.
+  if (!limpo.pagamento) pendente(online ? 'Vai pagar como? Pix (te mando o código aqui mesmo), dinheiro ou cartão na entrega?' : 'Vai pagar como? Dinheiro, cartão na entrega ou Pix?');
+  else if (limpo.pagamento === 'online') {
+    pendente(online
+      ? `Cartão online é só pelo nosso site 👉 ${linkSite}\nPor aqui dá pra pagar no Pix (te mando o código) ou em dinheiro/cartão na entrega. Qual prefere?`
+      : 'Por aqui eu fecho com dinheiro, cartão na entrega ou Pix. Qual prefere?');
   } else if (limpo.pagamento === 'dinheiro' && limpo.troco > 0 && limpo.troco < res.total) {
     pendente(`O troco precisa ser pra um valor maior que o total (${brl(res.total)}). Troco pra quanto?`);
   }
@@ -209,20 +213,46 @@ function textoResumo(v) {
   L.push(r.tipo === 'delivery'
     ? `🛵 Entrega: ${r.rua}, ${r.numero}${r.complemento ? ', ' + r.complemento : ''} — ${v.bairro}`
     : '🏃 Retirada no local');
-  const pag = { dinheiro: 'Dinheiro', cartao: 'Cartão na entrega', pix: 'Pix' }[r.pagamento];
+  const pixOnline = r.pagamento === 'pix' && CD.pagamentoOnlineAtivo();
+  const pag = { dinheiro: 'Dinheiro', cartao: 'Cartão na entrega', pix: pixOnline ? 'Pix (te mando o código aqui)' : 'Pix' }[r.pagamento];
   L.push(`💳 ${pag}${r.pagamento === 'dinheiro' && r.troco ? ` (troco pra ${brl(r.troco)})` : ''}`);
   L.push(`👤 ${r.nome}`);
   if (r.obs) L.push(`📝 Obs: ${r.obs}`);
   L.push('');
-  L.push('Tá tudo certo? Responde *SIM* que eu mando pra cozinha 🔥');
+  L.push(pixOnline
+    ? 'Tá tudo certo? Responde *SIM* que eu te mando o Pix ⚡'
+    : 'Tá tudo certo? Responde *SIM* que eu mando pra cozinha 🔥');
   return L.join('\n');
 }
 
 // ── GRAVAÇÃO ────────────────────────────────────────────────────
+// Campos de dadosPedido() do cliente (sem número, status e horários).
+// pag: o do rascunho, ou 'online_pix' no Pix pelo Mercado Pago (pix.js).
+function dadosPedido(v, numeroWhatsApp, pag) {
+  const r = v.rascunho;
+  const delivery = r.tipo === 'delivery';
+  const forma = pag || r.pagamento;
+  return {
+    nome: r.nome,
+    tel: telefoneFormatado(numeroWhatsApp),
+    tipo: r.tipo,
+    bairro: delivery ? v.bairro : '',
+    endereco: delivery ? `${r.rua}, ${r.numero}${r.complemento ? ', ' + r.complemento : ''}` : '',
+    cidade: delivery ? r.cidade : '',
+    pag: forma,
+    troco: forma === 'dinheiro' ? r.troco : 0,
+    frete: delivery ? v.frete : 0,
+    desconto: 0,
+    cupom: '',
+    obs: r.obs,
+    itens: v.montado.itens,
+    total: v.total,
+    origem: 'whatsapp',
+  };
+}
+
 // v = resultado de conferir() sem pendência. FV = FieldValue de firebase-admin/firestore.
 async function gravarPedido(db, FV, v, numeroWhatsApp) {
-  const r = v.rascunho;
-
   // Número sequencial: o MESMO contador do site, balcão e mesa.
   const contRef = db.collection('config').doc('contador');
   const numOrdem = await db.runTransaction(async (t) => {
@@ -232,32 +262,17 @@ async function gravarPedido(db, FV, v, numeroWhatsApp) {
     return next;
   });
   const num = '#' + String(numOrdem).padStart(3, '0');
-  const delivery = r.tipo === 'delivery';
   const horaStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: CD.TZ });
 
   // Mesmos campos de dadosPedido() + finalizarPedido() do cliente.
   const pedido = {
     id: numOrdem, num,
-    nome: r.nome,
-    tel: telefoneFormatado(numeroWhatsApp),
-    tipo: r.tipo,
-    bairro: delivery ? v.bairro : '',
-    endereco: delivery ? `${r.rua}, ${r.numero}${r.complemento ? ', ' + r.complemento : ''}` : '',
-    cidade: delivery ? r.cidade : '',
-    pag: r.pagamento,
-    troco: r.pagamento === 'dinheiro' ? r.troco : 0,
-    frete: delivery ? v.frete : 0,
-    desconto: 0,
-    cupom: '',
-    obs: r.obs,
-    itens: v.montado.itens,
-    total: v.total,
+    ...dadosPedido(v, numeroWhatsApp),
     status: 'novo',
     hora: FV.serverTimestamp(),
     horaStr,
     impresso: false,
     criadoEm: FV.serverTimestamp(),
-    origem: 'whatsapp',
   };
   const ref = await db.collection('pedidos').add(pedido);
 
@@ -330,6 +345,6 @@ async function buscarCliente(db, numeroWhatsApp) {
 }
 
 module.exports = {
-  conferir, textoResumo, gravarPedido, buscarCliente, telefoneLimpo, telefoneFormatado, brl,
+  conferir, textoResumo, dadosPedido, gravarPedido, buscarCliente, telefoneLimpo, telefoneFormatado, brl,
   COMBO_SUCO_EXTRA, COMBO_PADRAO,
 };

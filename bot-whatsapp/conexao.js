@@ -10,7 +10,9 @@
 //  • lê a chave do Gemini cadastrada no painel (botSegredos/gemini);
 //  • publica o status e o QR Code em bots/{uid}, que o painel mostra;
 //  • escuta bots/{uid}: se sumir (removido no painel), desliga e esquece o
-//    pareamento.
+//    pareamento;
+//  • chama as functions do Pix do Mercado Pago (criarPixMP etc.), as mesmas
+//    que o site usa — o token do Mercado Pago fica só no servidor.
 // Pedidos, contador, estoque e CRM seguem as mesmas regras do site.
 // ═══════════════════════════════════════════════════════════════
 
@@ -121,8 +123,11 @@ async function conectar() {
     }, (e) => console.warn('[painel] não leu a chave do Gemini:', e.message));
   }
 
+  // Cloud Function (onCall) → o resultado. 30 s: o Mercado Pago às vezes demora.
+  const chamar = (nome, data) => firebase.app().functions(REGIAO).httpsCallable(nome, { timeout: 30000 })(data).then((r) => r.data);
+
   return {
-    db, FieldValue, uid, status,
+    db, FieldValue, uid, status, chamar,
     nome: par.nome || os.hostname(),
     aoRemover: (fn) => aoRemover.push(fn),
     aoChave: (fn) => { if (chaveLocal) fn(process.env.GEMINI_API_KEY); else aoChave.push(fn); },

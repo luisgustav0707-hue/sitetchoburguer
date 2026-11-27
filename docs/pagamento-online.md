@@ -35,6 +35,17 @@ cancelando o Pix no Mercado Pago. Se mesmo assim um pagamento entrar depois,
 ele **não vira pedido** (o cliente já fez outro) — fica como
 `pago-apos-cancelar` e aparece no log das functions; devolva pelo Mercado Pago.
 
+### Pelo WhatsApp (atendente)
+
+Com o pagamento online ligado, o atendente oferece **Pix**. No "sim" do resumo,
+ele faz o mesmo caminho do site: grava `pagamentos/{id}` como `aguardando`,
+chama `criarPixMP` e manda ao cliente o QR code e o copia e cola. Quando o
+Mercado Pago confirma, a function cria o pedido (`origem: "whatsapp"`) e o bot
+manda "✅ Pagamento recebido! Pedido #… confirmado". O bot também consulta
+`verificarPagamentoMP` a cada 15 s e na hora em que o cliente diz "paguei" ou
+manda um comprovante. Se o cliente troca de ideia, `cancelarPagamentoMP`
+cancela o Pix. Cartão online continua só pelo site. Código: `bot-whatsapp/pix.js`.
+
 Código: `functions/pagamentos.js` (servidor), `cliente/cliente.js`
 (`finalizarPedidoOnline`, `acompanharPagamento`, `mostrarTelaPix`), `firestore.rules`
 (`/pagamentos` e a trava em `/pedidos`).

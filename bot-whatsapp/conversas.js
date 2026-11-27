@@ -18,6 +18,7 @@ function novo(chatId) {
     historico: [],          // [{ quem: 'cliente'|'bot', texto }]
     rascunho: {},           // o que a IA entendeu até agora
     resumo: null,           // { rascunho, conferido } mostrado ao cliente, esperando o "sim"
+    pix: null,              // Pix do Mercado Pago esperando pagamento (atendente.js → pedirPix)
     naoEntendeu: 0,         // vezes seguidas que a IA não entendeu
     pausadoAte: 0,
     avisoFechadoEm: 0,
@@ -48,7 +49,7 @@ function registrar(c, quem, texto) {
 
 // Pedido gravado: começa do zero, mas lembra quem é o cliente.
 function zerarPedido(c) {
-  c.rascunho = {}; c.resumo = null; c.naoEntendeu = 0; c.historico = [];
+  c.rascunho = {}; c.resumo = null; c.pix = null; c.naoEntendeu = 0; c.historico = [];
 }
 
 function pausar(chatId, ms = PAUSA_MS) {

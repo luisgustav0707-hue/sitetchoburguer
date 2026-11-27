@@ -7,27 +7,41 @@
 
 const assert = require('assert');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const CD = require('./cardapio');
 const PED = require('./pedido');
 const CONV = require('./conversas');
-const { criarAtendente } = require('./atendente');
+const { criarAtendente, PAGUEI, PEDE_PIX, semAcento } = require('./atendente');
+const { criarPix } = require('./pix');
 
 // ── Firestore de mentira ────────────────────────────────────────
 function fakeDb(inicial = {}) {
   const store = new Map(Object.entries(JSON.parse(JSON.stringify(inicial))));
   let auto = 0;
   const copia = (x) => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)));
-  const write = (p, d, opt) => store.set(p, opt && opt.merge ? { ...(store.get(p) || {}), ...copia(d) } : copia(d));
+  const ouvintes = new Map();   // caminho → [fn] (onSnapshot)
+  const snap = (p) => { const d = store.get(p); return { exists: !!d, id: p.split('/')[1], data: () => copia(d) }; };
+  const write = (p, d, opt) => {
+    store.set(p, opt && opt.merge ? { ...(store.get(p) || {}), ...copia(d) } : copia(d));
+    (ouvintes.get(p) || []).forEach((fn) => setImmediate(() => fn(snap(p))));
+  };
   const docRef = (col, id) => ({
     id,
-    get: async () => { const d = store.get(`${col}/${id}`); return { exists: !!d, id, data: () => copia(d) }; },
+    get: async () => snap(`${col}/${id}`),
     set: async (d, o) => write(`${col}/${id}`, d, o),
     update: async (d) => write(`${col}/${id}`, d, { merge: true }),
+    onSnapshot: (fn) => {
+      const k = `${col}/${id}`;
+      ouvintes.set(k, [...(ouvintes.get(k) || []), fn]);
+      setImmediate(() => fn(snap(k)));
+      return () => ouvintes.set(k, (ouvintes.get(k) || []).filter((f) => f !== fn));
+    },
   });
   return {
     store,
     collection: (col) => ({
-      doc: (id) => docRef(col, id),
+      doc: (id) => docRef(col, id || `pg${++auto}abcdefghij`),
       add: async (d) => { const id = 'auto' + (++auto); write(`${col}/${id}`, d); return docRef(col, id); },
     }),
     runTransaction: async (fn) => fn({ get: (r) => r.get(), set: (r, d, o) => r.set(d, o), update: (r, d) => r.update(d) }),
@@ -148,12 +162,13 @@ async function caso(nome, fn) {
     assert.match(ultima(chat), /ainda não entregamos no bairro Savassi/);
   });
 
-  await caso('Pix com pagamento online ligado → manda o link do site', async () => {
+  await caso('cartão online com pagamento online ligado → manda o link do site e oferece Pix', async () => {
     CD._carregarParaTeste(TCHO, DOCS(), { ...ABERTA, pagamentoOnline: true });
     const chat = 'f@c.us';
-    roteiro.push({ transcricao: '', acao: 'mostrar_resumo', resposta: '', pedido: pedidoBase({ lanches: [lanche({ ponto: 'ap', sache: 'sn' })], tipo: 'retirada', nome: 'Duda', pagamento: 'pix' }) });
-    await fala(chat, 'pago no pix');
+    roteiro.push({ transcricao: '', acao: 'mostrar_resumo', resposta: '', pedido: pedidoBase({ lanches: [lanche({ ponto: 'ap', sache: 'sn' })], tipo: 'retirada', nome: 'Duda', pagamento: 'online' }) });
+    await fala(chat, 'quero pagar no cartão online');
     assert.match(ultima(chat), /tchoburguer\.com\/cliente\//);
+    assert.match(ultima(chat), /Pix \(te mando o código\)/);
     CD._carregarParaTeste(TCHO, DOCS(), ABERTA);
   });
 
@@ -356,6 +371,198 @@ async function caso(nome, fn) {
     await fala('bv3@c.us', 'oi', { numero: '5531999990103' });
     assert.deepStrictEqual(enviadas.filter((e) => e.chatId === 'bv3@c.us').map((e) => e.texto), ['Oi! O que vai ser?'], 'desligado: só a IA');
     CD._carregarParaTeste(TCHO, DOCS(), ABERTA);
+  });
+
+  // ── PIX PELO WHATSAPP (Mercado Pago de mentira) ──────────────
+  // Simula as functions de functions/pagamentos.js: criarPixMP, verificar,
+  // cancelar e o webhook (aprovar) que cria o pedido.
+  const mp = { pagos: new Set(), falhar: false, venceEmMs: 30 * 60000, num: 600 };
+  async function aprovar(id) {
+    const ref = db.collection('pagamentos').doc(id);
+    const d = (await ref.get()).data();
+    if (d.status === 'pago') return;
+    const num = '#' + (++mp.num);
+    await db.collection('pedidos').doc(id).set({ ...d.pedido, num, status: 'novo', pag: 'Pago online - Pix' });
+    await ref.update({ status: 'pago', pedidoNum: num });
+  }
+  async function chamarFake(nome, { id }) {
+    const ref = db.collection('pagamentos').doc(id);
+    const d = (await ref.get()).data();
+    if (!d) throw Object.assign(new Error('Pedido não encontrado.'), { code: 'functions/not-found' });
+    if (nome === 'criarPixMP') {
+      if (mp.falhar) throw Object.assign(new Error('O Mercado Pago não gerou o Pix.'), { code: 'functions/unavailable' });
+      if (d.pix && d.pix.venceMs > Date.now() + 60000) return { ...d.pix, total: d.total };
+      const t = (d.pixTentativas || 0) + 1;
+      if (t > 5) throw Object.assign(new Error('Muitas tentativas.'), { code: 'functions/resource-exhausted' });
+      const pix = { mpId: 'mp' + t, qr: `00020126PIX-${id}-${t}`, qrBase64: 'A'.repeat(120), venceMs: Date.now() + mp.venceEmMs };
+      await ref.update({ pix, pixTentativas: t, status: 'aguardando' });
+      return { ...pix, total: d.total };
+    }
+    if (nome === 'verificarPagamentoMP') {
+      if (mp.pagos.has(id)) await aprovar(id);
+      return { status: (await ref.get()).data().status };
+    }
+    if (nome === 'cancelarPagamentoMP') {
+      if (mp.pagos.has(id)) { await aprovar(id); return { status: 'pago' }; }
+      await ref.update({ status: 'cancelado' });
+      return { status: 'cancelado' };
+    }
+    throw new Error('function desconhecida ' + nome);
+  }
+  const arqPix = path.join(os.tmpdir(), `tcho-pix-teste-${process.pid}.json`);
+  const atPix = criarAtendente({
+    db, FieldValue: fakeFieldValue, ia: iaFake, chamar: chamarFake, arquivoPix: arqPix, pixIntervaloMs: 20,
+    enviar: async (chatId, texto) => enviadas.push({ chatId, texto }),
+    enviarImagem: async (chatId, b64, texto) => enviadas.push({ chatId, texto, imagem: b64 }),
+    aoPausar: (chatId) => pausas.push(chatId),
+  });
+  const falaPix = (chatId, texto, extra = {}) => atPix.receber({ chatId, numero: '5531988887777', tipo: 'texto', texto, ...extra });
+  const dorme = (ms) => new Promise((r) => setTimeout(r, ms));
+  const pedidoPix = (p = {}) => pedidoBase({ lanches: [lanche({ ponto: 'ap', sache: 'sn' })], tipo: 'retirada', nome: 'Duda Pix', pagamento: 'pix', ...p });
+  // Resumo + "sim" → Pix gerado. Devolve o id de pagamentos/{id}.
+  async function gerarPix(chat) {
+    roteiro.push({ transcricao: '', acao: 'mostrar_resumo', resposta: '', pedido: pedidoPix() });
+    await falaPix(chat, 'x-salada ao ponto sem sachê, retirada, pix, Duda Pix');
+    await falaPix(chat, 'sim');
+    const c = CONV._conversas.get(chat);
+    assert.ok(c.pix && c.pix.id, 'Pix gerado');
+    return c.pix.id;
+  }
+
+  await caso('Pix online: "sim" → QR + copia e cola; pedido só entra quando paga; confirma pro cliente', async () => {
+    CD._carregarParaTeste(TCHO, DOCS(), { ...ABERTA, pagamentoOnline: true });
+    const chat = 'px1@c.us';
+    roteiro.push({ transcricao: '', acao: 'mostrar_resumo', resposta: '', pedido: pedidoPix() });
+    await falaPix(chat, 'x-salada ao ponto sem sachê, retirada, pix, Duda Pix');
+    assert.match(ultima(chat), /💳 Pix \(te mando o código aqui\)/);
+    assert.match(ultima(chat), /SIM\* que eu te mando o Pix/);
+    const pedidosAntes = [...db.store.keys()].filter((k) => k.startsWith('pedidos/')).length;
+    await falaPix(chat, 'sim');
+    const minhas = enviadas.filter((e) => e.chatId === chat);
+    const img = minhas[minhas.length - 2];
+    assert.ok(img.imagem, 'QR code vai como imagem');
+    assert.match(img.texto, /Pix de R\$25/);
+    assert.match(img.texto, /Pix Copia e Cola/);
+    const id = CONV._conversas.get(chat).pix.id;
+    assert.strictEqual(ultima(chat), `00020126PIX-${id}-1`, 'copia e cola sozinho na última mensagem');
+    const pg = db.store.get(`pagamentos/${id}`);
+    assert.strictEqual(pg.status, 'aguardando');
+    assert.strictEqual(pg.total, 25);
+    assert.strictEqual(pg.pedido.pag, 'online_pix');
+    assert.strictEqual(pg.pedido.origem, 'whatsapp');
+    assert.strictEqual(pg.pedido.tel, '(31) 98888-7777');
+    assert.strictEqual(pg.carrinho.burguers.length, 1);
+    assert.deepStrictEqual(Object.keys(pg).sort(), ['carrinho', 'consumo', 'criadoEm', 'cupomId', 'pedido', 'pix', 'pixTentativas', 'status', 'total'].sort());
+    assert.strictEqual([...db.store.keys()].filter((k) => k.startsWith('pedidos/')).length, pedidosAntes, 'nada no Kanban antes de pagar');
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(arqPix, 'utf8')).map((x) => x.id), [id], 'Pix guardado no arquivo');
+
+    const antesIA = chamadasIA;
+    await falaPix(chat, 'Já paguei!');
+    assert.match(ultima(chat), /Ainda não apareceu o pagamento/);
+    assert.strictEqual(chamadasIA, antesIA, '"paguei" não passa pela IA');
+
+    await aprovar(id);                      // webhook do Mercado Pago
+    await dorme(30); await atPix.ocioso(chat);
+    assert.match(ultima(chat), /✅ Pagamento recebido! Pedido \*#601\* confirmado/);
+    assert.match(ultima(chat), /Pode vir buscar em uns 40–60 min/);
+    assert.match(ultima(chat), /Valeu, Duda Pix!/);
+    assert.strictEqual(CONV._conversas.get(chat).pix, null);
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(arqPix, 'utf8')), [], 'saiu do arquivo');
+    await dorme(60);
+    assert.strictEqual(enviadas.filter((e) => e.chatId === chat && /Pagamento recebido/.test(e.texto)).length, 1, 'confirma uma vez só');
+  });
+
+  await caso('Pix online: comprovante (imagem) → confere na hora e confirma se caiu', async () => {
+    const chat = 'px2@c.us';
+    const id = await gerarPix(chat);
+    mp.pagos.add(id);                        // pagou, mas o aviso do Mercado Pago ainda não chegou
+    await falaPix(chat, '', { tipo: 'outro' });
+    await dorme(30); await atPix.ocioso(chat);
+    assert.match(ultima(chat), /Pagamento recebido! Pedido \*#\d+\* confirmado/);
+    assert.ok(!enviadas.some((e) => e.chatId === chat && /^Recebi!/.test(e.texto)), 'não diz que não caiu');
+  });
+
+  await caso('Pix online: trocou pra dinheiro → cancela o Pix e manda resumo novo', async () => {
+    const chat = 'px3@c.us';
+    const id = await gerarPix(chat);
+    roteiro.push({ transcricao: '', acao: 'mostrar_resumo', resposta: '', pedido: pedidoPix({ pagamento: 'dinheiro' }) });
+    await falaPix(chat, 'pensando bem vou pagar em dinheiro na hora');
+    assert.match(ultima(chat), /^Beleza, cancelei aquele Pix 👍/);
+    assert.match(ultima(chat), /💳 Dinheiro/);
+    assert.match(ultima(chat), /SIM\* que eu mando pra cozinha/);
+    assert.strictEqual(db.store.get(`pagamentos/${id}`).status, 'cancelado');
+    assert.strictEqual(CONV._conversas.get(chat).pix, null);
+  });
+
+  await caso('Pix online: pergunta sem mudar o pedido → IA responde e o Pix continua', async () => {
+    const chat = 'px4@c.us';
+    const id = await gerarPix(chat);
+    roteiro.push({ transcricao: '', acao: 'conversar', resposta: 'Fica pronto em uns 40 min!', pedido: pedidoPix() });
+    await falaPix(chat, 'quanto tempo demora?');
+    assert.strictEqual(ultima(chat), 'Fica pronto em uns 40 min!');
+    assert.strictEqual(db.store.get(`pagamentos/${id}`).status, 'aguardando');
+    roteiro.push({ transcricao: '', acao: 'confirmar', resposta: '', pedido: pedidoPix() });
+    await falaPix(chat, 'me manda aquele codigo de pagamento de novo por favor');
+    assert.strictEqual(ultima(chat), `00020126PIX-${id}-1`, 'reenvia o mesmo código');
+    roteiro.push({ transcricao: '', acao: 'cancelar', resposta: 'Tranquilo, cancelado!', pedido: pedidoPix() });
+    await falaPix(chat, 'desisti');
+    assert.strictEqual(ultima(chat), 'Tranquilo, cancelado!');
+    assert.strictEqual(db.store.get(`pagamentos/${id}`).status, 'cancelado');
+  });
+
+  await caso('Pix online: venceu → avisa uma vez; "PIX" gera outro', async () => {
+    const chat = 'px5@c.us';
+    mp.venceEmMs = 40;
+    const id = await gerarPix(chat);
+    mp.venceEmMs = 30 * 60000;
+    await dorme(150); await atPix.ocioso(chat);
+    assert.match(ultima(chat), /O Pix venceu/);
+    assert.strictEqual(enviadas.filter((e) => e.chatId === chat && /O Pix venceu/.test(e.texto)).length, 1);
+    await falaPix(chat, 'PIX');
+    assert.strictEqual(ultima(chat), `00020126PIX-${id}-2`, 'código novo');
+    assert.strictEqual(CONV._conversas.get(chat).pix.vencido, false);
+  });
+
+  await caso('Pix online: Mercado Pago fora → pede outra forma de pagamento', async () => {
+    const chat = 'px6@c.us';
+    mp.falhar = true;
+    roteiro.push({ transcricao: '', acao: 'mostrar_resumo', resposta: '', pedido: pedidoPix() });
+    await falaPix(chat, 'x-salada, retirada, pix');
+    await falaPix(chat, 'sim');
+    mp.falhar = false;
+    assert.match(ultima(chat), /não consegui gerar o Pix agora/);
+    const c = CONV._conversas.get(chat);
+    assert.strictEqual(c.pix, null);
+    assert.strictEqual(c.rascunho.pagamento, '');
+  });
+
+  await caso('Pix: bot reiniciou → retoma o acompanhamento e confirma', async () => {
+    const arq = path.join(os.tmpdir(), `tcho-pix-retoma-${process.pid}.json`);
+    const pagos = [];
+    const opcoes = { db, FieldValue: fakeFieldValue, chamar: chamarFake, arquivo: arq, intervaloMs: 20, aoVencer: () => {}, log: () => {} };
+    const antes = criarPix({ ...opcoes, aoPagar: () => {} });
+    const r = await antes.gerar({ chatId: 'px7@c.us', pedido: { nome: 'Rei' }, total: 30, consumo: {}, carrinho: { burguers: [], extras: {} }, info: { nome: 'Rei', tipo: 'delivery', total: 30 } });
+    antes.esquecer(r.id);                    // "desligou" (esquecer limpa o arquivo: grava de novo como estava)
+    fs.writeFileSync(arq, JSON.stringify([{ id: r.id, chatId: 'px7@c.us', venceMs: r.pix.venceMs, info: { nome: 'Rei', tipo: 'delivery', total: 30, qr: r.pix.qr } }]));
+    const depois = criarPix({ ...opcoes, aoPagar: (chatId, x) => pagos.push({ chatId, ...x }) });
+    assert.strictEqual(depois.retomar().length, 1);
+    mp.pagos.add(r.id);                      // pagou com o bot desligado
+    await dorme(80);
+    assert.strictEqual(pagos.length, 1);
+    assert.strictEqual(pagos[0].chatId, 'px7@c.us');
+    assert.strictEqual(pagos[0].info.nome, 'Rei');
+    assert.match(pagos[0].num, /^#\d+$/);
+    fs.unlinkSync(arq);
+  });
+
+  await caso('Pix: frases de "paguei" e de pedir o código', async () => {
+    const t = (x) => semAcento(x);
+    ['paguei', 'Já paguei!', 'pronto', 'fiz o pix ✅', 'pago', 'ta pago ja', 'feito 👍', 'transferi agora'].forEach((x) => assert.ok(PAGUEI.test(t(x)), x));
+    ['pago na entrega', 'pronto, muda o endereço pra rua B', 'paguei errado quero cancelar', 'vou pagar no dinheiro'].forEach((x) => assert.ok(!PAGUEI.test(t(x)), x));
+    ['pix', 'PIX', 'manda o pix de novo', 'gera outro pix', 'codigo', 'outro'].forEach((x) => assert.ok(PEDE_PIX.test(t(x)), x));
+    ['o pix não funcionou', 'pix ou dinheiro?'].forEach((x) => assert.ok(!PEDE_PIX.test(t(x)), x));
+    CD._carregarParaTeste(TCHO, DOCS(), ABERTA);
+    try { fs.unlinkSync(arqPix); } catch (e) {}
   });
 
   console.log(`\n${ok} casos ok${process.exitCode ? ' — HÁ FALHAS' : ''}\n`);

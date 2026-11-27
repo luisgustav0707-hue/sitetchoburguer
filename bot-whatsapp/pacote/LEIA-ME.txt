@@ -19,6 +19,11 @@ ATENDENTE DE WHATSAPP - TCHO BURGUER
 
 5. Quando aparecer "Atendente no ar!", esta funcionando.
    Deixe a janela aberta. Fechar a janela desliga o atendente.
+
+- O atendente abre sozinho quando o PC liga (depois de entrar no Windows)
+  e cria o atalho "Atendente WhatsApp Tcho" na Area de Trabalho.
+  Para ele NAO abrir sozinho: crie um arquivo chamado
+  SEM-INICIO-AUTOMATICO nesta pasta.
    O painel mostra se ele esta no ar.
 
 - Esta pasta NAO tem nenhuma senha ou chave. O acesso vem do pareamento

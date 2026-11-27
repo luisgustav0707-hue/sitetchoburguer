@@ -77,6 +77,12 @@ A IA **nunca** define preço nem total: ela só diz o que o cliente escolheu. O 
 5. Vai aparecer um **QR Code** na janela. No celular da loja, abra **WhatsApp → Aparelhos conectados → Conectar aparelho** e escaneie.
    A sessão fica salva em `.wwebjs_auth/`, então das próximas vezes não pede QR.
 
+A cada início, o `INICIAR.bat` roda o `atalhos.ps1`, que cria ou corrige dois atalhos "Atendente WhatsApp Tcho", com o ícone `atendente.ico`:
+- um na Área de Trabalho;
+- um na pasta Inicializar do Windows, que **abre o atendente sozinho quando o PC liga**, depois que alguém entra no Windows.
+
+Para o atendente não abrir sozinho, crie um arquivo `SEM-INICIO-AUTOMATICO` na pasta `Tcho-Atendente-WhatsApp`.
+
 Pelo terminal dá no mesmo:
 ```
 cd bot-whatsapp

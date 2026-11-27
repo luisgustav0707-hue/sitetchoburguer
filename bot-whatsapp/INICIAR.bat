@@ -25,6 +25,8 @@ echo.
 echo  Procurando versao nova do atendente...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0atualizar.ps1"
 if exist "%~dp0INICIAR.novo" goto inicio
+rem Atalho com icone na Area de Trabalho + abrir sozinho quando o PC liga.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0atalhos.ps1"
 echo.
 echo  Conferindo dependencias ^(na primeira vez demora uns minutos^)...
 call npm install --omit=dev --no-fund --no-audit

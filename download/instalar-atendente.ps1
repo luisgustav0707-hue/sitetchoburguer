@@ -52,13 +52,19 @@ Copy-Item (Join-Path $origem '*') $raiz -Recurse -Force
 Remove-Item (Join-Path $raiz 'bot-whatsapp\INICIAR.novo') -Force -ErrorAction SilentlyContinue
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 
-# 4. Atalho na Area de Trabalho e abre o atendente.
-try {
-  $s = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $desktop 'Atendente WhatsApp Tcho.lnk'))
-  $s.TargetPath = Join-Path $raiz 'ABRIR-ATENDENTE.bat'
-  $s.WorkingDirectory = $raiz
-  $s.Save()
-} catch {}
+# 4. Atalhos (Area de Trabalho com icone + abrir sozinho quando o PC liga)
+#    e abre o atendente. O INICIAR.bat refaz os atalhos a cada inicio.
+$atalhos = Join-Path $raiz 'bot-whatsapp\atalhos.ps1'
+if (Test-Path $atalhos) {
+  & powershell -NoProfile -ExecutionPolicy Bypass -File $atalhos
+} else {
+  try {
+    $s = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $desktop 'Atendente WhatsApp Tcho.lnk'))
+    $s.TargetPath = Join-Path $raiz 'ABRIR-ATENDENTE.bat'
+    $s.WorkingDirectory = $raiz
+    $s.Save()
+  } catch {}
+}
 Start-Process -FilePath (Join-Path $raiz 'ABRIR-ATENDENTE.bat') -WorkingDirectory $raiz
 Write-Host ''
 Write-Host '  Pronto! A janela do atendente abriu. O QR Code aparece nela e no painel.'
